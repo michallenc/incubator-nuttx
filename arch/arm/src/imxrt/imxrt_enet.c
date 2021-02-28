@@ -515,9 +515,14 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
    * no transmission in progress.
    */
 
+  /* Flush the contents of the TX buffer into physical memory */
+
+  up_clean_dcache((uintptr_t)priv->dev.d_buf,
+                  (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+  
+
   txdesc = &priv->txdesc[priv->txhead];
-  up_invalidate_dcache((uintptr_t)txdesc,
-                       (uintptr_t)txdesc + sizeof(struct enet_desc_s));
+
   priv->txhead++;
   if (priv->txhead >= CONFIG_IMXRT_ENET_NTXBUFFERS)
     {
@@ -525,15 +530,10 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
     }
 
 #ifdef CONFIG_DEBUG_ASSERTIONS
-  up_invalidate_dcache((uintptr_t)txdesc,
-                       (uintptr_t)txdesc + sizeof(struct enet_desc_s));
 
   DEBUGASSERT(priv->txtail != priv->txhead &&
              (txdesc->status1 & TXDESC_R) == 0);
 #endif
-
-  up_invalidate_dcache((uintptr_t)txdesc,
-                       (uintptr_t)txdesc + sizeof(struct enet_desc_s));
 
   /* Increment statistics */
 
@@ -561,7 +561,7 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
       rxdesc->data = txdesc->data;
       txdesc->data = buf;
       up_clean_dcache((uintptr_t)rxdesc,
-                          (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
+                 (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
     }
   else
     {
@@ -891,6 +891,7 @@ static void imxrt_receive(FAR struct imxrt_driver_s *priv)
 
           priv->dev.d_buf = (uint8_t *)
             imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
+
           rxdesc->status1 |= RXDESC_E;
 
           /* Update the index to the next descriptor */
@@ -901,10 +902,10 @@ static void imxrt_receive(FAR struct imxrt_driver_s *priv)
               priv->rxtail = 0;
             }
 
-          up_clean_dcache((uintptr_t)rxdesc,
-                          (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
-          up_clean_dcache((uintptr_t)priv->dev.d_buf,
-                          (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+          //up_clean_dcache((uintptr_t)rxdesc,
+            //              (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
+          //up_clean_dcache((uintptr_t)priv->dev.d_buf,
+           ///               (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 
           /* Indicate that there have been empty receive buffers produced */
 
@@ -2447,12 +2448,6 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
   priv->txdesc[CONFIG_IMXRT_ENET_NTXBUFFERS - 1].status1 |= TXDESC_W;
   priv->rxdesc[CONFIG_IMXRT_ENET_NRXBUFFERS - 1].status1 |= RXDESC_W;
 
-    up_clean_dcache((uintptr_t)priv->rxdesc,
-                 (uintptr_t)priv->rxdesc + CONFIG_IMXRT_ENET_NRXBUFFERS * sizeof(struct enet_desc_s));
-      up_clean_dcache((uintptr_t)priv->txdesc,
-                 (uintptr_t)priv->txdesc + CONFIG_IMXRT_ENET_NTXBUFFERS * sizeof(struct enet_desc_s));
-
-
   /* We start with RX descriptor 0 and with no TX descriptors in use */
 
   priv->txtail = 0;
@@ -2463,6 +2458,10 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
 
   priv->dev.d_buf =
     (uint8_t *)imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
+      up_clean_dcache((uintptr_t)priv->rxdesc,
+                 (uintptr_t)priv->rxdesc + CONFIG_IMXRT_ENET_NRXBUFFERS * sizeof(struct enet_desc_s));
+      up_clean_dcache((uintptr_t)&priv->txdesc,
+                 (uintptr_t)priv->txdesc + CONFIG_IMXRT_ENET_NTXBUFFERS * sizeof(struct enet_desc_s));
   up_clean_dcache((uintptr_t)priv->dev.d_buf,
                   (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 }
