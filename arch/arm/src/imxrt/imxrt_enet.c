@@ -554,14 +554,13 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
   if (priv->rxdesc[priv->rxtail].data == buf)
     {
       struct enet_desc_s *rxdesc = &priv->rxdesc[priv->rxtail];
-
       /* Data was written into the RX buffer, so swap the TX and RX buffers */
 
       DEBUGASSERT((rxdesc->status1 & RXDESC_E) == 0);
       rxdesc->data = txdesc->data;
       txdesc->data = buf;
       up_clean_dcache((uintptr_t)rxdesc,
-                            (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
+                      (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
     }
   else
     {
@@ -660,8 +659,8 @@ static int imxrt_txpoll(struct net_driver_s *dev)
           priv->dev.d_buf = (uint8_t *)
               imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
 
-          //up_clean_dcache((uintptr_t)priv->dev.d_buf,
-            //      (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+          up_clean_dcache((uintptr_t)priv->dev.d_buf,
+                          (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 
           /* Check if there is room in the device to hold another packet. If
            * not, return a non-zero value to terminate the poll.
@@ -705,8 +704,8 @@ static inline void imxrt_dispatch(FAR struct imxrt_driver_s *priv)
 
   NETDEV_RXPACKETS(&priv->dev);
 
-  //up_invalidate_dcache((uintptr_t)priv->dev.d_buf,
-    //                   (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+  up_invalidate_dcache((uintptr_t)priv->dev.d_buf,
+                          (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 
 #ifdef CONFIG_NET_PKT
   /* When packet sockets are enabled, feed the frame into the tap */
@@ -799,7 +798,7 @@ static inline void imxrt_dispatch(FAR struct imxrt_driver_s *priv)
 #endif
 #ifdef CONFIG_NET_ARP
   /* Check for an ARP packet */
-
+  
   if (BUF->type == htons(ETHTYPE_ARP))
     {
       NETDEV_RXARP(&priv->dev);
@@ -891,8 +890,12 @@ static void imxrt_receive(FAR struct imxrt_driver_s *priv)
 
           priv->dev.d_buf = (uint8_t *)
             imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
+          up_clean_dcache((uintptr_t)priv->dev.d_buf,
+                               (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 
           rxdesc->status1 |= RXDESC_E;
+          up_clean_dcache((uintptr_t)rxdesc,
+                           (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
 
           /* Update the index to the next descriptor */
 
@@ -2452,9 +2455,9 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
 
   priv->dev.d_buf =
     (uint8_t *)imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
-      up_clean_dcache((uintptr_t)priv->rxdesc,
+  up_clean_dcache((uintptr_t)priv->rxdesc,
                  (uintptr_t)priv->rxdesc + CONFIG_IMXRT_ENET_NRXBUFFERS * sizeof(struct enet_desc_s));
-      up_clean_dcache((uintptr_t)&priv->txdesc,
+  up_clean_dcache((uintptr_t)priv->txdesc,
                  (uintptr_t)priv->txdesc + CONFIG_IMXRT_ENET_NTXBUFFERS * sizeof(struct enet_desc_s));
   up_clean_dcache((uintptr_t)priv->dev.d_buf,
                   (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
