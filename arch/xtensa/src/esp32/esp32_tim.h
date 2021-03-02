@@ -46,6 +46,7 @@
 #define ESP32_TIM_GETCONFIG(d, v)                  ((d)->ops->getconfig(d, v))
 #define ESP32_TIM_GETCTR(d, v)                     ((d)->ops->getcounter(d, v))
 #define ESP32_TIM_SETCTR(d, v)                     ((d)->ops->setcounter(d, v))
+#define ESP32_TIM_RLD_NOW(d)                       ((d)->ops->reloadnow(d))
 #define ESP32_TIM_GETALRVL(d, v)                   ((d)->ops->getalarmvalue(d, v))
 #define ESP32_TIM_SETALRVL(d, v)                   ((d)->ops->setalarmvalue(d, v))
 #define ESP32_TIM_SETALRM(d, e)                    ((d)->ops->setalarm(d, e))
@@ -101,6 +102,7 @@ struct esp32_tim_ops_s
   CODE int (*getconfig)(FAR struct esp32_tim_dev_s *dev, uint32_t *value);
   CODE int (*getcounter)(FAR struct esp32_tim_dev_s *dev, uint64_t *value);
   CODE int (*setcounter)(FAR struct esp32_tim_dev_s *dev, uint64_t value);
+  CODE int (*reloadnow)(FAR struct esp32_tim_dev_s *dev);
   CODE int (*getalarmvalue)(FAR struct esp32_tim_dev_s *dev,
                             uint64_t *value);
   CODE int (*setalarmvalue)(FAR struct esp32_tim_dev_s *dev, uint64_t value);
@@ -123,5 +125,6 @@ struct esp32_tim_ops_s
 
 FAR struct esp32_tim_dev_s *esp32_tim_init(int timer);
 int esp32_tim_deinit(FAR struct esp32_tim_dev_s *dev);
+FAR struct esp32_tim_dev_s *esp32_tim0_init(void);
 
 #endif /* __ARCH_XTENSA_SRC_ESP32_ESP32_TIM_H */

@@ -136,7 +136,7 @@ static int  nrf52_attach(struct uart_dev_s *dev);
 static void nrf52_detach(struct uart_dev_s *dev);
 static int  nrf52_interrupt(int irq, void *context, FAR void *arg);
 static int  nrf52_ioctl(struct file *filep, int cmd, unsigned long arg);
-static int  nrf52_receive(struct uart_dev_s *dev, uint32_t *status);
+static int  nrf52_receive(struct uart_dev_s *dev, unsigned int *status);
 static void nrf52_rxint(struct uart_dev_s *dev, bool enable);
 static bool nrf52_rxavailable(struct uart_dev_s *dev);
 static void nrf52_send(struct uart_dev_s *dev, int ch);
@@ -475,12 +475,6 @@ static int nrf52_ioctl(struct file *filep, int cmd, unsigned long arg)
               break;
             }
 
-          /* Get baud */
-
-          cfsetispeed(termiosp, config->baud);
-
-          /* Get flags */
-
           termiosp->c_cflag = ((config->parity != 0) ? PARENB : 0)
                               | ((config->parity == 1) ? PARODD : 0)
                               | ((config->stopbits2) ? CSTOPB : 0) |
@@ -491,6 +485,8 @@ static int nrf52_ioctl(struct file *filep, int cmd, unsigned long arg)
                               ((config->iflow) ? CRTS_IFLOW : 0) |
 #endif
                               CS8;
+
+          cfsetispeed(termiosp, config->baud);
 
           break;
         }
@@ -580,7 +576,7 @@ static int nrf52_ioctl(struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-static int nrf52_receive(struct uart_dev_s *dev, uint32_t *status)
+static int nrf52_receive(struct uart_dev_s *dev, unsigned int *status)
 {
   struct nrf52_dev_s *priv = (struct nrf52_dev_s *)dev->priv;
   uint32_t data;
@@ -753,8 +749,8 @@ static bool nrf52_txempty(struct uart_dev_s *dev)
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
  *   before nrf52_serialinit.  NOTE:  This function depends on GPIO pin
- *   configuration performed in nrf52_lowsetup() and main clock iniialization
- *   performed in nrf_clock_configure().
+ *   configuration performed in nrf52_lowsetup() and main clock
+ *   initialization performed in nrf_clock_configure().
  *
  ****************************************************************************/
 

@@ -74,10 +74,12 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-# list of documentation versions to offer (besides latest)
+# list of documentation versions to offer (besides latest). this will be
+# overriden by command line option but we can provide a sane default
+# this way
 
 html_context = dict()
-html_context['nuttx_versions'] = ['latest']
+html_context['nuttx_versions'] = 'latest'
 
 # TODO: append other options using releases detected from git (or maybe just
 # a few hand-selected ones, or maybe just a "stable" option)
@@ -92,7 +94,7 @@ html_theme = 'sphinx_rtd_theme'
 html_show_sphinx = False
 
 html_theme_options = {
-    'prev_next_buttons_location': None
+    'navigation_depth': 5
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -117,3 +119,11 @@ c_id_attributes = [
   'noreturn_function'
 ]
 
+# This is required to allow running linkcheck with sphinx-tabs
+sphinx_tabs_valid_builders = ['linkcheck']
+
+# There are some sites where the linkchecker cannot handle anchors
+linkcheck_ignore = [
+   'https://github.com/pyenv/pyenv#installation',
+   'http://openocd.zylin.com/#/c/4103/',
+]

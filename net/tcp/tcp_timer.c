@@ -443,14 +443,13 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
                             }
 #endif
 
-                          /* And send the probe (along with a garbage byte).
-                           * The packet we sned must have these properties:
+                          /* And send the probe.
+                           * The packet we send must have these properties:
                            *
                            *   - TCP_ACK flag (only) is set.
                            *   - Sequence number is the sequence number of
                            *     previously ACKed data, i.e., the expected
                            *     sequence number minus one.
-                           *   - The data payload is one or two bytes.
                            *
                            * tcp_send() will send the TCP sequence number as
                            * conn->sndseq.  Rather than creating a new
@@ -460,15 +459,9 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
                           saveseq = tcp_getsequence(conn->sndseq);
                           tcp_setsequence(conn->sndseq, saveseq - 1);
 
-                          tcp_send(dev, conn, TCP_ACK, tcpiplen + 1);
+                          tcp_send(dev, conn, TCP_ACK, tcpiplen);
 
                           tcp_setsequence(conn->sndseq, saveseq);
-
-                          /* Increment the number of un-ACKed bytes due to
-                           * the dummy byte that we just sent.
-                           */
-
-                          conn->tx_unacked++;
 
 #ifdef CONFIG_NET_TCP_WRITE_BUFFERS
                           /* Increment the un-ACKed sequence number */

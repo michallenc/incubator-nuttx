@@ -45,6 +45,7 @@
 #include <sys/ioctl.h>
 
 #include <math.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -119,7 +120,7 @@ struct vs1053_struct_s
   struct dq_queue_s       apbq;              /* Our queue for enqueued buffers */
   unsigned long           spi_freq;          /* Frequency to run the SPI bus at. */
   unsigned long           chip_freq;         /* Current chip frequency */
-  mqd_t                   mq;                /* Message queue for receiving messages */
+  struct file             mq;                /* Message queue for receiving messages */
   char                    mqname[16];        /* Our message queue name */
   pthread_t               threadid;          /* ID of our thread */
   sem_t                   apbq_sem;          /* Audio Pipeline Buffer Queue sem access */
@@ -1275,8 +1276,8 @@ static int vs1053_dreq_isr(int irq, FAR void *context, FAR void *arg)
   if (dev->running)
     {
       msg.msg_id = AUDIO_MSG_DATA_REQUEST;
-      nxmq_send(dev->mq, (FAR const char *)&msg, sizeof(msg),
-                CONFIG_VS1053_MSG_PRIO);
+      file_mq_send(&dev->mq, (FAR const char *)&msg, sizeof(msg),
+                   CONFIG_VS1053_MSG_PRIO);
     }
   else
     {
@@ -1340,7 +1341,7 @@ static void *vs1053_workerthread(pthread_addr_t pvarg)
 
       /* Wait for messages from our message queue */
 
-      size = nxmq_receive(dev->mq, (FAR char *)&msg, sizeof(msg), &prio);
+      size = file_mq_receive(&dev->mq, (FAR char *)&msg, sizeof(msg), &prio);
 
       /* Handle the case when we return with no message */
 
@@ -1425,9 +1426,8 @@ static void *vs1053_workerthread(pthread_addr_t pvarg)
 
   /* Close the message queue */
 
-  mq_close(dev->mq);
-  mq_unlink(dev->mqname);
-  dev->mq = NULL;
+  file_mq_close(&dev->mq);
+  file_mq_unlink(dev->mqname);
 
   /* Send an AUDIO_MSG_COMPLETE message to the client */
 
@@ -1486,18 +1486,20 @@ static int vs1053_start(FAR struct audio_lowerhalf_s *lower)
 
   /* Create a message queue for the worker thread */
 
-  snprintf(dev->mqname, sizeof(dev->mqname), "/tmp/%X", dev);
+  snprintf(dev->mqname, sizeof(dev->mqname), "/tmp/%" PRIXPTR,
+           (uintptr_t)dev);
   attr.mq_maxmsg = 16;
   attr.mq_msgsize = sizeof(struct audio_msg_s);
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
-  dev->mq = mq_open(dev->mqname, O_RDWR | O_CREAT, 0644, &attr);
-  if (dev->mq == NULL)
+  ret = file_mq_open(&dev->mq, dev->mqname,
+                     O_RDWR | O_CREAT, 0644, &attr);
+  if (ret < 0)
     {
       /* Error creating message queue! */
 
       auderr("ERROR: Couldn't allocate message queue\n");
-      return -ENOMEM;
+      return ret;
     }
 
   /* Pop the first enqueued buffer */
@@ -1534,7 +1536,7 @@ static int vs1053_start(FAR struct audio_lowerhalf_s *lower)
       (pthread_addr_t) dev);
   if (ret != OK)
     {
-      auderr("ERROR: Can't create worker thread, errno=%d\n", errno);
+      auderr("ERROR: Can't create worker thread, ret=%d\n", ret);
     }
   else
     {
@@ -1569,8 +1571,8 @@ static int vs1053_stop(FAR struct audio_lowerhalf_s *lower)
 
   term_msg.msg_id = AUDIO_MSG_STOP;
   term_msg.u.data = 0;
-  nxmq_send(dev->mq, (FAR const char *)&term_msg, sizeof(term_msg),
-            CONFIG_VS1053_MSG_PRIO);
+  file_mq_send(&dev->mq, (FAR const char *)&term_msg, sizeof(term_msg),
+               CONFIG_VS1053_MSG_PRIO);
 
   /* Join the worker thread */
 
@@ -1681,12 +1683,12 @@ static int vs1053_enqueuebuffer(FAR struct audio_lowerhalf_s *lower,
 
       /* Send a message indicating a new buffer enqueued */
 
-      if (dev->mq != NULL)
+      if (dev->mq.f_inode != NULL)
         {
           term_msg.msg_id = AUDIO_MSG_ENQUEUE;
           term_msg.u.data = 0;
-          nxmq_send(dev->mq, (FAR const char *)&term_msg,
-                    sizeof(term_msg), CONFIG_VS1053_MSG_PRIO);
+          file_mq_send(&dev->mq, (FAR const char *)&term_msg,
+                       sizeof(term_msg), CONFIG_VS1053_MSG_PRIO);
         }
     }
 
@@ -1873,21 +1875,15 @@ struct audio_lowerhalf_s *vs1053_initialize(FAR struct spi_dev_s *spi,
 
   /* Allocate a VS1053 device structure */
 
-  dev = (struct vs1053_struct_s *)kmm_malloc(sizeof(struct vs1053_struct_s));
+  dev = (struct vs1053_struct_s *)kmm_zalloc(sizeof(struct vs1053_struct_s));
   if (dev)
     {
       /* Initialize the VS1053 device structure */
 
       dev->lower.ops   = &g_audioops;
-      dev->lower.upper = NULL;
-      dev->lower.priv  = NULL;
       dev->hw_lower    = lower;
       dev->spi_freq    = CONFIG_VS1053_XTALI / 7;
       dev->spi         = spi;
-      dev->mq          = NULL;
-      dev->busy        = false;
-      dev->threadid    = 0;
-      dev->running     = false;
 
 #ifndef CONFIG_AUDIO_EXCLUDE_VOLUME
       dev->volume      = 250;           /* 25% volume as default */
@@ -1896,10 +1892,6 @@ struct audio_lowerhalf_s *vs1053_initialize(FAR struct spi_dev_s *spi,
 #endif
 #endif
 
-#ifndef CONFIG_AUDIO_EXCLUDE_TONE
-      dev->bass        = 0;
-      dev->treble      = 0;
-#endif
       nxsem_init(&dev->apbq_sem, 0, 1);
       dq_init(&dev->apbq);
 

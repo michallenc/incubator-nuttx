@@ -1368,7 +1368,7 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  * Input Parameters:
  *   dev -  Device-specific state data
- *   nbits - The number of bits requests
+ *   nbits - The number of bits requested
  *
  * Returned Value:
  *   none
@@ -1411,8 +1411,8 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
       regval |= setting;
       spi_putreg(priv, PIC32MZ_SPI_CON_OFFSET, regval);
 
-      /* Save the selection so the subsequence re-configurations will be
-       * faster
+      /* Save the selection so that subsequent re-configurations will be
+       * faster.
        */
 
       priv->nbits = nbits;
@@ -2092,7 +2092,7 @@ FAR struct spi_dev_s *pic32mz_spibus_initialize(int port)
   regval |= (SPI_CON_ENHBUF | SPI_CON_SRXISEL_HALF | SPI_CON_STXISEL_HALF);
 #endif
   spi_putreg(priv, PIC32MZ_SPI_CON_OFFSET, regval);
-  spiinfo("CON: %08x\n", regval);
+  spiinfo("CON: %08" PRIx32 "\n", regval);
 
   /* Set the initial SPI configuration */
 

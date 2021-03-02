@@ -61,6 +61,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -1105,7 +1106,7 @@ static int i2s_rxdma_setup(struct stm32_i2s_s *priv)
 
       if (ret < 0)
         {
-          i2serr("ERROR: wd_start failed: %d\n", errno);
+          i2serr("ERROR: wd_start failed: %d\n", ret);
         }
     }
 
@@ -1504,7 +1505,7 @@ static int i2s_txdma_setup(struct stm32_i2s_s *priv)
 
       if (ret < 0)
         {
-          i2serr("ERROR: wd_start failed: %d\n", errno);
+          i2serr("ERROR: wd_start failed: %d\n", ret);
         }
     }
 
@@ -1897,7 +1898,7 @@ static int stm32_i2s_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
 #endif
 
   DEBUGASSERT(priv && apb && ((uintptr_t)apb->samp & priv->align) == 0);
-  i2sinfo("apb=%p nmaxbytes=%d arg=%p timeout=%d\n",
+  i2sinfo("apb=%p nmaxbytes=%d arg=%p timeout=%" PRId32 "\n",
           apb, apb->nmaxbytes, arg, timeout);
 
   i2s_init_buffer(apb->samp, apb->nmaxbytes);
@@ -2107,7 +2108,7 @@ static int stm32_i2s_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
    */
 
   DEBUGASSERT(priv && apb);
-  i2sinfo("apb=%p nbytes=%d arg=%p timeout=%d\n",
+  i2sinfo("apb=%p nbytes=%d arg=%p timeout=%" PRId32 "\n",
           apb, apb->nbytes - apb->curbyte, arg, timeout);
 
   i2s_dump_buffer("Sending", &apb->samp[apb->curbyte],

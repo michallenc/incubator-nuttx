@@ -296,15 +296,15 @@ static int dns_send_query(int sd, FAR const char *name,
   ret = connect(sd, &uaddr->addr, addrlen);
   if (ret < 0)
     {
-      ret = -errno;
+      ret = -get_errno();
       nerr("ERROR: connect failed: %d\n", ret);
       return ret;
     }
 
-  ret = _NX_SEND(sd, buffer, dest - buffer, 0);
+  ret = send(sd, buffer, dest - buffer, 0);
   if (ret < 0)
     {
-      ret = -_NX_GETERRNO(ret);
+      ret = -get_errno();
       nerr("ERROR: sendto failed: %d\n", ret);
       return ret;
     }
@@ -346,10 +346,10 @@ static int dns_recv_response(int sd, FAR union dns_addr_u *addr, int naddr,
 
   /* Receive the response */
 
-  ret = _NX_RECV(sd, buffer, RECV_BUFFER_SIZE, 0);
+  ret = recv(sd, buffer, RECV_BUFFER_SIZE, 0);
   if (ret < 0)
     {
-      ret = -_NX_GETERRNO(ret);
+      ret = -get_errno();
       nerr("ERROR: recv failed: %d\n", ret);
       return ret;
     }
@@ -487,10 +487,10 @@ static int dns_recv_response(int sd, FAR union dns_addr_u *addr, int naddr,
           nameptr += 10 + 4;
 
           ninfo("IPv4 address: %d.%d.%d.%d\n",
-                (ans->u.ipv4.s_addr) & 0xff,
-                (ans->u.ipv4.s_addr >> 8) & 0xff,
-                (ans->u.ipv4.s_addr >> 16) & 0xff,
-                (ans->u.ipv4.s_addr >> 24) & 0xff);
+                (int)((ans->u.ipv4.s_addr) & 0xff),
+                (int)((ans->u.ipv4.s_addr >> 8) & 0xff),
+                (int)((ans->u.ipv4.s_addr >> 16) & 0xff),
+                (int)((ans->u.ipv4.s_addr >> 24) & 0xff));
 
           inaddr                  = &addr[naddr_read].ipv4;
           inaddr->sin_family      = AF_INET;

@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -546,7 +547,7 @@ static void  wm8776_senddone(FAR struct i2s_dev_s *i2s,
    * against that possibility.
    */
 
-  flags = spin_lock_irqsave();
+  flags = spin_lock_irqsave(NULL);
 
   /* Add the completed buffer to the end of our doneq.  We do not yet
    * decrement the reference count.
@@ -564,18 +565,18 @@ static void  wm8776_senddone(FAR struct i2s_dev_s *i2s,
   /* REVISIT:  This can be overwritten */
 
   priv->result = result;
-  spin_unlock_irqrestore(flags);
+  spin_unlock_irqrestore(NULL, flags);
 
   /* Now send a message to the worker thread, informing it that there are
    * buffers in the done queue that need to be cleaned up.
    */
 
   msg.msg_id = AUDIO_MSG_COMPLETE;
-  ret = mq_send(priv->mq, (FAR const char *)&msg, sizeof(msg),
-                CONFIG_WM8776_MSG_PRIO);
+  ret = file_mq_send(&priv->mq, (FAR const char *)&msg, sizeof(msg),
+                     CONFIG_WM8776_MSG_PRIO);
   if (ret < 0)
     {
-      auderr("ERROR: mq_send failed: %d\n", get_errno());
+      auderr("ERROR: file_mq_send failed: %d\n", ret);
     }
 }
 
@@ -599,13 +600,13 @@ static void wm8776_returnbuffers(FAR struct wm8776_dev_s *priv)
    * use interrupt controls to protect against that possibility.
    */
 
-  flags = spin_lock_irqsave();
+  flags = spin_lock_irqsave(NULL);
   while (dq_peek(&priv->doneq) != NULL)
     {
       /* Take the next buffer from the queue of completed transfers */
 
       apb = (FAR struct ap_buffer_s *)dq_remfirst(&priv->doneq);
-      spin_unlock_irqrestore(flags);
+      spin_unlock_irqrestore(NULL, flags);
 
       audinfo("Returning: apb=%p curbyte=%d nbytes=%d flags=%04x\n",
               apb, apb->curbyte, apb->nbytes, apb->flags);
@@ -640,10 +641,10 @@ static void wm8776_returnbuffers(FAR struct wm8776_dev_s *priv)
 #else
       priv->dev.upper(priv->dev.priv, AUDIO_CALLBACK_DEQUEUE, apb, OK);
 #endif
-      flags = spin_lock_irqsave();
+      flags = spin_lock_irqsave(NULL);
     }
 
-  spin_unlock_irqrestore(flags);
+  spin_unlock_irqrestore(NULL, flags);
 }
 
 /****************************************************************************
@@ -696,9 +697,9 @@ static int wm8776_sendbuffer(FAR struct wm8776_dev_s *priv)
        * to avoid a possible race condition.
        */
 
-      flags = spin_lock_irqsave();
+      flags = spin_lock_irqsave(NULL);
       priv->inflight++;
-      spin_unlock_irqrestore(flags);
+      spin_unlock_irqrestore(NULL, flags);
 
       shift  = (priv->bpsamp == 8) ? 14 - 3 : 14 - 4;
       shift -= (priv->nchannels > 1) ? 1 : 0;
@@ -747,15 +748,17 @@ static int wm8776_start(FAR struct audio_lowerhalf_s *dev)
 
   /* Create a message queue for the worker thread */
 
-  snprintf(priv->mqname, sizeof(priv->mqname), "/tmp/%X", priv);
+  snprintf(priv->mqname, sizeof(priv->mqname), "/tmp/%" PRIXPTR,
+           (uintptr_t)priv);
 
   attr.mq_maxmsg  = 16;
   attr.mq_msgsize = sizeof(struct audio_msg_s);
   attr.mq_curmsgs = 0;
   attr.mq_flags   = 0;
 
-  priv->mq = mq_open(priv->mqname, O_RDWR | O_CREAT, 0644, &attr);
-  if (priv->mq == NULL)
+  ret = file_mq_open(&priv->mq, priv->mqname,
+                     O_RDWR | O_CREAT, 0644, &attr);
+  if (ret < 0)
     {
       /* Error creating message queue! */
 
@@ -817,8 +820,8 @@ static int wm8776_stop(FAR struct audio_lowerhalf_s *dev)
 
   term_msg.msg_id = AUDIO_MSG_STOP;
   term_msg.u.data = 0;
-  mq_send(priv->mq, (FAR const char *)&term_msg, sizeof(term_msg),
-          CONFIG_WM8776_MSG_PRIO);
+  file_mq_send(&priv->mq, (FAR const char *)&term_msg, sizeof(term_msg),
+               CONFIG_WM8776_MSG_PRIO);
 
   /* Join the worker thread */
 
@@ -927,20 +930,16 @@ static int wm8776_enqueuebuffer(FAR struct audio_lowerhalf_s *dev,
    */
 
   ret = OK;
-  if (priv->mq != NULL)
+  if (priv->mq.f_inode != NULL)
     {
       term_msg.msg_id  = AUDIO_MSG_ENQUEUE;
       term_msg.u.data = 0;
 
-      ret = mq_send(priv->mq, (FAR const char *)&term_msg, sizeof(term_msg),
-                    CONFIG_WM8776_MSG_PRIO);
+      ret = file_mq_send(&priv->mq, (FAR const char *)&term_msg,
+                         sizeof(term_msg), CONFIG_WM8776_MSG_PRIO);
       if (ret < 0)
         {
-          int errcode = get_errno();
-          DEBUGASSERT(errcode > 0);
-
-          auderr("ERROR: mq_send failed: %d\n", errcode);
-          UNUSED(errcode);
+          auderr("ERROR: file_mq_send failed: %d\n", ret);
         }
     }
 
@@ -1223,7 +1222,8 @@ repeat:
 
       /* Wait for messages from our message queue */
 
-      msglen = mq_receive(priv->mq, (FAR char *)&msg, sizeof(msg), &prio);
+      msglen = file_mq_receive(&priv->mq, (FAR char *)&msg,
+                               sizeof(msg), &prio);
 
       /* Handle the case when we return with no message */
 
@@ -1277,7 +1277,7 @@ repeat:
             break;
         }
 
-      mq_getattr(priv->mq, &attr);
+      file_mq_getattr(&priv->mq, &attr);
 
       /* If there is a message in the queue, process it */
 
@@ -1317,9 +1317,8 @@ repeat:
 
   /* Close the message queue */
 
-  mq_close(priv->mq);
-  mq_unlink(priv->mqname);
-  priv->mq = NULL;
+  file_mq_close(&priv->mq);
+  file_mq_unlink(priv->mqname);
 
   /* Send an AUDIO_MSG_COMPLETE message to the client */
 

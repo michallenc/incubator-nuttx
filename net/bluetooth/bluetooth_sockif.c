@@ -72,6 +72,18 @@ static ssize_t    bluetooth_sendto(FAR struct socket *psock,
                    FAR const struct sockaddr *to, socklen_t tolen);
 static int        bluetooth_close(FAR struct socket *psock);
 
+/* Protocol Specific Interfaces */
+
+static int        bluetooth_l2cap_bind(FAR struct socket *psock,
+                    FAR const struct sockaddr_l2 *addr, socklen_t addrlen);
+static int        bluetooth_hci_bind(FAR struct socket *psock,
+                    FAR const struct sockaddr_hci *addr,
+                    socklen_t addrlen);
+static ssize_t    bluetooth_l2cap_send(FAR struct socket *psock,
+                   FAR const void *buf, size_t len, int flags);
+static ssize_t    bluetooth_hci_send(FAR struct socket *psock,
+                   FAR const void *buf, size_t len, int flags);
+
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -165,8 +177,8 @@ static int bluetooth_sockif_alloc(FAR struct socket *psock)
 static int bluetooth_setup(FAR struct socket *psock, int protocol)
 {
   /* Allocate the appropriate connection structure.  This reserves the
-   * the connection structure is is unallocated at this point.  It will
-   * not actually be initialized until the socket is connected.
+   * connection structure, it is unallocated at this point.  It will not
+   * actually be initialized until the socket is connected.
    *
    * Only SOCK_RAW is supported
    */
@@ -270,11 +282,19 @@ static int bluetooth_connect(FAR struct socket *psock,
 
   if (addr->sa_family == AF_BLUETOOTH)
     {
+      /* Verify the Protocol */
+
+      if (psock->s_proto != BTPROTO_L2CAP)
+        {
+          return -EPFNOSUPPORT;
+        }
+
       /* Save the "connection" address */
 
       btaddr = (FAR struct sockaddr_l2 *)addr;
       memcpy(&conn->bc_raddr, &btaddr->l2_bdaddr, sizeof(bt_addr_t));
       conn->bc_channel = btaddr->l2_cid;
+      conn->bc_proto = psock->s_proto;
     }
   else
     {
@@ -325,7 +345,7 @@ static int bluetooth_connect(FAR struct socket *psock,
  *
  * Returned Value:
  *   Returns 0 (OK) on success.  On failure, it returns a negated errno
- *   value.  See accept() for a desrciption of the appropriate error value.
+ *   value.  See accept() for a description of the appropriate error value.
  *
  * Assumptions:
  *   The network is locked.
@@ -333,9 +353,9 @@ static int bluetooth_connect(FAR struct socket *psock,
  ****************************************************************************/
 
 static int bluetooth_accept(FAR struct socket *psock,
-                             FAR struct sockaddr *addr,
-                             FAR socklen_t *addrlen,
-                             FAR struct socket *newsock)
+                            FAR struct sockaddr *addr,
+                            FAR socklen_t *addrlen,
+                            FAR struct socket *newsock)
 {
   return -EAFNOSUPPORT;
 }
@@ -364,21 +384,80 @@ static int bluetooth_accept(FAR struct socket *psock,
 static int bluetooth_bind(FAR struct socket *psock,
                           FAR const struct sockaddr *addr, socklen_t addrlen)
 {
-  FAR const struct sockaddr_l2 *iaddr;
-  FAR struct radio_driver_s *radio;
-  FAR struct bluetooth_conn_s *conn;
-
   DEBUGASSERT(psock != NULL && addr != NULL);
 
   /* Verify that a valid address has been provided */
 
-  if (addr->sa_family != AF_BLUETOOTH ||
-      addrlen < sizeof(struct sockaddr_l2))
+  if (addr->sa_family != AF_BLUETOOTH)
     {
-      nerr("ERROR: Invalid family: %u or address length: %d < %d\n",
-           addr->sa_family, addrlen, sizeof(struct sockaddr_l2));
+      nerr("ERROR: Invalid family: %u\n", addr->sa_family);
       return -EBADF;
     }
+
+  switch (psock->s_proto)
+    {
+      case BTPROTO_L2CAP:
+        {
+          FAR const struct sockaddr_l2 *iaddr;
+          if (addrlen < sizeof(struct sockaddr_l2))
+            {
+              nerr("ERROR: Invalid address length: %zu < %zu\n",
+                   (size_t)addrlen, sizeof(struct sockaddr_l2));
+              return -EBADF;
+            }
+
+          iaddr = (FAR const struct sockaddr_l2 *)addr;
+          return bluetooth_l2cap_bind(psock, iaddr, addrlen);
+        }
+
+      case BTPROTO_HCI:
+        {
+          FAR const struct sockaddr_hci *hciaddr;
+          if (addrlen < sizeof(struct sockaddr_hci))
+            {
+              nerr("ERROR: Invalid address length: %zu < %zu\n",
+                   (size_t)addrlen, sizeof(struct sockaddr_hci));
+              return -EBADF;
+            }
+
+          hciaddr = (FAR const struct sockaddr_hci *)addr;
+          return bluetooth_hci_bind(psock, hciaddr, addrlen);
+        }
+
+      default:
+        return -EPFNOSUPPORT;
+    }
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: bluetooth_l2cap_bind
+ *
+ * Description:
+ *   bluetooth_bind() gives the socket 'psock' the local address 'iaddr'.
+ *   'iaddr' is 'addrlen' bytes long.  Traditionally, this is called
+ *   "assigning a name to a socket."  When a socket is created with
+ *   socket(), it exists in a name space (address family) but has no name
+ *   assigned.
+ *
+ * Input Parameters:
+ *   psock    Socket structure of the socket to bind
+ *   iaddr    Socket local address
+ *   addrlen  Length of 'addr'
+ *
+ * Returned Value:
+ *   0 on success;  A negated errno value is returned on failure.  See
+ *   bind() for a list a appropriate error values.
+ *
+ ****************************************************************************/
+
+static int bluetooth_l2cap_bind(FAR struct socket *psock,
+                                FAR const struct sockaddr_l2 *iaddr,
+                                socklen_t addrlen)
+{
+  FAR struct radio_driver_s *radio;
+  FAR struct bluetooth_conn_s *conn;
 
   /* Bind a PF_BLUETOOTH socket to an network device.
    *
@@ -399,8 +478,6 @@ static int bluetooth_bind(FAR struct socket *psock,
       return -EINVAL;
     }
 
-  iaddr = (FAR const struct sockaddr_l2 *)addr;
-
   /* Very that some address was provided.
    *
    * REVISIT: Currently and explicit address must be assigned.  Should we
@@ -408,6 +485,8 @@ static int bluetooth_bind(FAR struct socket *psock,
    */
 
   conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
+
+  conn->bc_proto = psock->s_proto;
 
   /* Find the device associated with the requested address */
 
@@ -421,6 +500,61 @@ static int bluetooth_bind(FAR struct socket *psock,
   /* Save the address as the socket's local address */
 
   memcpy(&conn->bc_laddr, &iaddr->l2_bdaddr, sizeof(bt_addr_t));
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: bluetooth_l2cap_bind
+ *
+ * Description:
+ *   bluetooth_bind() gives the socket 'psock' the local address 'hciaddr'.
+ *   'hciaddr' is 'addrlen' bytes long.  Traditionally, this is called
+ *   "assigning a name to a socket."  When a socket is created with
+ *   socket(), it exists in a name space (address family) but has no name
+ *   assigned.
+ *
+ * Input Parameters:
+ *   psock    Socket structure of the socket to bind
+ *   hciaddr  Socket local address
+ *   addrlen  Length of 'addr'
+ *
+ * Returned Value:
+ *   0 on success;  A negated errno value is returned on failure.  See
+ *   bind() for a list a appropriate error values.
+ *
+ ****************************************************************************/
+
+static int bluetooth_hci_bind(FAR struct socket *psock,
+                              FAR const struct sockaddr_hci *hciaddr,
+                             socklen_t addrlen)
+{
+  FAR struct bluetooth_conn_s *conn;
+
+  /* Bind a PF_BLUETOOTH socket to an network device.
+   *
+   * Only SOCK_RAW is supported
+   */
+
+  if (psock->s_type != SOCK_RAW)
+    {
+      nerr("ERROR: Invalid socket type: %u\n", psock->s_type);
+      return -EBADF;
+    }
+
+  /* Verify that the socket is not already bound. */
+
+  if (_SS_ISBOUND(psock->s_flags))
+    {
+      nerr("ERROR: Already bound\n");
+      return -EINVAL;
+    }
+
+  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
+
+  conn->bc_proto = psock->s_proto;
+  conn->bc_channel = hciaddr->hci_channel;
+  conn->bc_ldev = hciaddr->hci_dev;
 
   return OK;
 }
@@ -525,6 +659,11 @@ static int bluetooth_getpeername(FAR struct socket *psock,
 
   DEBUGASSERT(psock != NULL && addr != NULL && addrlen != NULL);
 
+  if (psock->s_proto != BTPROTO_L2CAP)
+    {
+      return -EPFNOSUPPORT;
+    }
+
   conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
   DEBUGASSERT(conn != NULL);
 
@@ -570,7 +709,7 @@ static int bluetooth_getpeername(FAR struct socket *psock,
  *
  * Returned Value:
  *   On success, zero is returned. On error, a negated errno value is
- *   returned.  See list() for the set of appropriate error values.
+ *   returned.  See listen() for the set of appropriate error values.
  *
  ****************************************************************************/
 
@@ -628,49 +767,118 @@ static int bluetooth_poll_local(FAR struct socket *psock,
  ****************************************************************************/
 
 static ssize_t bluetooth_send(FAR struct socket *psock, FAR const void *buf,
-                               size_t len, int flags)
+                              size_t len, int flags)
 {
-  struct sockaddr_l2 to;
-  FAR struct bluetooth_conn_s *conn;
   ssize_t ret;
 
   DEBUGASSERT(psock != NULL || buf != NULL);
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn != NULL);
 
   /* Only SOCK_RAW is supported */
 
   if (psock->s_type == SOCK_RAW)
     {
-      /* send() may be used only if the socket is has been connected. */
-
-      if (!_SS_ISCONNECTED(psock->s_flags))
+      switch (psock->s_proto)
         {
-          ret = -ENOTCONN;
-        }
-      else
-        {
-          to.l2_family = AF_BLUETOOTH;
-          memcpy(&to.l2_bdaddr, &conn->bc_raddr, sizeof(bt_addr_t));
-          to.l2_cid = conn->bc_channel;
+          case BTPROTO_L2CAP:
+            {
+              ret = bluetooth_l2cap_send(psock, buf, len, flags);
+              break;
+            }
 
-          /* Then perform the send() as sendto() */
+          case BTPROTO_HCI:
+            {
+              ret = bluetooth_hci_send(psock, buf, len, flags);
+              break;
+            }
 
-          ret = psock_bluetooth_sendto(psock, buf, len, flags,
-                                        (FAR const struct sockaddr *)&to,
-                                        sizeof(struct sockaddr_l2));
+          default:
+            ret = -EPFNOSUPPORT;
         }
     }
   else
     {
-      /* EDESTADDRREQ.  Signifies that the socket is not connection-mode and
-       * no peer address is set.
-       */
-
-      ret = -EDESTADDRREQ;
+      ret = -EINVAL;
     }
 
   return ret;
+}
+
+/****************************************************************************
+ * Name: bluetooth_l2cap_send
+ *
+ * Description:
+ *   Socket send() method for the PF_BLUETOOTH socket over BTPROTO_L2CAP.
+ *
+ * Input Parameters:
+ *   psock    An instance of the internal socket structure.
+ *   buf      Data to send
+ *   len      Length of data to send
+ *   flags    Send flags
+ *
+ * Returned Value:
+ *   On success, returns the number of characters sent.  On  error, a negated
+ *   errno value is returned (see send() for the list of appropriate error
+ *   values.
+ *
+ ****************************************************************************/
+
+static ssize_t bluetooth_l2cap_send(FAR struct socket *psock,
+                                    FAR const void *buf,
+                                    size_t len, int flags)
+{
+  struct sockaddr_l2 to;
+  FAR struct bluetooth_conn_s *conn;
+  ssize_t ret;
+
+  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
+  DEBUGASSERT(conn != NULL);
+
+  if (!_SS_ISCONNECTED(psock->s_flags))
+    {
+      ret = -ENOTCONN;
+    }
+  else
+    {
+      to.l2_family = AF_BLUETOOTH;
+      memcpy(&to.l2_bdaddr, &conn->bc_raddr, sizeof(bt_addr_t));
+      to.l2_cid = conn->bc_channel;
+
+      /* Then perform the send() as sendto() */
+
+      ret = psock_bluetooth_sendto(psock, buf, len, flags,
+                                   (FAR const struct sockaddr *)&to,
+                                   sizeof(struct sockaddr_l2));
+    }
+
+  return ret;
+}
+
+/****************************************************************************
+ * Name: bluetooth_hci_send
+ *
+ * Description:
+ *   Socket send() method for the PF_BLUETOOTH socket over BTPROTO_HCI.
+ *
+ * Input Parameters:
+ *   psock    An instance of the internal socket structure.
+ *   buf      Data to send
+ *   len      Length of data to send
+ *   flags    Send flags
+ *
+ * Returned Value:
+ *   On success, returns the number of characters sent.  On  error, a negated
+ *   errno value is returned (see send() for the list of appropriate error
+ *   values.
+ *
+ ****************************************************************************/
+
+static ssize_t bluetooth_hci_send(FAR struct socket *psock,
+                                  FAR const void *buf,
+                                  size_t len, int flags)
+{
+  /* We only support sendto() for HCI sockets */
+
+  return -EPFNOSUPPORT;
 }
 
 /****************************************************************************

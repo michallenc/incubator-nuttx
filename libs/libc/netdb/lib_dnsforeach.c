@@ -104,7 +104,7 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
   stream = fopen(CONFIG_NETDB_RESOLVCONF_PATH, "r");
   if (stream == NULL)
     {
-      ret = -errno;
+      ret = -get_errno();
       nerr("ERROR: Failed to open %s: %d\n",
         CONFIG_NETDB_RESOLVCONF_PATH, ret);
       DEBUGASSERT(ret < 0);
@@ -224,7 +224,7 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
               else
 #endif
                 {
-                  nerr("ERROR: Unrecognized address: %s\n", addrstr)
+                  nerr("ERROR: Unrecognized address: %s\n", addrstr);
                   ret = OK;
                 }
 #ifdef CONFIG_NET_IPv6

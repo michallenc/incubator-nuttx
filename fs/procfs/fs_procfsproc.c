@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -361,7 +362,7 @@ static FAR const struct proc_node_s * const g_groupinfo[] =
 
 /* Names of task/thread states */
 
-static FAR const char *g_statenames[] =
+static FAR const char * const g_statenames[] =
 {
   "Invalid",
   "Waiting,Unlock",
@@ -382,7 +383,7 @@ static FAR const char *g_statenames[] =
 #endif
 };
 
-static FAR const char *g_ttypenames[4] =
+static FAR const char * const g_ttypenames[4] =
 {
   "Task",
   "pthread",
@@ -630,9 +631,9 @@ static ssize_t proc_status(FAR struct proc_file_s *procfile,
       return totalsize;
     }
 
-  /* Show the signal mask */
+  /* Show the signal mask. Note: sigset_t is uint32_t on NuttX. */
 
-  linesize = snprintf(procfile->line, STATUS_LINELEN, "%-12s%08x\n",
+  linesize = snprintf(procfile->line, STATUS_LINELEN, "%-12s%08" PRIx32 "\n",
                       "SigMask:", tcb->sigprocmask);
   copysize = procfs_memcpy(procfile->line, linesize, buffer, remaining,
                            &offset);
@@ -688,7 +689,7 @@ static ssize_t proc_cmdline(FAR struct proc_file_s *procfile,
     {
       FAR struct pthread_tcb_s *ptcb = (FAR struct pthread_tcb_s *)tcb;
 
-      linesize   = snprintf(procfile->line, STATUS_LINELEN, " 0x%p\n",
+      linesize   = snprintf(procfile->line, STATUS_LINELEN, " %p\n",
                             ptcb->arg);
       copysize   = procfs_memcpy(procfile->line, linesize, buffer,
                                  remaining, &offset);
@@ -769,7 +770,8 @@ static ssize_t proc_loadavg(FAR struct proc_file_s *procfile,
       fracpart = 0;
     }
 
-  linesize = snprintf(procfile->line, STATUS_LINELEN, "%3d.%01d%%",
+  linesize = snprintf(procfile->line, STATUS_LINELEN,
+                      "%3" PRId32 ".%01" PRId32 "%%",
                       intpart, fracpart);
   copysize = procfs_memcpy(procfile->line, linesize, buffer, buflen,
                            &offset);
@@ -1754,7 +1756,7 @@ static int proc_readdir(struct fs_dirent_s *dir)
       /* Save the filename and file type */
 
       dir->fd_dir.d_type = node->dtype;
-      strncpy(dir->fd_dir.d_name, node->name, NAME_MAX + 1);
+      strncpy(dir->fd_dir.d_name, node->name, NAME_MAX);
 
       /* Set up the next directory entry offset.  NOTE that we could use the
        * standard f_pos instead of our own private index.

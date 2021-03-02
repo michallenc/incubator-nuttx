@@ -46,9 +46,9 @@
 
 #include <sys/types.h>
 #include <stdint.h>
-#include <signal.h>
 #include <debug.h>
 
+#include <nuttx/signal.h>
 #include <nuttx/serial/serial.h>
 
 /****************************************************************************
@@ -139,7 +139,7 @@ void uart_recvchars(FAR uart_dev_t *dev)
 #endif
   unsigned int status;
   int nexthead = rxbuf->head + 1;
-#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGSTP)
+#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP)
   int signo = 0;
 #endif
   uint16_t nbytes = 0;
@@ -233,13 +233,13 @@ void uart_recvchars(FAR uart_dev_t *dev)
         }
       else
 #endif
-#ifdef CONFIG_TTY_SIGSTP
-      /* Is this the special character that will generate the SIGSTP
+#ifdef CONFIG_TTY_SIGTSTP
+      /* Is this the special character that will generate the SIGTSTP
        * signal?
        */
 
       if (dev->pid >= 0 && (dev->tc_lflag & ISIG) &&
-          ch == CONFIG_TTY_SIGSTP_CHAR)
+          ch == CONFIG_TTY_SIGTSTP_CHAR)
         {
 #ifdef CONFIG_TTY_SIGINT
           /* Give precedence to SIGINT */
@@ -251,7 +251,7 @@ void uart_recvchars(FAR uart_dev_t *dev)
                * into the Rx buffer.  It should not be read as normal data.
                */
 
-              signo = SIGSTP;
+              signo = SIGTSTP;
             }
         }
       else
@@ -292,12 +292,12 @@ void uart_recvchars(FAR uart_dev_t *dev)
       uart_datareceived(dev);
     }
 
-#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGSTP)
+#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP)
   /* Send the signal if necessary */
 
   if (signo != 0)
     {
-      kill(dev->pid, signo);
+      nxsig_kill(dev->pid, signo);
       uart_reset_sem(dev);
     }
 #endif

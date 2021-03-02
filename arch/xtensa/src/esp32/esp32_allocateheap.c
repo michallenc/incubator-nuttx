@@ -53,6 +53,61 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* The heap overview:
+ *
+ * CONFIG_HEAP2_BASE                         eg. 3f80 0000
+ *     :
+ *     : g_mmheap region3 (CONFIG_ESP32_SPIRAM)
+ *     :
+ * CONFIG_HEAP2_BASE + CONFIG_HEAP2_SIZE     eg. 3fc0 0000
+ *
+ * _sheap                                    eg. 3ffc 8c6c
+ *     :
+ *     : g_iheap (CONFIG_XTENSA_USE_SEPARATE_IMEM)
+ *     :
+ * _sheap + CONFIG_XTENSA_IMEM_REGION_SIZE   eg. 3ffd ebfc
+ *     :
+ *     : g_mmheap region1
+ *     :
+ * HEAP_REGION1_END                              3ffd fff0
+ *     :
+ *     : ROM data
+ *     :
+ * HEAP_REGION2_START                            3ffe 1330 or 3ffe 7e40
+ *     :
+ *     : g_mmheap region2
+ *     :
+ *     : about 123KB
+ *     :
+ * _eheap                                        4000 0000
+ */
+
+/* Region 1 of the heap is the area from the end of the .data section to the
+ * beginning of the ROM data.  The start address is defined from the linker
+ * script as "_sheap".  Then end is defined here, as follows:
+ */
+
+#define HEAP_REGION1_END    0x3ffdfff0
+
+/* Region 2 of the heap is the area from the end of the ROM data to the end
+ * of DRAM.  The linker script has already set "_eheap" as the end of DRAM,
+ * the following defines the start of region2.
+ * N.B: That ROM data consists of 2 regions, one per CPU.  If SMP is not
+ * enabled include APP's region with the heap.
+ */
+
+#ifndef CONFIG_SMP
+#  define HEAP_REGION2_START  0x3ffe1330
+#else
+#  define HEAP_REGION2_START  0x3ffe7e40
+#endif
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+#define	XTENSA_IMEM_REGION_SIZE	CONFIG_XTENSA_IMEM_REGION_SIZE
+#else
+#define	XTENSA_IMEM_REGION_SIZE	0
+#endif
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -72,13 +127,17 @@
  *
  ****************************************************************************/
 
-#warning REVISIT heap.  Do what with non-heterogeneous memory?
-
 void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 {
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)&_sheap;
-  *heap_size = (size_t)((uintptr_t)&_eheap - (uintptr_t)&_sheap);
+  *heap_start = (FAR void *)&_sheap + XTENSA_IMEM_REGION_SIZE;
+
+  /* If the following DEBUGASSERT fails,
+   * probably you have too large CONFIG_XTENSA_IMEM_REGION_SIZE.
+   */
+
+  DEBUGASSERT(HEAP_REGION1_END > (uintptr_t)*heap_start);
+  *heap_size = (size_t)(HEAP_REGION1_END - (uintptr_t)*heap_start);
 }
 
 /****************************************************************************
@@ -93,10 +152,16 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 #if CONFIG_MM_REGIONS > 1
 void xtensa_add_region(void)
 {
+  umm_addregion((FAR void *)HEAP_REGION2_START,
+                (size_t)(uintptr_t)&_eheap - HEAP_REGION2_START);
+
+#if defined(CONFIG_ESP32_SPIRAM)
   /* Check for any additional memory regions */
 
-#if defined(CONFIG_HEAP2_BASE) && defined(CONFIG_HEAP2_SIZE)
-  umm_addregion((FAR void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
+#  if defined(CONFIG_HEAP2_BASE) && defined(CONFIG_HEAP2_SIZE)
+    umm_addregion((FAR void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
+#  endif
 #endif
 }
 #endif
+

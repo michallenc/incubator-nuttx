@@ -627,6 +627,13 @@ loadable
   with any Windows configuration, however, because Windows does not use the
   ELF format.
 
+  This is the key part of the configuration:
+
+  +CONFIG_PATH_INITIAL="/system/bin"
+  +CONFIG_USER_INITPATH="/system/bin/nsh"
+
+  The shell is loaded from the elf, but you can also run any of the ELFs that are in /system/bin as they are on the "PATH"
+
 minibasic
 
   This configuration was used to test the Mini Basic port at
@@ -635,14 +642,14 @@ minibasic
 module
 
   This is a configuration to test CONFIG_LIBC_MODLIB with 64-bit modules.
-  This has apps/examples/module and apps/examples/sotest enabled.
+  This has apps/examples/module enabled.
   This configuration is intended for 64-bit host OS.
 
 module32
 
   This is a configuration to test CONFIG_LIBC_MODLIB with CONFIG_SIM_M32
   and 32-bit modules.
-  This has apps/examples/module and apps/examples/sotest enabled.
+  This has apps/examples/module enabled.
   This configuration is intended for 64-bit host OS.
 
 mount
@@ -684,6 +691,39 @@ nettest
      will either need to edit your configuration files to use 10.0.0.1 on the
      "target" (CONFIG_EXAMPLES_NETTEST_*) or edit up_wpcap.c to select the IP
      address that you want to use.
+
+nimble
+
+  This is similar to bthcisock configuration, which uses the exposes the real
+  BLE stack to NuttX, but disables NuttX's own BLE stack and uses nimBLE stack
+  instead (built in userspace).
+
+  This configuration can be tested by running nimBLE example application "nimble"
+  as follows:
+
+    $ sudo setcap 'cap_net_raw,cap_net_admin=eip' nuttx
+    $ ./nuttx
+    NuttShell (NSH) NuttX-9.1.0
+    nsh> ifup bnep0
+    ifup bnep0...OK
+    nsh> nimble
+    hci init
+    port init
+    gap init
+    gatt init
+    ans init
+    ias init
+    lls init
+    tps init
+    hci_sock task init
+    ble_host task init
+    hci sock task
+    host task
+    advertise
+
+  At this point you should be able to detect a "nimble" BLE device when scanning
+  for BLE devices. You can use nRFConnect Android application from Nordic to connect
+  and inspect exposed GATT services.
 
 nsh
 
@@ -1146,6 +1186,19 @@ spiffs
 
   This is a test of the SPIFFS file system using the apps/testing/fstest test
   with an MTD RAM driver to simulate the FLASH part.
+
+sotest
+
+  This is a configuration to test CONFIG_LIBC_MODLIB with 64-bit modules.
+  This has apps/examples/sotest enabled.
+  This configuration is intended for 64-bit host OS.
+
+sotest32
+
+  This is a configuration to test CONFIG_LIBC_MODLIB with CONFIG_SIM_M32
+  and 32-bit modules.
+  This has apps/examples/sotest enabled.
+  This configuration is intended for 64-bit host OS.
 
 tcploop
 

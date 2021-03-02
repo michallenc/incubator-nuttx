@@ -46,7 +46,7 @@
 #  undef  USE_SERIALDRIVER
 #  undef  USE_EARLYSERIALINIT
 #else
-#  if defined(CONFIG_ARM_LWL_CONSOLE)
+#  if defined(CONFIG_LWL_CONSOLE)
 #    undef  USE_SERIALDRIVER
 #    undef  USE_EARLYSERIALINIT
 #  elif defined(CONFIG_CONSOLE_SYSLOG)
@@ -212,7 +212,7 @@ EXTERN volatile uint32_t *g_current_regs[1];
  * CONFIG_RAM_END
  */
 
-EXTERN const uint32_t g_idle_topstack;
+EXTERN const uintptr_t g_idle_topstack;
 
 /* Address of the saved user stack pointer */
 
@@ -428,9 +428,7 @@ void arm_earlyserialinit(void);
 void rpmsg_serialinit(void);
 #endif
 
-#ifdef CONFIG_ARM_LWL_CONSOLE
-/* Defined in src/common/arm_lwl_console.c */
-
+#ifdef CONFIG_LWL_CONSOLE
 void lwlconsole_init(void);
 #endif
 

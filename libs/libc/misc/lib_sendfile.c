@@ -115,18 +115,25 @@ ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count)
 
   if (offset)
     {
+      off_t newpos;
+
       /* Use lseek to get the current file position */
 
-      startpos = lseek(infd, 0, SEEK_CUR);
-      if (startpos == (off_t)-1)
+      startpos = _NX_SEEK(infd, 0, SEEK_CUR);
+      if (startpos < 0)
         {
+          int errcode = _NX_GETERRNO(startpos);
+          _NX_SETERRNO(errcode);
           return ERROR;
         }
 
       /* Use lseek again to set the new file position */
 
-      if (lseek(infd, *offset, SEEK_SET) == (off_t)-1)
+      newpos = _NX_SEEK(infd, *offset, SEEK_SET);
+      if (newpos < 0)
         {
+          int errcode = _NX_GETERRNO(newpos);
+          _NX_SETERRNO(errcode);
           return ERROR;
         }
     }
@@ -210,15 +217,17 @@ ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count)
 
               if (nbyteswritten >= 0)
                 {
-                  /* Advance the buffer pointer and decrement the number of bytes
-                   * remaining in the iobuffer.  Typically, nbytesread will now
-                   * be zero.
+                  /* Advance the buffer pointer and decrement the number of
+                   * bytes remaining in the iobuffer.  Typically, nbytesread
+                   * will now be zero.
                    */
 
                   wrbuffer     += nbyteswritten;
                   nbytesread   -= nbyteswritten;
 
-                  /* Increment the total number of bytes successfully transferred. */
+                  /* Increment the total number of bytes successfully
+                   * transferred.
+                   */
 
                   ntransferred += nbyteswritten;
                 }
@@ -263,9 +272,11 @@ ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count)
     {
       /* Use lseek to get the current file position */
 
-      off_t curpos = lseek(infd, 0, SEEK_CUR);
-      if (curpos == (off_t)-1)
+      off_t curpos = _NX_SEEK(infd, 0, SEEK_CUR);
+      if (curpos < 0)
         {
+          int errcode = _NX_GETERRNO(curpos);
+          _NX_SETERRNO(errcode);
           return ERROR;
         }
 
@@ -275,8 +286,11 @@ ssize_t sendfile(int outfd, int infd, off_t *offset, size_t count)
 
       /* Use lseek again to restore the original file position */
 
-      if (lseek(infd, startpos, SEEK_SET) == (off_t)-1)
+      startpos = _NX_SEEK(infd, startpos, SEEK_SET);
+      if (startpos < 0)
         {
+          int errcode = _NX_GETERRNO(startpos);
+          _NX_SETERRNO(errcode);
           return ERROR;
         }
     }

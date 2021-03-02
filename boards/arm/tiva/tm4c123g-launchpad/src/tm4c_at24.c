@@ -54,8 +54,6 @@
 
 #include <nuttx/config.h>
 
-#include <sys/mount.h>
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <errno.h>
@@ -63,6 +61,7 @@
 
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/mtd/mtd.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
 
 #include "tiva_i2c.h"
@@ -118,9 +117,7 @@ int tm4c_at24_automount(int minor)
         }
 
 #if defined(CONFIG_TM4C123G_LAUNCHPAD_AT24_FTL)
-      /* And finally,
-       * use the FTL layer to wrap the MTD driver as a block driver
-       */
+      /* And use the FTL layer to wrap the MTD driver as a block driver */
 
       ret = ftl_initialize(AT24_MINOR, mtd);
       if (ret < 0)
@@ -142,14 +139,15 @@ int tm4c_at24_automount(int minor)
 
       /* Mount the file system at /mnt/at24 */
 
-      ret = mount(NULL, "/mnt/at24", "nxffs", 0, NULL);
+      ret = nx_mount(NULL, "/mnt/at24", "nxffs", 0, NULL);
       if (ret < 0)
         {
           syslog(LOG_ERR, "ERROR: Failed to mount the NXFFS volume: %d\n",
-                 errno);
+                 ret);
           return ret;
         }
 #endif
+
       /* Now we are initialized */
 
       initialized = true;

@@ -141,8 +141,8 @@ static int grp_foreach(grp_foreach_match_t match, uintptr_t arg,
   stream = fopen(CONFIG_LIBC_GROUP_FILEPATH, "r");
   if (stream == NULL)
     {
-      int errcode = errno;
-      DEBUGASSERT(errno > 0);
+      int errcode = get_errno();
+      DEBUGASSERT(errcode > 0);
       return -errcode;
     }
 
@@ -312,7 +312,8 @@ static int grp_foreach(grp_foreach_match_t match, uintptr_t arg,
 int grp_findby_name(FAR const char *gname, FAR struct group *entry,
                     FAR char *buffer, size_t buflen)
 {
-  return grp_foreach(grp_match_name, (uintptr_t)gname, entry, buffer, buflen);
+  return grp_foreach(grp_match_name, (uintptr_t)gname,
+                     entry, buffer, buflen);
 }
 
 /****************************************************************************

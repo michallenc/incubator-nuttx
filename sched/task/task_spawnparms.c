@@ -68,11 +68,11 @@ struct spawn_parms_s g_spawn_parms;
 
 static inline int nxspawn_close(FAR struct spawn_close_file_action_s *action)
 {
-  /* The return value from close() is ignored */
+  /* The return value from nx_close() is ignored */
 
   sinfo("Closing fd=%d\n", action->fd);
 
-  close(action->fd);
+  nx_close(action->fd);
   return OK;
 }
 
@@ -84,13 +84,11 @@ static inline int nxspawn_dup2(FAR struct spawn_dup2_file_action_s *action)
 
   sinfo("Dup'ing %d->%d\n", action->fd1, action->fd2);
 
-  ret = dup2(action->fd1, action->fd2);
+  ret = nx_dup2(action->fd1, action->fd2);
   if (ret < 0)
     {
-      int errcode = get_errno();
-
-      serr("ERROR: dup2 failed: %d\n", errcode);
-      return -errcode;
+      serr("ERROR: dup2 failed: %d\n", ret);
+      return ret;
     }
 
   return OK;
@@ -123,15 +121,14 @@ static inline int nxspawn_open(FAR struct spawn_open_file_action_s *action)
 
       sinfo("Dup'ing %d->%d\n", fd, action->fd);
 
-      ret = dup2(fd, action->fd);
+      ret = nx_dup2(fd, action->fd);
       if (ret < 0)
         {
-          ret = get_errno();
           serr("ERROR: dup2 failed: %d\n", ret);
         }
 
       sinfo("Closing fd=%d\n", fd);
-      close(fd);
+      nx_close(fd);
     }
 
   return ret;

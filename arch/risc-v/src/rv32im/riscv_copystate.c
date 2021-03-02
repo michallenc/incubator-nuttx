@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/risc-v/src/rv32im/up_copystate.c
+ * arch/risc-v/src/rv32im/riscv_copystate.c
  *
  *   Copyright (C) 2011 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -70,20 +70,31 @@ void up_copystate(uint32_t *dest, uint32_t *src)
 {
   int i;
 
-  /* In the MIPS model, the state is copied from the stack to the TCB,
+#ifdef CONFIG_ARCH_FPU
+  uint32_t *regs = dest;
+#endif
+
+  /* In the RISC-V model, the state is copied from the stack to the TCB,
    * but only a reference is passed to get the state from the TCB.  So the
    * following check avoids copying the TCB save area onto itself:
    */
 
   if (src != dest)
     {
-      for (i = 0; i < XCPTCONTEXT_REGS; i++)
+      /* save integer registers first */
+
+      for (i = 0; i < INT_XCPT_REGS; i++)
         {
           *dest++ = *src++;
         }
 
+      /* Save the floating point registers: This will initialize the floating
+       * registers at indices INT_XCPT_REGS through (XCPTCONTEXT_REGS-1).
+       * Do this after saving REG_INT_CTX with the ORIGINAL context pointer.
+       */
+
 #ifdef CONFIG_ARCH_FPU
-      up_savefpu(dest);
+      up_savefpu(regs);
 #endif
     }
 }

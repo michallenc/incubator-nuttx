@@ -39,9 +39,10 @@
 
 #include <nuttx/config.h>
 
-#include <sys/mount.h>
 #include <sys/types.h>
 #include <debug.h>
+
+#include <nuttx/fs/fs.h>
 
 #include "nucleo-f091rc.h"
 
@@ -70,7 +71,7 @@ int stm32_bringup(void)
 #ifdef CONFIG_FS_PROCFS
   /* Mount the procfs file system */
 
-  ret = mount(NULL, "/proc", "procfs", 0, NULL);
+  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
   if (ret < 0)
     {
       ferr("ERROR: Failed to mount procfs at /proc: %d\n", ret);
@@ -81,7 +82,8 @@ int stm32_bringup(void)
   ret = stm32_lpwaninitialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize wireless driver: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize wireless driver: %d\n",
+             ret);
     }
 #endif /* CONFIG_LPWAN_SX127X */
 

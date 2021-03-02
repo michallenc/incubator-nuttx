@@ -53,6 +53,7 @@
 
 #include <nuttx/drivers/drivers.h>
 #include <nuttx/drivers/ramdisk.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
 #include <nuttx/i2c/i2c_master.h>
 
@@ -177,7 +178,7 @@ int sam_bringup(void)
 #ifdef CONFIG_FS_PROCFS
   /* Mount the procfs file system */
 
-  ret = mount(NULL, SAME70_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
+  ret = nx_mount(NULL, SAME70_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to mount procfs at %s: %d\n",
@@ -210,19 +211,19 @@ int sam_bringup(void)
 #ifdef CONFIG_SAME70XPLAINED_HSMCI0_MOUNT
   else
     {
-      /* REVISIT:  A delay seems to be required here or the mount will fail. */
+      /* REVISIT: A delay seems to be required here or the mount will fail */
 
       /* Mount the volume on HSMCI0 */
 
-      ret = mount(CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_BLKDEV,
-                  CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT,
-                  CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_FSTYPE,
-                  0, NULL);
+      ret = nx_mount(CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_BLKDEV,
+                     CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT,
+                     CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_FSTYPE,
+                     0, NULL);
 
       if (ret < 0)
         {
           syslog(LOG_ERR, "ERROR: Failed to mount %s: %d\n",
-                 CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT, errno);
+                 CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT, ret);
         }
     }
 
@@ -238,8 +239,8 @@ int sam_bringup(void)
 #ifdef HAVE_ROMFS
   /* Create a ROM disk for the /etc filesystem */
 
-  ret = romdisk_register(CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_MINOR, romfs_img,
-                         NSECTORS(romfs_img_len),
+  ret = romdisk_register(CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_MINOR,
+                         romfs_img, NSECTORS(romfs_img_len),
                          CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_SECTSIZE);
   if (ret < 0)
     {
@@ -249,14 +250,14 @@ int sam_bringup(void)
     {
       /* Mount the file system */
 
-      ret = mount(CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_DEVNAME,
-                  CONFIG_SAME70XPLAINED_ROMFS_MOUNT_MOUNTPOINT,
-                  "romfs", MS_RDONLY, NULL);
+      ret = nx_mount(CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_DEVNAME,
+                     CONFIG_SAME70XPLAINED_ROMFS_MOUNT_MOUNTPOINT,
+                     "romfs", MS_RDONLY, NULL);
       if (ret < 0)
         {
-          syslog(LOG_ERR, "ERROR: mount(%s,%s,romfs) failed: %d\n",
+          syslog(LOG_ERR, "ERROR: nx_mount(%s,%s,romfs) failed: %d\n",
                  CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_DEVNAME,
-                 CONFIG_SAME70XPLAINED_ROMFS_MOUNT_MOUNTPOINT, errno);
+                 CONFIG_SAME70XPLAINED_ROMFS_MOUNT_MOUNTPOINT, ret);
         }
     }
 #endif
@@ -279,7 +280,8 @@ int sam_bringup(void)
   ret = ftl_initialize(PROGMEM_MTD_MINOR, mtd);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize the FTL layer: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize the FTL layer: %d\n",
+             ret);
       return ret;
     }
 
@@ -293,7 +295,8 @@ int sam_bringup(void)
   ret = bchdev_register(blockdev, chardev, false);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: bchdev_register %s failed: %d\n", chardev, ret);
+      syslog(LOG_ERR, "ERROR: bchdev_register %s failed: %d\n",
+             chardev, ret);
       return ret;
     }
 #endif

@@ -39,11 +39,12 @@
 
 #include <nuttx/config.h>
 
-#include <sys/mount.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <debug.h>
 #include <errno.h>
+
+#include <nuttx/fs/fs.h>
 
 #ifdef CONFIG_USBMONITOR
 #  include <nuttx/usb/usbmonitor.h>
@@ -120,6 +121,10 @@
 
 #ifdef CONFIG_SENSORS_XEN1210
 #include "stm32_xen1210.h"
+#endif
+
+#ifdef CONFIG_USBADB
+#  include <nuttx/usb/adb.h>
 #endif
 
 /****************************************************************************
@@ -453,7 +458,7 @@ int stm32_bringup(void)
 #ifdef CONFIG_FS_PROCFS
   /* Mount the procfs file system */
 
-  ret = mount(NULL, STM32_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
+  ret = nx_mount(NULL, STM32_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       serr("ERROR: Failed to mount procfs at %s: %d\n",
@@ -525,6 +530,10 @@ int stm32_bringup(void)
                       " %d\n", ret);
     }
 #endif /* CONFIG_LPWAN_SX127X */
+
+#ifdef CONFIG_USBADB
+  usbdev_adb_initialize();
+#endif
 
   return ret;
 }

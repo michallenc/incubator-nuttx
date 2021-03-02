@@ -32,6 +32,9 @@
  ****************************************************************************/
 
 #include <stdint.h>
+#include <stdbool.h>
+
+#include "xtensa_attr.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -194,11 +197,10 @@
 #define APB_CLK_FREQ                            80 * 1000000    /* Unit: Hz */
 #define REF_CLK_FREQ                            (1000000)
 #define UART_CLK_FREQ                           APB_CLK_FREQ
-#define WDT_CLK_FREQ                            APB_CLK_FREQ
+#define MWDT_CLK_FREQ                           APB_CLK_FREQ
 #define TIMER_CLK_FREQ                          (80000000 >> 4) /* 80MHz divided by 16 */
 #define SPI_CLK_DIV                             4
 #define TICKS_PER_US_ROM                        26              /* CPU is 80MHz */
-#define TB_CLK_FREQ                             APB_CLK_FREQ
 
 #define DR_REG_DPORT_BASE                       0x3ff00000
 #define DR_REG_UART_BASE                        0x3ff40000
@@ -213,6 +215,7 @@
 #define DR_REG_RTCIO_BASE                       0x3ff48400
 #define DR_REG_SARADC_BASE                      0x3ff48800
 #define DR_REG_IO_MUX_BASE                      0x3ff49000
+#define DR_REG_EFUSE_BASE                       0x3ff5a000
 #define DR_REG_RTCMEM0_BASE                     0x3ff61000
 #define DR_REG_RTCMEM1_BASE                     0x3ff62000
 #define DR_REG_RTCMEM2_BASE                     0x3ff63000
@@ -248,28 +251,34 @@
 #define PERIPHS_SPI_ENCRYPT_BASEADDR            DR_REG_SPI_ENCRYPT_BASE
 
 /* Overall memory map */
-#define SOC_DROM_LOW                            0x3f400000
-#define SOC_DROM_HIGH                           0x3f800000
-#define SOC_DRAM_LOW                            0x3ffae000
-#define SOC_DRAM_HIGH                           0x40000000
-#define SOC_IROM_LOW                            0x400d0000
-#define SOC_IROM_HIGH                           0x40400000
-#define SOC_IROM_MASK_LOW                       0x40000000
-#define SOC_IROM_MASK_HIGH                      0x40064f00
-#define SOC_CACHE_PRO_LOW                       0x40070000
-#define SOC_CACHE_PRO_HIGH                      0x40078000
-#define SOC_CACHE_APP_LOW                       0x40078000
-#define SOC_CACHE_APP_HIGH                      0x40080000
-#define SOC_IRAM_LOW                            0x40080000
-#define SOC_IRAM_HIGH                           0x400a0000
-#define SOC_RTC_IRAM_LOW                        0x400c0000
-#define SOC_RTC_IRAM_HIGH                       0x400c2000
-#define SOC_RTC_DRAM_LOW                        0x3ff80000
-#define SOC_RTC_DRAM_HIGH                       0x3ff82000
-#define SOC_RTC_DATA_LOW                        0x50000000
-#define SOC_RTC_DATA_HIGH                       0x50002000
-#define SOC_EXTRAM_DATA_LOW                     0x3f800000
-#define SOC_EXTRAM_DATA_HIGH                    0x3fc00000
+
+#define SOC_DROM_LOW            0x3f400000
+#define SOC_DROM_HIGH           0x3f800000
+#define SOC_DRAM_LOW            0x3ffae000
+#define SOC_DRAM_HIGH           0x40000000
+#define SOC_IROM_LOW            0x400d0000
+#define SOC_IROM_HIGH           0x40400000
+#define SOC_IROM_MASK_LOW       0x40000000
+#define SOC_IROM_MASK_HIGH      0x40064f00
+#define SOC_CACHE_PRO_LOW       0x40070000
+#define SOC_CACHE_PRO_HIGH      0x40078000
+#define SOC_CACHE_APP_LOW       0x40078000
+#define SOC_CACHE_APP_HIGH      0x40080000
+#define SOC_IRAM_LOW            0x40080000
+#define SOC_IRAM_HIGH           0x400a0000
+#define SOC_RTC_IRAM_LOW        0x400c0000
+#define SOC_RTC_IRAM_HIGH       0x400c2000
+#define SOC_RTC_DRAM_LOW        0x3ff80000
+#define SOC_RTC_DRAM_HIGH       0x3ff82000
+#define SOC_RTC_DATA_LOW        0x50000000
+#define SOC_RTC_DATA_HIGH       0x50002000
+#define SOC_EXTRAM_DATA_LOW     0x3f800000
+#define SOC_EXTRAM_DATA_HIGH    0x3fc00000
+
+/* Virtual address 0 */
+
+#define VADDR0_START_ADDR       SOC_DROM_LOW
+#define VADDR0_END_ADDR         (SOC_DROM_HIGH - 1)
 
 /* Interrupt hardware source table
  * This table is decided by hardware, don't touch this.
@@ -411,10 +420,10 @@
 
 /* APB_CTRL_PRE_DIV_CNT : R/W ;bitpos:[9:0] ;default: 10'h0 ; */
 
-#define APB_CTRL_PRE_DIV_CNT        0x000003FF
+#define APB_CTRL_PRE_DIV_CNT        0x000003ff
 #define APB_CTRL_PRE_DIV_CNT_M      ((APB_CTRL_PRE_DIV_CNT_V) << \
                                      (APB_CTRL_PRE_DIV_CNT_S))
-#define APB_CTRL_PRE_DIV_CNT_V      0x3FF
+#define APB_CTRL_PRE_DIV_CNT_V      0x3ff
 #define APB_CTRL_PRE_DIV_CNT_S      0
 
 #define I2C_BBPLL_IR_CAL_DELAY      0
@@ -772,6 +781,67 @@ extern int rom_i2c_writeReg(int block, int block_id, int reg_add,
 #define FE2_TX_INF_FORCE_PD_V       1
 #define FE2_TX_INF_FORCE_PD_S       9
 
-#define PIN_CTRL                    (DR_REG_IO_MUX_BASE +0x00)
+/* RO data page in MMU index */
+
+#define DROM0_PAGES_START           0
+#define DROM0_PAGES_END             64
+
+#define IROM0_PAGES_START           64
+#define IROM0_PAGES_END             256
+
+/* MMU invalid value */
+
+#define INVALID_MMU_VAL             0x100
+
+/****************************************************************************
+ * Inline Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: esp32_sp_dram
+ *
+ * Description:
+ *   Check if the stack pointer is in DRAM.
+ *
+ ****************************************************************************/
+
+static inline bool IRAM_ATTR esp32_sp_dram(uint32_t sp)
+{
+  return (sp >= SOC_DRAM_LOW + 0x10 && sp < SOC_DRAM_HIGH - 0x10);
+}
+
+/****************************************************************************
+ * Name: esp32_ptr_extram
+ *
+ * Description:
+ *   Check if the buffer comes from the external RAM
+ *
+ ****************************************************************************/
+
+static inline bool IRAM_ATTR esp32_ptr_extram(const void *p)
+{
+  return ((intptr_t)p >= SOC_EXTRAM_DATA_LOW &&
+          (intptr_t)p < SOC_EXTRAM_DATA_HIGH);
+}
+
+/****************************************************************************
+ * Name: esp32_ptr_exec
+ *
+ * Description:
+ *   Check if the pointer is within an executable range.
+ *
+ ****************************************************************************/
+
+static inline bool IRAM_ATTR esp32_ptr_exec(const void *p)
+{
+  intptr_t ip = (intptr_t)p;
+  return (ip >= SOC_IROM_LOW && ip < SOC_IROM_HIGH)
+      || (ip >= SOC_IRAM_LOW && ip < SOC_IRAM_HIGH)
+      || (ip >= SOC_IROM_MASK_LOW && ip < SOC_IROM_MASK_HIGH)
+#if defined(SOC_CACHE_APP_LOW) && !defined(CONFIG_SMP)
+      || (ip >= SOC_CACHE_APP_LOW && ip < SOC_CACHE_APP_HIGH)
+#endif
+      || (ip >= SOC_RTC_IRAM_LOW && ip < SOC_RTC_IRAM_HIGH);
+}
 
 #endif /* __ARCH_XTENSA_SRC_ESP32_HARDWARE_ESP32_SOC_H */

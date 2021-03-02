@@ -68,7 +68,7 @@
 #endif
 
 #undef HAVE_SIGNALS
-#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGSTP)
+#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP)
 #  define HAVE_SIGNALS
 #endif
 
@@ -289,18 +289,18 @@ static void telnet_check_ctrlchar(FAR struct telnet_dev_s *priv,
         }
 #endif
 
-#ifdef CONFIG_TTY_SIGSTP
-      /* Is this the special character that will generate the SIGSTP
+#ifdef CONFIG_TTY_SIGTSTP
+      /* Is this the special character that will generate the SIGTSTP
        * signal?
        */
 
-      if (*buffer == CONFIG_TTY_SIGSTP_CHAR)
+      if (*buffer == CONFIG_TTY_SIGTSTP_CHAR)
         {
           /* Note that the kill is needed and do not put the character
            * into the Rx buffer.  It should not be read as normal data.
            */
 
-          signo = SIGSTP;
+          signo = SIGTSTP;
 #ifndef CONFIG_TTY_SIGINT
           break;
 #endif
@@ -359,7 +359,7 @@ static ssize_t telnet_receive(FAR struct telnet_dev_s *priv,
   int nread;
   uint8_t ch;
 
-  ninfo("srclen: %d destlen: %d\n", srclen, destlen);
+  ninfo("srclen: %zd destlen: %zd\n", srclen, destlen);
 
   for (nread = 0; srclen > 0 && nread < destlen; srclen--)
     {
@@ -809,7 +809,7 @@ static ssize_t telnet_read(FAR struct file *filep, FAR char *buffer,
   ssize_t nread = 0;
   int ret;
 
-  ninfo("len: %d\n", len);
+  ninfo("len: %zd\n", len);
 
   /* First, handle the case where there are still valid bytes left in the
    * I/O buffer from the last time that read was called.  NOTE:  Much of
@@ -892,7 +892,7 @@ static ssize_t telnet_write(FAR struct file *filep, FAR const char *buffer,
   char ch;
   bool eol;
 
-  ninfo("len: %d\n", len);
+  ninfo("len: %zd\n", len);
 
   /* Process each character from the user buffer */
 
@@ -917,7 +917,7 @@ static ssize_t telnet_write(FAR struct file *filep, FAR const char *buffer,
           ret = psock_send(&priv->td_psock, priv->td_txbuffer, ncopied, 0);
           if (ret < 0)
             {
-              nerr("ERROR: psock_send failed '%s': %d\n",
+              nerr("ERROR: psock_send failed '%s': %zd\n",
                    priv->td_txbuffer, ret);
               return ret;
             }
@@ -935,7 +935,7 @@ static ssize_t telnet_write(FAR struct file *filep, FAR const char *buffer,
       ret = psock_send(&priv->td_psock, priv->td_txbuffer, ncopied, 0);
       if (ret < 0)
         {
-          nerr("ERROR: psock_send failed '%s': %d\n",
+          nerr("ERROR: psock_send failed '%s': %zd\n",
                priv->td_txbuffer, ret);
           return ret;
         }

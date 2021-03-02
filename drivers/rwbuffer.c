@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -310,7 +311,7 @@ static ssize_t rwb_writebuffer(FAR struct rwbuffer_s *rwb,
           nblocks = 0;
         }
 
-      /* 4. We upate a portion at the end of the write buffer */
+      /* 4. We update a portion at the end of the write buffer */
 
       else if (wrbend >= startblock && wrbend <= newend)
         {
@@ -535,7 +536,8 @@ int rwb_invalidate_writebuffer(FAR struct rwbuffer_s *rwb,
       off_t wrbend;
       off_t invend;
 
-      finfo("startblock=%d blockcount=%p\n", startblock, blockcount);
+      finfo("startblock=%jd blockcount=%zu\n",
+            (intmax_t)startblock, blockcount);
 
       ret = rwb_semtake(&rwb->wrsem);
       if (ret < 0)
@@ -676,7 +678,8 @@ int rwb_invalidate_readahead(FAR struct rwbuffer_s *rwb,
       off_t rhbend;
       off_t invend;
 
-      finfo("startblock=%d blockcount=%p\n", startblock, blockcount);
+      finfo("startblock=%jd blockcount=%zu\n",
+            (intmax_t)startblock, blockcount);
 
       ret = rwb_semtake(&rwb->rhsem);
       if (ret < 0)

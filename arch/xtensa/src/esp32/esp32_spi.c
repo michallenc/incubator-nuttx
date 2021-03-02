@@ -27,10 +27,12 @@
 #ifdef CONFIG_ESP32_SPI
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <errno.h>
 #include <debug.h>
 #include <time.h>
@@ -54,10 +56,9 @@
 #include "hardware/esp32_spi.h"
 #include "hardware/esp32_soc.h"
 #include "hardware/esp32_pinmap.h"
-#include "rom/esp32_gpio.h"
 
 /****************************************************************************
- * Private Types
+ * Pre-processor Definitions
  ****************************************************************************/
 
 /* SPI DMA RX/TX description number */
@@ -76,6 +77,14 @@
 /* SPI Default speed (limited by clock divider) */
 
 #define SPI_FREQ_DEFAULT  400000
+
+#ifndef MIN
+#  define  MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+/****************************************************************************
+ * Private Types
+ ****************************************************************************/
 
 /* SPI Device hardware configuration */
 
@@ -157,8 +166,7 @@ struct esp32_spi_priv_s
 static int esp32_spi_lock(FAR struct spi_dev_s *dev, bool lock);
 #ifndef CONFIG_ESP32_SPI_UDCS
 static void esp32_spi_select(FAR struct spi_dev_s *dev,
-                             uint32_t devid,
-                             bool selected);
+                             uint32_t devid, bool selected);
 #endif
 static uint32_t esp32_spi_setfrequency(FAR struct spi_dev_s *dev,
                                        uint32_t frequency);
@@ -411,8 +419,7 @@ static inline uint32_t esp32_spi_get_reg(struct esp32_spi_priv_s *priv,
  ****************************************************************************/
 
 static inline void esp32_spi_set_regbits(struct esp32_spi_priv_s *priv,
-                                         int offset,
-                                         uint32_t bits)
+                                         int offset, uint32_t bits)
 {
   uint32_t tmp = getreg32(priv->config->reg_base + offset);
 
@@ -436,8 +443,7 @@ static inline void esp32_spi_set_regbits(struct esp32_spi_priv_s *priv,
  ****************************************************************************/
 
 static inline void esp32_spi_reset_regbits(struct esp32_spi_priv_s *priv,
-                                           int offset,
-                                           uint32_t bits)
+                                           int offset, uint32_t bits)
 {
   uint32_t tmp = getreg32(priv->config->reg_base + offset);
 
@@ -550,7 +556,7 @@ static int esp32_spi_sem_waitdone(FAR struct esp32_spi_priv_s *priv)
  * Name: esp32_spi_select
  *
  * Description:
- *   Enable/disable the SPI chip select.   The implementation of this method
+ *   Enable/disable the SPI chip select.  The implementation of this method
  *   must include handshaking:  If a device is selected, it must hold off
  *   all other attempts to select the device until the device is deselected.
  *
@@ -560,8 +566,8 @@ static int esp32_spi_sem_waitdone(FAR struct esp32_spi_priv_s *priv)
  *   the function will do nothing.
  *
  * Input Parameters:
- *   priv   - Private SPI device structure
- *   devid  - Identifies the device to select
+ *   priv     - Private SPI device structure
+ *   devid    - Identifies the device to select
  *   selected - true: slave selected, false: slave de-selected
  *
  * Returned Value:
@@ -571,8 +577,7 @@ static int esp32_spi_sem_waitdone(FAR struct esp32_spi_priv_s *priv)
 
 #ifndef CONFIG_ESP32_SPI_UDCS
 static void esp32_spi_select(FAR struct spi_dev_s *dev,
-                             uint32_t devid,
-                             bool selected)
+                             uint32_t devid, bool selected)
 {
 #ifdef CONFIG_ESP32_SPI_SWCS
   FAR struct esp32_spi_priv_s *priv = (FAR struct esp32_spi_priv_s *)dev;
@@ -581,7 +586,8 @@ static void esp32_spi_select(FAR struct spi_dev_s *dev,
   esp32_gpiowrite(priv->config->cs_pin, value);
 #endif
 
-  spiinfo("devid: %08lx CS: %s\n", devid, selected ? "select" : "free");
+  spiinfo("devid: %08" PRIx32 " CS: %s\n",
+          devid, selected ? "select" : "free");
 }
 #endif
 
@@ -786,16 +792,14 @@ static void esp32_spi_setbits(FAR struct spi_dev_s *dev, int nbits)
 
   if (nbits != priv->nbits)
     {
-      /**
-       * Save the selection so the subsequence re-configurations
+      /* Save the selection so that subsequent re-configurations
        * will be faster.
        */
 
       priv->nbits = nbits;
 
-      /**
-       * Each DMA transmission will set these value according to
-       * calculate buffer length.
+      /* Each DMA transmission will set these value according to
+       * calculated buffer length.
        */
 
       if (!priv->dma_chan)
@@ -860,11 +864,45 @@ static void esp32_spi_dma_exchange(FAR struct esp32_spi_priv_s *priv,
                                    FAR void *rxbuffer,
                                    uint32_t nwords)
 {
-  uint32_t bytes = nwords * (priv->nbits / 8);
-  uint8_t *tp = (uint8_t *)txbuffer;
-  uint8_t *rp = (uint8_t *)rxbuffer;
+  const uint32_t total = nwords * (priv->nbits / 8);
+  uint32_t bytes = total;
+  uint8_t *tp;
+  uint8_t *rp;
   uint32_t n;
   uint32_t regval;
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  uint8_t *alloctp;
+  uint8_t *allocrp;
+#endif
+
+  /* If the buffer comes from PSRAM, allocate a new one from DRAM */
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  if (esp32_ptr_extram(txbuffer))
+    {
+      alloctp = xtensa_imm_malloc(total);
+      DEBUGASSERT(alloctp != NULL);
+      memcpy(alloctp, txbuffer, total);
+      tp = alloctp;
+    }
+  else
+#endif
+    {
+      tp = (uint8_t *)txbuffer;
+    }
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  if (esp32_ptr_extram(rxbuffer))
+    {
+      allocrp = xtensa_imm_malloc(total);
+      DEBUGASSERT(allocrp != NULL);
+      rp = allocrp;
+    }
+  else
+#endif
+    {
+      rp = (uint8_t *)rxbuffer;
+    }
 
   if (!tp)
     {
@@ -924,6 +962,21 @@ static void esp32_spi_dma_exchange(FAR struct esp32_spi_priv_s *priv,
       tp += n;
       rp += n;
     }
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  if (esp32_ptr_extram(rxbuffer))
+    {
+      memcpy(rxbuffer, allocrp, total);
+      xtensa_imm_free(allocrp);
+    }
+#endif
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  if (esp32_ptr_extram(txbuffer))
+    {
+      xtensa_imm_free(alloctp);
+    }
+#endif
 }
 
 /****************************************************************************
@@ -1235,39 +1288,39 @@ static void esp32_spi_init(FAR struct spi_dev_s *dev)
 
 #ifdef CONFIG_ESP32_SPI_SWCS
   esp32_configgpio(config->cs_pin, OUTPUT);
-  gpio_matrix_out(config->cs_pin, SIG_GPIO_OUT_IDX, 0, 0);
+  esp32_gpio_matrix_out(config->cs_pin, SIG_GPIO_OUT_IDX, 0, 0);
 #endif
 
   if (esp32_spi_iomux(priv))
     {
 #ifndef CONFIG_ESP32_SPI_SWCS
       esp32_configgpio(config->cs_pin, OUTPUT_FUNCTION_2);
-      gpio_matrix_out(config->cs_pin, SIG_GPIO_OUT_IDX, 0, 0);
+      esp32_gpio_matrix_out(config->cs_pin, SIG_GPIO_OUT_IDX, 0, 0);
 #endif
       esp32_configgpio(config->mosi_pin, OUTPUT_FUNCTION_2);
-      gpio_matrix_out(config->mosi_pin, SIG_GPIO_OUT_IDX, 0, 0);
+      esp32_gpio_matrix_out(config->mosi_pin, SIG_GPIO_OUT_IDX, 0, 0);
 
       esp32_configgpio(config->miso_pin, INPUT_FUNCTION_2 | PULLUP);
-      gpio_matrix_out(config->miso_pin, SIG_GPIO_OUT_IDX, 0, 0);
+      esp32_gpio_matrix_out(config->miso_pin, SIG_GPIO_OUT_IDX, 0, 0);
 
       esp32_configgpio(config->clk_pin, OUTPUT_FUNCTION_2);
-      gpio_matrix_out(config->clk_pin, SIG_GPIO_OUT_IDX, 0, 0);
+      esp32_gpio_matrix_out(config->clk_pin, SIG_GPIO_OUT_IDX, 0, 0);
     }
   else
     {
 #ifndef CONFIG_ESP32_SPI_SWCS
       esp32_configgpio(config->cs_pin, OUTPUT_FUNCTION_3);
-      gpio_matrix_out(config->cs_pin, config->cs_outsig, 0, 0);
+      esp32_gpio_matrix_out(config->cs_pin, config->cs_outsig, 0, 0);
 #endif
 
       esp32_configgpio(config->mosi_pin, OUTPUT_FUNCTION_3);
-      gpio_matrix_out(config->mosi_pin, config->mosi_outsig, 0, 0);
+      esp32_gpio_matrix_out(config->mosi_pin, config->mosi_outsig, 0, 0);
 
       esp32_configgpio(config->miso_pin, INPUT_FUNCTION_3 | PULLUP);
-      gpio_matrix_in(config->miso_pin, config->miso_insig, 0);
+      esp32_gpio_matrix_in(config->miso_pin, config->miso_insig, 0);
 
       esp32_configgpio(config->clk_pin, OUTPUT_FUNCTION_3);
-      gpio_matrix_out(config->clk_pin, config->clk_outsig, 0, 0);
+      esp32_gpio_matrix_out(config->clk_pin, config->clk_outsig, 0, 0);
     }
 
   modifyreg32(DPORT_PERIP_CLK_EN_REG, 0, config->clk_bit);
@@ -1332,7 +1385,14 @@ static void esp32_spi_deinit(FAR struct spi_dev_s *dev)
       modifyreg32(DPORT_PERIP_CLK_EN_REG, priv->config->dma_clk_bit, 0);
     }
 
+  modifyreg32(DPORT_PERIP_RST_EN_REG, 0, priv->config->clk_bit);
   modifyreg32(DPORT_PERIP_CLK_EN_REG, priv->config->clk_bit, 0);
+
+  priv->frequency = 0;
+  priv->actual    = 0;
+  priv->mode      = SPIDEV_MODE0;
+  priv->nbits     = 0;
+  priv->dma_chan  = 0;
 }
 
 /****************************************************************************

@@ -44,6 +44,7 @@
 
 #include <queue.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1176,7 +1177,7 @@ static void rndis_txavail_work(FAR void *arg)
 
   if (rndis_allocnetreq(priv))
     {
-      devif_poll(&priv->netdev, rndis_txpoll);
+      devif_timer(&priv->netdev, 0, rndis_txpoll);
       if (priv->net_req != NULL)
         {
           rndis_freenetreq(priv);
@@ -1275,7 +1276,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             }
           else
             {
-              uerr("Unknown RNDIS message type %u\n", msg->msgtype);
+              uerr("Unknown RNDIS message type %" PRIu32 "\n", msg->msgtype);
             }
         }
     }
@@ -1599,7 +1600,8 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
         break;
 
       default:
-        uwarn("Unsupported RNDIS control message: %u\n", cmd_hdr->msgtype);
+        uwarn("Unsupported RNDIS control message: %" PRIu32 "\n",
+              cmd_hdr->msgtype);
     }
 
   return OK;

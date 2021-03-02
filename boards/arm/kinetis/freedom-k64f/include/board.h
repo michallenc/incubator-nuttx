@@ -54,7 +54,7 @@
 
 /* The Freedom K64F uses a 50MHz external clock from the Micrel Ethernet PHY.
  * The Kinetis MCU startup from an internal digitally-controlled oscillator
- * (DCO). Nuttx will enable the main external oscillator (EXTAL0/XTAL0).
+ * (DCO). NuttX will enable the main external oscillator (EXTAL0/XTAL0).
  * The external oscillator/resonator can range from 32.768 KHz up to 50 MHz.
  * The default external source for the MCG oscillator inputs (EXTAL) is
  * 50 MHz clock source from Micrel Ethernet PHY.
@@ -101,6 +101,27 @@
 #define BOARD_BUS_FREQ      (BOARD_MCG_FREQ / BOARD_OUTDIV2)
 #define BOARD_FLEXBUS_FREQ  (BOARD_MCG_FREQ / BOARD_OUTDIV3)
 #define BOARD_FLASHCLK_FREQ (BOARD_MCG_FREQ / BOARD_OUTDIV4)
+
+/* Use BOARD_MCG_FREQ as the output SIM_SOPT2 MUX selected by
+ * SIM_SOPT2[PLLFLLSEL]
+ */
+
+#define BOARD_SOPT2_PLLFLLSEL   SIM_SOPT2_PLLFLLSEL_MCGPLLCLK
+#define BOARD_SOPT2_FREQ        BOARD_MCG_FREQ
+
+/* Divider output clock = Divider input clock * ((USBFRAC+1) / (USBDIV+1))
+ *     SIM_CLKDIV2_FREQ = BOARD_SOPT2_FREQ * ((USBFRAC+1) / (USBDIV+1))
+ *     SIM_CLKDIV2_FREQ = BOARD_SOPT2_FREQ / (USBDIV+1)* (USBFRAC+1)
+ *                48MHz = 120MHz / (4 + 1) * (1 + 1)
+ */
+
+#if (BOARD_SOPT2_FREQ == 120000000L)
+#  define BOARD_SIM_CLKDIV2_USBFRAC     2
+#  define BOARD_SIM_CLKDIV2_USBDIV      5
+#  define BOARD_SIM_CLKDIV2_FREQ        (BOARD_SOPT2_FREQ / \
+                                         BOARD_SIM_CLKDIV2_USBDIV * \
+                                         BOARD_SIM_CLKDIV2_USBFRAC)
+#endif
 
 /* SDHC clocking ************************************************************/
 
@@ -151,6 +172,15 @@
 #  define BOARD_SDHC_SD4MODE_PRESCALER SDHC_SYSCTL_SDCLKFS_DIV2
 #  define BOARD_SDHC_SD4MODE_DIVISOR   SDHC_SYSCTL_DVS_DIV(3)
 #endif
+
+/* Use the output of SIM_SOPT2[PLLFLLSEL] as the USB clock source */
+
+#define BOARD_USB_CLKSRC               SIM_SOPT2_USBSRC
+#define BOARD_USB_FREQ                 BOARD_SIM_CLKDIV2_FREQ
+
+/* Allow USBOTG-FS Controller to Read from FLASH */
+
+#define BOARD_USB_FLASHACCESS
 
 /* PWM Configuration */
 

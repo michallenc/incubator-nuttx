@@ -177,7 +177,7 @@ NuttX EABI "buildroot" Toolchain
   Bitbucket download site (https://bitbucket.org/nuttx/buildroot/downloads/).
   This GNU toolchain builds and executes in the Linux or Cygwin environment.
 
-  1. You must have already configured Nuttx in <some-dir>/nuttx.
+  1. You must have already configured NuttX in <some-dir>/nuttx.
 
      tools/configure.sh sama5d3x-ek:<sub-dir>
 
@@ -227,7 +227,7 @@ NXFLAT Toolchain
 
   This GNU toolchain builds and executes in the Linux or Cygwin environment.
 
-  1. You must have already configured Nuttx in <some-dir>/nuttx.
+  1. You must have already configured NuttX in <some-dir>/nuttx.
 
      tools/configure.sh sama5d3x-ek:<sub-dir>
 
@@ -2286,12 +2286,12 @@ I2C Tool
     Where <cmd> is one of:
 
       Show help     : ?
-      List buses   : bus
+      List buses    : bus
       List devices  : dev [OPTIONS] <first> <last>
-      Read register : get [OPTIONS] [<repititions>]
+      Read register : get [OPTIONS] [<repetitions>]
       Show help     : help
-      Write register: set [OPTIONS] <value> [<repititions>]
-      Verify access : verf [OPTIONS] [<value>] [<repititions>]
+      Write register: set [OPTIONS] <value> [<repetitions>]
+      Verify access : verf [OPTIONS] [<value>] [<repetitions>]
 
     Where common "sticky" OPTIONS include:
       [-a addr] is the I2C device address (hex).  Default: 03 Current: 03
@@ -2299,7 +2299,7 @@ I2C Tool
       [-r regaddr] is the I2C device register address (hex).  Default: 00 Current: 00
       [-w width] is the data width (8 or 16 decimal).  Default: 8 Current: 8
       [-s|n], send/don't send start between command and data.  Default: -n Current: -n
-      [-i|j], Auto increment|don't increment regaddr on repititions.  Default: NO Current: NO
+      [-i|j], Auto increment|don't increment regaddr on repetitions.  Default: NO Current: NO
       [-f freq] I2C frequency.  Default: 100000 Current: 100000
 
     NOTES:

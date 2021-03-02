@@ -1,4 +1,4 @@
-NuttX TODO List (Last updated July 19, 2020)
+NuttX TODO List (Last updated November 26, 2020)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This file summarizes known NuttX bugs, limitations, inconsistencies with
@@ -10,7 +10,7 @@ issues related to each board port.
 nuttx/:
 
  (16)  Task/Scheduler (sched/)
-  (5)  SMP
+  (2)  SMP
   (1)  Memory Management (mm/)
   (0)  Power Management (drivers/pm)
   (5)  Signals (sched/signal, arch/)
@@ -18,7 +18,7 @@ nuttx/:
   (0)  Message Queues (sched/mqueue)
   (1)  Work Queues (sched/wqueue)
   (6)  Kernel/Protected Build
-  (3)  C++ Support
+  (2)  C++ Support
   (5)  Binary loaders (binfmt/)
  (17)  Network (net/, drivers/net)
   (4)  USB (drivers/usbdev, drivers/usbhost)
@@ -448,34 +448,6 @@ o Task/Scheduler (sched/)
 o SMP
   ^^^
 
-  Title:       SMP AND DATA CACHES
-  Description: When spinlocks, semaphores, etc. are used in an SMP system with
-               a data cache, then there may be problems with cache coherency
-               in some CPU architectures:  When one CPU modifies the shared
-               object, the changes may not be visible to another CPU if it
-               does not share the data cache. That would cause failure in
-               the IPC logic.
-
-               Flushing the D-cache on writes and invalidating before a read is
-               not really an option.  That would essentially effect every memory
-               access and there may be side-effects due to cache line sizes
-               and alignment.
-
-               For the same reason a separate, non-cacheable memory region is
-               not an option.  Essentially all data would have to go in the
-               non-cached region and you would have no benefit from the data
-               cache.
-
-               On ARM Cortex-A, each CPU has a separate data cache.  However,
-               the MPCore's Snoop Controller Unit supports coherency among
-               the different caches.  The SCU is enabled by the SCU control
-               register and each CPU participates in the SMP coherency by
-               setting the ACTLR_SMP bit in the auxiliary control register
-               (ACTLR).
-
-  Status:      Closed
-  Priority:    High on platforms that may have the issue.
-
   Title:       MISUSE OF sched_lock() IN SMP MODE
   Description: The OS API sched_lock() disables pre-emption and locks a
                task in place.  In the single CPU case, it is also often
@@ -496,37 +468,6 @@ o SMP
   Priority:    Medium for SMP system.  Not critical to single CPU systems.
                NOTE:  There are no known bugs from this potential problem.
 
-  Title:       CORTEX-A GIC SGI INTERRUPT MASKING
-  Description: In the ARMv7-A GICv2 architecture, the inter-processor
-               interrupts (SGIs) are non maskable and will occur even if
-               interrupts are disabled.  This adds a lot of complexity
-               to the ARMV7-A critical section design.
-
-               Masayuki Ishikawa has suggested the use of the GICv2 ICCMPR
-               register to control SGI interrupts.  This register (much like
-               the ARMv7-M BASEPRI register) can be used to mask interrupts
-               by interrupt priority.  Since SGIs may be assigned priorities
-               the ICCMPR should be able to block execution of SGIs as well.
-
-               Such an implementation would be very similar to the BASEPRI
-               (vs PRIMASK) implementation for the ARMv7-M:  (1) The
-               up_irq_save() and up_irq_restore() registers would have to
-               set/restore the ICCMPR register, (2) register setup logic in
-               arch/arm/src/armv7-a for task start-up and signal dispatch
-               would have to set the ICCMPR correctly, and (3) the 'xcp'
-               structure would have to be extended to hold the ICCMPR
-               register;  logic would have to added be save/restore the
-               ICCMPR register in the 'xcp' structure on each interrupt and
-               context switch.
-
-               This would also be an essential part of a high priority,
-               nested interrupt implementation (unrelated).
-  Status:      Open
-  Priority:    Low.  There are no known issues with the current non-maskable
-               SGI implementation.  This change would, however, lead to
-               simplification in the design and permit commonality with
-               other, non-GIC implementations.
-
   Title:       ISSUES WITH ACCESSING CPU INDEX
   Description: The CPU number is accessed usually with the macro this_cpu().
                The returned CPU number is then used for various things,
@@ -543,70 +484,6 @@ o SMP
   Prioity:     Medium.  This is a logical problem but I have never seen
                an bugs caused by this.  But I believe that failures are
                possible.
-
-  Title:       POSSIBLE FOR TWO CPUs TO HOLD A CRITICAL SECTION?
-  Description: The SMP design includes logic that will support multiple
-               CPUs holding a critical section.  Is this necessary?  How
-               can that occur?  I think it can occur in the following
-               situation:
-
-               The log below was reported is Nuttx running on two cores
-               Cortex-A7 architecture in SMP mode.  You can notice see that
-               when nxsched_add_readytorun() was called, the g_cpu_irqset is 3.
-
-                 nxsched_add_readytorun: irqset cpu 1, me 0 btcbname init, irqset 1 irqcount 2.
-                 nxsched_add_readytorun: nxsched_add_readytorun line 338 g_cpu_irqset = 3.
-
-               This can happen, but only under a very certain condition.
-               g_cpu_irqset only exists to support this certain condition:
-
-                 a. A task running on CPU 0 takes the critical section.  So
-                    g_cpu_irqset == 0x1.
-
-                 b. A task exits on CPU 1 and a waiting, ready-to-run task
-                    is re-started on CPU 1.  This new task also holds the
-                    critical section.  So when the task is re-restarted on
-                    CPU 1, we than have g_cpu_irqset == 0x3
-
-               So we are in a very perverse state!  There are two tasks
-               running on two different CPUs and both hold the critical
-               section.  I believe that is a dangerous situation and there
-               could be undiscovered bugs that could happen in that case.
-               However, as of this moment, I have not heard of any specific
-               problems caused by this weird behavior.
-
-               A possible solution would be to add a new task state that
-               would exist only for SMP.
-
-               - Add a new SMP-only task list and state.  Say,
-                 g_csection_wait[].  It should be prioritized.
-               - When a task acquires the critical section, all tasks in
-                 g_readytorun[] that need the critical section would be
-                 moved to g_csection_wait[].
-               - When any task is unblocked for any reason and moved to the
-                 g_readytorun[] list, if that unblocked task needs the
-                 critical section, it would also be moved to the
-                 g_csection_wait[] list.  No task that needs the critical
-                 section can be in the ready-to-run list if the critical
-                 section is not available.
-               - When the task releases the critical section, all tasks in
-                 the g_csection_wait[] needs to be moved back to
-                 g_readytorun[].
-              - This may result in a context switch.  The tasks should be
-                 moved back to g_readytorun[] highest priority first.  If a
-                 context switch occurs and the critical section to re-taken
-                 by the re-started task, the lower priority tasks in
-                 g_csection_wait[] must stay in that list.
-
-               That is really not as much work as it sounds.  It is
-               something that could be done in 2-3 days of work if you know
-               what you are doing.  Getting the proper test setup and
-               verifying the change would be the more difficult task.
-
-Status:        Open
-Priority:      Unknown.  Might be high, but first we would need to confirm
-               that this situation can occur and that is actually causes
-               a failure.
 
 o Memory Management (mm/)
   ^^^^^^^^^^^^^^^^^^^^^^^
@@ -718,7 +595,7 @@ o Signals (sched/signal, arch/)
                SIGALRM Abnormal Termination CONFIG_SIG_SIGALRM_ACTION
                SIGPOLL Abnormal Termination CONFIG_SIG_SIGPOLL_ACTION
                SIGSTOP Suspend task         CONFIG_SIG_SIGSTOP_ACTION
-               SIGSTP  Suspend task         CONFIG_SIG_SIGSTOP_ACTION
+               SIGTSTP Suspend task         CONFIG_SIG_SIGSTOP_ACTION
                SIGCONT Resume task          CONFIG_SIG_SIGSTOP_ACTION
                SIGINT  Abnormal Termination CONFIG_SIG_SIGKILL_ACTION
                SIGKILL Abnormal Termination CONFIG_SIG_SIGKILL_ACTION
@@ -1076,23 +953,6 @@ o Kernel/Protected Build
 
 o C++ Support
   ^^^^^^^^^^^
-
-  Title:       USE OF SIZE_T IN NEW OPERATOR
-  Description: The argument of the 'new' operators should take a type of
-               size_t (see libxx/libxx_new.cxx and libxx/libxx_newa.cxx).  But
-               size_t has an unknown underlying.  In the nuttx sys/types.h
-               header file, size_t is typed as uint32_t (which is determined by
-               architecture-specific logic).  But the C++ compiler may believe
-               that size_t is of a different type resulting in compilation errors
-               in the operator.  Using the underlying integer type Instead of
-               size_t seems to resolve the compilation issues.
-  Status:      Kind of open. There is a workaround. Setting CONFIG_ARCH_SIZET_LONG
-               =y will define the operators with argument of type unsigned long;
-               Setting CONFIG_ARCH_SIZET_LONG=n will define the operators with
-               argument of type unsigned int. But this is pretty ugly!  A better
-               solution would be to get a hold of the compilers definition of
-               size_t.
-  Priority:    Low.
 
   Title:       STATIC CONSTRUCTORS AND MULTITASKING
   Description: The logic that calls static constructors operates on the main

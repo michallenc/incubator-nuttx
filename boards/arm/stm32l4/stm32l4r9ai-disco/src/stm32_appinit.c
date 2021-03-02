@@ -40,7 +40,6 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <sys/mount.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <errno.h>
@@ -50,6 +49,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 
 #include <stm32l4.h>
 #include <stm32l4_uart.h>
@@ -64,9 +64,9 @@
 
 #include "stm32l4r9ai-disco.h"
 
-/* Conditional logic in stm32l4r9ai-disco.h will determine if certain features
- * are supported.  Tests for these features need to be made after including
- * stm32l4r9ai-disco.
+/* Conditional logic in stm32l4r9ai-disco.h will determine if certain
+ * features are supported.  Tests for these features need to be made
+ * after includingstm32l4r9ai-disco.
  */
 
 #ifdef HAVE_RTC_DRIVER
@@ -80,10 +80,10 @@
 
 #ifdef CONFIG_I2C
 #  ifdef CONFIG_STM32L4_I2C1
-static struct i2c_master_s* g_i2c1;
+static struct i2c_master_s *g_i2c1;
 #  endif
 #  ifdef CONFIG_STM32L4_I2C3
-static struct i2c_master_s* g_i2c3;
+static struct i2c_master_s *g_i2c3;
 #  endif
 #endif
 
@@ -129,12 +129,11 @@ int board_app_initialize(uintptr_t arg)
 
   syslog(LOG_INFO, "Mounting procfs to /proc\n");
 
-  ret = mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
+  ret = nx_mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR,
-             "ERROR: Failed to mount the PROC filesystem: %d (%d)\n",
-             ret, errno);
+             "ERROR: Failed to mount the PROC filesystem: %d\n", ret);
       return ret;
     }
 #endif

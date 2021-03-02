@@ -504,10 +504,8 @@ static int hostfs_rpmsg_unlink_handler(FAR struct rpmsg_endpoint *ept,
                                        uint32_t src, FAR void *priv)
 {
   FAR struct hostfs_rpmsg_unlink_s *msg = data;
-  int ret;
 
-  ret = unlink(msg->pathname);
-  msg->header.result = ret ? -get_errno() : 0;
+  msg->header.result = nx_unlink(msg->pathname);
   return rpmsg_send(ept, msg, sizeof(*msg));
 }
 
@@ -560,12 +558,8 @@ static int hostfs_rpmsg_stat_handler(FAR struct rpmsg_endpoint *ept,
   struct stat buf;
   int ret;
 
-  ret = stat(msg->pathname, &buf);
-  if (ret)
-    {
-      ret = -get_errno();
-    }
-  else
+  ret = nx_stat(msg->pathname, &buf, 1);
+  if (ret >= 0)
     {
       msg->buf = buf;
     }

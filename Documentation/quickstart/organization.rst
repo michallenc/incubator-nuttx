@@ -1,4 +1,9 @@
 .. include:: /substitutions.rst
+
+.. todo::
+  This is mostly untouched from the original documentation. It does
+  not really belong to "quickstart". Also, this needs cleanup.
+
 .. _organization:
 
 ===================
@@ -78,8 +83,8 @@ README.md file for information on how to build it.
 ``nuttx/arch``
 ==============
 
-Subdirectory Structure
-----------------------
+Arch Subdirectory Structure
+---------------------------
 
 This directory contains several sub-directories, each containing
 architecture-specific logic. The task of porting NuttX to a new
@@ -91,8 +96,8 @@ directory (plus the board-specific configurations in the
 subdirectory, *<arch-name>* under ``arch/`` with the following
 characteristics:
 
-Summary of Files
-----------------
+Arch Summary of Files
+---------------------
 
 -  ``include/``\ *<chip-name>*\ ``/`` This sub-directory contains
    chip-specific header files.
@@ -252,16 +257,16 @@ configurations plus the architecture-specific configurations in
 the ``arch/`` subdirectory complete define a customized port of
 NuttX.
 
-Subdirectory Structure
-----------------------
+Boards Subdirectory Structure
+-----------------------------
 
 The ``boards/`` directory contains board specific configuration
 files. Each board must provide a sub-directory <board-name> under
 ``boards/``\ *<arch-name>*\ ``/``>\ *<chip-name>*\ ``/`` with the
 following characteristics:
 
-Summary of Files
-----------------
+Boards Summary of Files
+-----------------------
 
 **Board Specific Logic**
 
@@ -316,7 +321,7 @@ contents of these configuration files.
    which is the path to the root directory of the build. This
    makefile fragment should include:
 
-   -  ``$(TOPDIR)/.config`` : Nuttx configuration
+   -  ``$(TOPDIR)/.config`` : NuttX configuration
    -  ``$(TOPDIR)/tools/Config.mk`` : Common definitions
 
    Definitions in the ``Make.defs`` file probably depend on some
@@ -348,7 +353,7 @@ Supported Boards
 
 All of the specific boards supported by NuttX are identified in
 the
-`README.txt <https://bitbucket.org/nuttx/nuttx/src/master/boards/README.txt>`__
+`README.txt <https://github.com/apache/incubator-nuttx/blob/master/boards/README.txt>`__
 file.
 
 Adding a New Board Configuration
@@ -506,10 +511,5 @@ support.
 ==================
 
 The top-level ``Makefile`` in the ``$(TOPDIR)`` directory contains
-all of the top-level control logic to build NuttX. Use of this
-``Makefile`` to build NuttX is described
-`below <#buildingnuttx>`__.
+all of the top-level control logic to build NuttX.
 
-----
-
-Next up is :ref:`build_and_make`.

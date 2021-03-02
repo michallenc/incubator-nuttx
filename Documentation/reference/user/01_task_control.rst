@@ -30,8 +30,8 @@ pthreads the were started from the same parent thread.
 **Executing Programs within a File System**. NuttX also provides
 internal interfaces for the execution of separately built programs that
 reside in a file system. These internal interfaces are, however,
-non-standard and are documented with the NuttX `binary
-loader <NuttXBinfmt.html>`__ and `NXFLAT <NuttXNxFlat.html#binfmt>`__.
+non-standard and are documented with the NuttX binary
+loader and NXFLAT documentation.
 
 **Task Control Interfaces**. The following task control interfaces are
 provided by NuttX:
@@ -90,12 +90,12 @@ Non-standard task control interfaces inspired by ``posix_spawn``:
   - :c:func:`task_spawnattr_getstacksize`
   - :c:func:`task_spawnattr_setstacksize`
   - :c:func:`posix_spawn_file_actions_init`
-  
+
 Functions
 ---------
 
 .. c:function:: int task_create(char *name, int priority, int stack_size, main_t entry, char * const argv[])
-  
+
   This function creates and activates a new task with a
   specified priority and returns its system-assigned ID.
 
@@ -127,16 +127,16 @@ Functions
   :param argv: A pointer to an array of input parameters. The array should
                be terminated with a NULL argv[] value. If no parameters are
                required, argv may be NULL.
-  
+
   :return: the non-zero task ID of the new task or ERROR if memory is
            insufficient or the task cannot be created
            (```errno`` <#ErrnoAccess>`__ is not set).
 
   **Defined in:** ``sched.h``
-  
+
   **POSIX Compatibility:** This is a NON-POSIX interface. VxWorks provides
   the following similar interface:
-  
+
   .. code-block:: c
 
     int taskSpawn(char *name, int priority, int options, int stackSize, FUNCPTR entryPt,
@@ -240,7 +240,7 @@ Functions
   -  Restart of the currently running task is not supported by NuttX.
   -  The VxWorks description says that the ID, priority, etc. take the
      value that they had when the task was *terminated*.
-     
+
 .. c:function:: int task_setcancelstate(int state, int *oldstate)
 
   This function atomically sets
@@ -305,7 +305,7 @@ Functions
   the functionality of ``pthread_testcancel()`` to tasks and supports use
   of ``task_delete()``.
 
-.. c:function:: void exit(int code)  
+.. c:function:: void exit(int code)
 .. c:function:: void _exit(int code)
 
   ..  #include <sched.h>
@@ -793,7 +793,7 @@ Functions
       FAR const posix_spawn_file_actions_t *file_actions, \
       FAR const posix_spawnattr_t *attr, \
       FAR char * const argv[], FAR char * const envp[])
-      
+
   The ``task_spawn()`` function will create a new, child
   task, where the entry point to the task is an address in memory.
 

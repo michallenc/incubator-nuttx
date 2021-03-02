@@ -297,7 +297,7 @@ Using U-Boot to Run NuttX
 
 The MCIMX6Q-SDB comes with a 8GB SD card containing the U-Boot and Android.
 You simply put the SD card in the SD card slot SD3 (on the bottom of the
-board next to the HDMI connect) and Android will boot.
+board next to the HDMI connect) and Android 4.2.2.1 will boot.
 
 But we need some other way to boot NuttX.  Here are some things that I have
 experimented with.
@@ -308,35 +308,31 @@ Building U-Boot (Failed Attempt #1)
 I have been unsuccessful getting building a working version of u-boot from
 scratch.  It builds, but it does not run.  Here are the things I did:
 
-1. Get a copy of the u-boot i.MX6 code via:
+1. Get a copy of the u-boot i.MX6 code and Android GCC toolchain
 
-    https://github.com/boundarydevices/u-boot-imx6/tree/production
-
-  or
-
-    $ git clone git://git.denx.de/u-boot.git
+    $ git clone https://source.codeaurora.org/external/imx/uboot-imx.git -b nxp/imx_v2009.08
+    $ git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6
 
 2. Build U-Boot for the i.MX6Q Sabre using the following steps.  This
-   assumes that you have the path to your arm-none-eabi- toolchain at the
+   assumes that you have the path to the above toolchain at the
    beginning of your PATH variable:
 
-    $ cd u-boot
+    $ cd uboot-imx
     $ export ARCH=arm
-    $ export CROSS_COMPILE=arm-none-eabi-
-    $ make mx6qsabresd_config
+    $ export CROSS_COMPILE=arm-eabi-
+    $ make mx6q_sabresd_android_config
     $ make
 
-  This should create a number of files, including u-boot.imx
+  This should create a number of files, including u-boot.bin
 
 3. Format an SD card
 
   Create a FAT16 partition at an offset of about 1MB into the SD card.
   This is where we will put nuttx.bin.
 
-4. Put U-Boot on SD.  U-boot should reside at offset 1024B of your SD
-   card. To put it there, do:
+4. Put U-Boot on SD.
 
-    $ dd if=u-boot.imx of=/dev/<your-sd-card> bs=1k seek=1
+    $ dd if=u-boot.bin of=/dev/<your-sd-card> bs=1k
     $ sync
 
   Your SD card device is typically something in /dev/sd<X> or
@@ -437,6 +433,34 @@ of 1MB or so.
      MX6Q SABRESD U-Boot > go 0x10800040
 
 A little hokey, but not such a bad solution.
+
+TFTPBOOT (Successful Attempt #6)
+------------------------------------------
+
+If you can prepare tftp server, this approach would be easy
+
+1. Copy nuttx.bin to the tftp server (e.g. /var/lib/tftpboot/ )
+
+2. Load nuttx.bin from the server and boot
+
+     MX6Q SABRESD U-Boot > setenv ipaddr 192.168.10.103
+     MX6Q SABRESD U-Boot > setenv serverip 192.168.10.16
+     MX6Q SABRESD U-Boot > setenv image nuttx.bin
+     MX6Q SABRESD U-Boot > tftp ${loadaddr} ${image}
+     PHY indentify @ 0x1 = 0x004dd074
+     FEC: Link is Up 796d
+     Using FEC0 device
+     TFTP from server 192.168.10.16; our IP address is 192.168.10.103
+     Filename 'nuttx.bin'.
+     Load address: 0x10800000
+     Loading: ###############
+     done
+     Bytes transferred = 217856 (35300 hex)
+     MX6Q SABRESD U-Boot > go ${loadaddr}
+     ## Starting application at 0x10800000 ...
+
+     NuttShell (NSH) NuttX-10.0.1
+     nsh>
 
 Debugging with the Segger J-Link
 ================================
@@ -592,24 +616,7 @@ Debugging with QEMU
 
 The nuttx ELF image can be debugged with QEMU.
 
-1. Before debugging, following change (enabling wfi instruction in up_idle)
-   is recommended to reduce CPU usage on host PC.
-
-diff --git a/arch/arm/src/common/up_idle.c b/arch/arm/src/common/up_idle.c
-index 45fab0b7c6..c54c1178a1 100644
---- a/arch/arm/src/common/up_idle.c
-+++ b/arch/arm/src/common/up_idle.c
-@@ -71,7 +71,7 @@ void up_idle(void)
-
-   /* Sleep until an interrupt occurs to save power */
-
--#if 0
-+#if 1
-   asm("WFI");  /* For example */
- #endif
- #endif
-
-2. Also, to debug the nuttx (ELF) with symbols, following change must
+1. To debug the nuttx (ELF) with symbols, following change must
    be applied to defconfig.
 
 diff --git a/boards/arm/imx6/sabre-6quad/configs/nsh/defconfig b/boards/arm/imx6/sabre-6quad/configs/nsh/defconfig
@@ -624,6 +631,33 @@ index b15becbb51..3ad4d13ad7 100644
 +CONFIG_DEBUG_SYMBOLS=y
  CONFIG_DEV_ZERO=y
 
+2. Please note that QEMU does not report PL310 (L2CC) related
+   registers correctly, so if you enable CONFIG_DEBUG_ASSERTION
+   the nuttx will stop with DEBUGASSERT(). To avoid this,
+   comment out the following lines.
+
+--- a/arch/arm/src/armv7-a/arm_l2cc_pl310.c
++++ b/arch/arm/src/armv7-a/arm_l2cc_pl310.c
+@@ -333,7 +333,7 @@ void arm_l2ccinitialize(void)
+ #if defined(CONFIG_ARMV7A_ASSOCIATIVITY_8WAY)
+   DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_ASS) == 0);
+ #elif defined(CONFIG_ARMV7A_ASSOCIATIVITY_16WAY)
+- DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_ASS) == L2CC_ACR_ASS);
++ //DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_ASS) == L2CC_ACR_ASS);
+ #else
+ # error No associativity selected
+ #endif
+@@ -345,8 +345,8 @@ void arm_l2ccinitialize(void)
+   DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_WAYSIZE_MASK) ==
+               L2CC_ACR_WAYSIZE_32KB);
+ #elif defined(CONFIG_ARMV7A_WAYSIZE_64KB)
+- DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_WAYSIZE_MASK) ==
+- L2CC_ACR_WAYSIZE_64KB);
++ // DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_WAYSIZE_MASK) ==
++ // L2CC_ACR_WAYSIZE_64KB);
+ #elif defined(CONFIG_ARMV7A_WAYSIZE_128KB)
+   DEBUGASSERT((getreg32(L2CC_ACR) & L2CC_ACR_WAYSIZE_MASK) ==
+               L2CC_ACR_WAYSIZE_128KB);
 
 3. Run QEMU
 
@@ -691,58 +725,7 @@ Open Issues:
    This will cause the interrupt handlers on other CPUs to spin until
    leave_critical_section() is called.  More verification is needed.
 
-2. Cache Concurrency.  Cache coherency in SMP configurations is managed by the
-   MPCore snoop control unit (SCU).  But I don't think I have the set up
-   correctly yet.
-
-   Currently cache inconsistencies appear to be the root cause of all current SMP
-   issues.  SMP works as expected if the caches are disabled, but otherwise there
-   are problems (usually hangs):
-
-   This will disable the caches:
-
-diff --git a/arch/arm/src/armv7-a/arm_head.S b/arch/arm/src/armv7-a/arm_head.S
-index 27c2a5b..2a6274c 100644
---- a/arch/arm/src/armv7-a/arm_head.S
-+++ b/arch/arm/src/armv7-a/arm_head.S
-@@ -454,6 +454,7 @@ __start:
-         * after SMP cache coherency has been setup.
-         */
-
-+#if 0 // REMOVE ME
- #if !defined(CPU_DCACHE_DISABLE) && !defined(CONFIG_SMP)
-        /* Dcache enable
-         *
-@@ -471,6 +472,7 @@ __start:
-
-        orr             r0, r0, #(SCTLR_I)
- #endif
-+#endif // REMOVE ME
-
- #ifdef CPU_ALIGNMENT_TRAP
-        /* Alignment abort enable
-diff --git a/arch/arm/src/armv7-a/arm_scu.c b/arch/arm/src/armv7-a/arm_scu.c
-index eedf179..1db2092 100644
---- a/arch/arm/src/armv7-a/arm_scu.c
-+++ b/arch/arm/src/armv7-a/arm_scu.c
-@@ -156,6 +156,7 @@ static inline void arm_set_actlr(uint32_t actlr)
-
- void arm_enable_smp(int cpu)
- {
-+#if 0 // REMOVE ME
-   uint32_t regval;
-
-   /* Handle actions unique to CPU0 which comes up first */
-@@ -222,6 +223,7 @@ void arm_enable_smp(int cpu)
-   regval  = arm_get_sctlr();
-   regval |= SCTLR_C;
-   arm_set_sctlr(regval);
-+#endif // REMOVE ME
- }
-
- #endif
-
-3. Recent redesigns to SMP of another ARMv7-M platform have made changes to the OS
+2. Recent redesigns to SMP of another ARMv7-M platform have made changes to the OS
    SMP support.  There are no known problem but the changes have not been verified
    fully (see STATUS above for 2019-02-06).
 

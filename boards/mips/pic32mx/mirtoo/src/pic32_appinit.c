@@ -39,14 +39,13 @@
 
 #include <nuttx/config.h>
 
-#include <sys/mount.h>
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <errno.h>
 #include <syslog.h>
 
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 
 #ifdef CONFIG_PIC32MX_SPI2
 #  include <nuttx/spi/spi.h>
@@ -62,7 +61,7 @@
 
 /* Configuration ************************************************************/
 
-/* Can't support the SST25 device if it SPI2 or SST25 support is not enabled */
+/* Can't support the SST25 device if it SPI2/SST25 support is not enabled */
 
 #define HAVE_SST25  1
 #if !defined(CONFIG_PIC32MX_SPI2) || !defined(CONFIG_MTD_SST25)
@@ -140,7 +139,7 @@ int board_app_initialize(uintptr_t arg)
     }
 
 #ifndef CONFIG_FS_NXFFS
-  /* And finally, use the FTL layer to wrap the MTD driver as a block driver */
+  /* And use the FTL layer to wrap the MTD driver as a block driver */
 
   ret = ftl_initialize(CONFIG_NSH_MMCSDMINOR, mtd);
   if (ret < 0)
@@ -160,13 +159,14 @@ int board_app_initialize(uintptr_t arg)
 
   /* Mount the file system at /mnt/sst25 */
 
-  ret = mount(NULL, "/mnt/sst25", "nxffs", 0, NULL);
+  ret = nx_mount(NULL, "/mnt/sst25", "nxffs", 0, NULL);
   if (ret < 0)
     {
-      ferr("ERROR: Failed to mount the NXFFS volume: %d\n", errno);
+      ferr("ERROR: Failed to mount the NXFFS volume: %d\n", ret);
       return ret;
     }
 #endif
 #endif
+
   return OK;
 }

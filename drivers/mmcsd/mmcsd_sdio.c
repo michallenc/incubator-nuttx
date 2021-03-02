@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -41,6 +42,7 @@
 #include <errno.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/signal.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/clock.h>
@@ -210,9 +212,9 @@ static ssize_t mmcsd_flush(FAR void *dev, FAR const uint8_t *buffer,
 static int     mmcsd_open(FAR struct inode *inode);
 static int     mmcsd_close(FAR struct inode *inode);
 static ssize_t mmcsd_read(FAR struct inode *inode, FAR unsigned char *buffer,
-                 size_t startsector, unsigned int nsectors);
+                 blkcnt_t startsector, unsigned int nsectors);
 static ssize_t mmcsd_write(FAR struct inode *inode,
-                 FAR const unsigned char *buffer, size_t startsector,
+                 FAR const unsigned char *buffer, blkcnt_t startsector,
                  unsigned int nsectors);
 static int     mmcsd_geometry(FAR struct inode *inode,
                  FAR struct geometry *geometry);
@@ -321,7 +323,8 @@ static int mmcsd_sendcmdpoll(FAR struct mmcsd_state_s *priv, uint32_t cmd,
       ret = SDIO_WAITRESPONSE(priv->dev, cmd);
       if (ret != OK)
         {
-          ferr("ERROR: Wait for response to cmd: %08x failed: %d\n",
+          ferr("ERROR: Wait for response to cmd: %08" PRIx32
+               " failed: %d\n",
                cmd, ret);
         }
     }
@@ -395,7 +398,7 @@ static int mmsd_recv_r1(FAR struct mmcsd_state_s *priv, uint32_t cmd)
            * indication for later use.
            */
 
-          ferr("ERROR: R1=%08x\n", r1);
+          ferr("ERROR: R1=%08" PRIx32 "\n", r1);
           priv->locked = ((r1 & MMCSD_R1_CARDISLOCKED) != 0);
           ret = -EIO;
         }
@@ -449,7 +452,7 @@ static int mmsd_recv_r6(FAR struct mmcsd_state_s *priv, uint32_t cmd)
       ret = -EIO;
     }
 
-  ferr("ERROR: Failed to get RCA. R6=%08x: %d\n", r6, ret);
+  ferr("ERROR: Failed to get RCA. R6=%08" PRIx32 ": %d\n", r6, ret);
   return ret;
 }
 
@@ -1066,7 +1069,7 @@ static int mmcsd_get_r1(FAR struct mmcsd_state_s *priv, FAR uint32_t *r1)
 
           /* We must tell someone which error bits were set. */
 
-          fwarn("WARNING: mmcsd_get_r1 returned errors: R1=%08x\n",
+          fwarn("WARNING: mmcsd_get_r1 returned errors: R1=%08" PRIx32 "\n",
                 local_r1);
           ret = -EIO;
         }
@@ -1271,7 +1274,7 @@ static int mmcsd_transferready(FAR struct mmcsd_state_s *priv)
            * if this error occurs.
            */
 
-          ferr("ERROR: Unexpected R1 state: %08x\n", r1);
+          ferr("ERROR: Unexpected R1 state: %08" PRIx32 "\n", r1);
           ret = -EINVAL;
           goto errorout;
         }
@@ -1368,7 +1371,7 @@ static ssize_t mmcsd_readsingle(FAR struct mmcsd_state_s *priv,
   off_t offset;
   int ret;
 
-  finfo("startblock=%d\n", startblock);
+  finfo("startblock=%jd\n", (intmax_t)startblock);
   DEBUGASSERT(priv != NULL && buffer != NULL);
 
   /* Check if the card is locked */
@@ -1422,7 +1425,7 @@ static ssize_t mmcsd_readsingle(FAR struct mmcsd_state_s *priv,
       offset = startblock << priv->blockshift;
     }
 
-  finfo("offset=%d\n", offset);
+  finfo("offset=%jd\n", (intmax_t)offset);
 
   /* Select the block size for the card */
 
@@ -1505,7 +1508,7 @@ static ssize_t mmcsd_readmultiple(FAR struct mmcsd_state_s *priv,
   off_t  offset;
   int ret;
 
-  finfo("startblock=%d nblocks=%d\n", startblock, nblocks);
+  finfo("startblock=%jd nblocks=%zu\n", (intmax_t)startblock, nblocks);
   DEBUGASSERT(priv != NULL && buffer != NULL && nblocks > 1);
 
   /* Check if the card is locked */
@@ -1561,7 +1564,7 @@ static ssize_t mmcsd_readmultiple(FAR struct mmcsd_state_s *priv,
       offset = startblock << priv->blockshift;
     }
 
-  finfo("nbytes=%d byte offset=%d\n", nbytes, offset);
+  finfo("nbytes=%zu byte offset=%jd\n", nbytes, (intmax_t)offset);
 
   /* Select the block size for the card */
 
@@ -1713,7 +1716,7 @@ static ssize_t mmcsd_writesingle(FAR struct mmcsd_state_s *priv,
   off_t offset;
   int ret;
 
-  finfo("startblock=%d\n", startblock);
+  finfo("startblock=%jd\n", (intmax_t)startblock);
   DEBUGASSERT(priv != NULL && buffer != NULL);
 
   /* Check if the card is locked or write protected (either via software or
@@ -1769,7 +1772,7 @@ static ssize_t mmcsd_writesingle(FAR struct mmcsd_state_s *priv,
       offset = startblock << priv->blockshift;
     }
 
-  finfo("offset=%d\n", offset);
+  finfo("offset=%jd\n", (intmax_t)offset);
 
   /* Select the block size for the card */
 
@@ -1883,7 +1886,7 @@ static ssize_t mmcsd_writemultiple(FAR struct mmcsd_state_s *priv,
   int ret;
   int evret = OK;
 
-  finfo("startblock=%d nblocks=%d\n", startblock, nblocks);
+  finfo("startblock=%jd nblocks=%zu\n", (intmax_t)startblock, nblocks);
   DEBUGASSERT(priv != NULL && buffer != NULL && nblocks > 1);
 
   /* Check if the card is locked or write protected (either via software or
@@ -1941,7 +1944,7 @@ static ssize_t mmcsd_writemultiple(FAR struct mmcsd_state_s *priv,
       offset = startblock << priv->blockshift;
     }
 
-  finfo("nbytes=%d byte offset=%d\n", nbytes, offset);
+  finfo("nbytes=%zu byte offset=%jd\n", nbytes, (intmax_t)offset);
 
   /* Select the block size for the card */
 
@@ -2221,7 +2224,7 @@ static int mmcsd_close(FAR struct inode *inode)
  ****************************************************************************/
 
 static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
-                          size_t startsector, unsigned int nsectors)
+                          blkcnt_t startsector, unsigned int nsectors)
 {
   FAR struct mmcsd_state_s *priv;
 #if !defined(CONFIG_DRVR_READAHEAD) && defined(CONFIG_MMCSD_MULTIBLOCK_DISABLE)
@@ -2232,7 +2235,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
 
   DEBUGASSERT(inode && inode->i_private);
   priv = (FAR struct mmcsd_state_s *)inode->i_private;
-  finfo("startsector: %d nsectors: %d sectorsize: %d\n",
+  finfo("startsector: %" PRIu32 " nsectors: %u sectorsize: %d\n",
         startsector, nsectors, priv->blocksize);
 
   if (nsectors > 0)
@@ -2301,7 +2304,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
 
 static ssize_t mmcsd_write(FAR struct inode *inode,
                            FAR const unsigned char *buffer,
-                           size_t startsector, unsigned int nsectors)
+                           blkcnt_t startsector, unsigned int nsectors)
 {
   FAR struct mmcsd_state_s *priv;
 #if defined(CONFIG_MMCSD_MULTIBLOCK_DISABLE)
@@ -2417,7 +2420,7 @@ static int mmcsd_geometry(FAR struct inode *inode, struct geometry *geometry)
           finfo("available: true mediachanged: %s writeenabled: %s\n",
                  geometry->geo_mediachanged ? "true" : "false",
                  geometry->geo_writeenabled ? "true" : "false");
-          finfo("nsectors: %lu sectorsize: %d\n",
+          finfo("nsectors: %lu sectorsize: %" PRIi16 "\n",
                  (unsigned long)geometry->geo_nsectors,
                  geometry->geo_sectorsize);
 
@@ -2643,7 +2646,7 @@ static int mmcsd_widebus(FAR struct mmcsd_state_s *priv)
       priv->widebus = true;
 
       SDIO_CLOCK(priv->dev, CLOCK_SD_TRANSFER_4BIT);
-      usleep(MMCSD_CLK_DELAY);
+      nxsig_usleep(MMCSD_CLK_DELAY);
       return OK;
     }
 
@@ -2775,7 +2778,7 @@ static int mmcsd_mmcinitialize(FAR struct mmcsd_state_s *priv)
   /* Select high speed MMC clocking (which may depend on the DSR setting) */
 
   SDIO_CLOCK(priv->dev, CLOCK_MMC_TRANSFER);
-  usleep(MMCSD_CLK_DELAY);
+  nxsig_usleep(MMCSD_CLK_DELAY);
   return OK;
 }
 
@@ -2895,8 +2898,8 @@ static int mmcsd_read_csd(FAR struct mmcsd_state_s *priv)
   priv->nblocks = (buffer[215] << 24) | (buffer[214] << 16) |
                   (buffer[213] << 8) | buffer[212];
 
-  finfo("MMC ext CSD read succsesfully, number of block %d\n",
-         priv->nblocks);
+  finfo("MMC ext CSD read succsesfully, number of block %" PRId32 "\n",
+        priv->nblocks);
 
   /* Return value:  One sector read */
 
@@ -3196,7 +3199,7 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
             }
           else
             {
-              ferr("ERROR: R7: %08x\n", response);
+              ferr("ERROR: R7: %08" PRIx32 "\n", response);
               return -EIO;
             }
         }
@@ -3259,7 +3262,7 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
                    * must be SD V1.x
                    */
 
-                  finfo("R3: %08x\n", response);
+                  finfo("R3: %08" PRIx32 "\n", response);
                   if (priv->type == MMCSD_CARDTYPE_UNKNOWN)
                     {
                       finfo("SD V1.x card\n");

@@ -44,6 +44,7 @@
 #include <sys/ioctl.h>
 
 #include <math.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -1015,11 +1016,11 @@ cs43l22_senddone(FAR struct i2s_dev_s *i2s,
    */
 
   msg.msg_id = AUDIO_MSG_COMPLETE;
-  ret = nxmq_send(priv->mq, (FAR const char *)&msg, sizeof(msg),
-                  CONFIG_CS43L22_MSG_PRIO);
+  ret = file_mq_send(&priv->mq, (FAR const char *)&msg, sizeof(msg),
+                     CONFIG_CS43L22_MSG_PRIO);
   if (ret < 0)
     {
-      auderr("ERROR: nxmq_send failed: %d\n", ret);
+      auderr("ERROR: file_mq_send failed: %d\n", ret);
     }
 }
 
@@ -1214,20 +1215,22 @@ static int cs43l22_start(FAR struct audio_lowerhalf_s *dev)
 
   /* Create a message queue for the worker thread */
 
-  snprintf(priv->mqname, sizeof(priv->mqname), "/tmp/%X", priv);
+  snprintf(priv->mqname, sizeof(priv->mqname), "/tmp/%" PRIXPTR,
+           (uintptr_t)priv);
 
   attr.mq_maxmsg  = 16;
   attr.mq_msgsize = sizeof(struct audio_msg_s);
   attr.mq_curmsgs = 0;
   attr.mq_flags   = 0;
 
-  priv->mq = mq_open(priv->mqname, O_RDWR | O_CREAT, 0644, &attr);
-  if (priv->mq == NULL)
+  ret = file_mq_open(&priv->mq, priv->mqname,
+                     O_RDWR | O_CREAT, 0644, &attr);
+  if (ret < 0)
     {
       /* Error creating message queue! */
 
       auderr("ERROR: Couldn't allocate message queue\n");
-      return -ENOMEM;
+      return ret;
     }
 
   /* Join any old worker thread we had created to prevent a memory leak */
@@ -1284,8 +1287,8 @@ static int cs43l22_stop(FAR struct audio_lowerhalf_s *dev)
 
   term_msg.msg_id = AUDIO_MSG_STOP;
   term_msg.u.data = 0;
-  nxmq_send(priv->mq, (FAR const char *)&term_msg, sizeof(term_msg),
-            CONFIG_CS43L22_MSG_PRIO);
+  file_mq_send(&priv->mq, (FAR const char *)&term_msg, sizeof(term_msg),
+               CONFIG_CS43L22_MSG_PRIO);
 
   /* Join the worker thread */
 
@@ -1407,16 +1410,16 @@ static int cs43l22_enqueuebuffer(FAR struct audio_lowerhalf_s *dev,
    */
 
   ret = OK;
-  if (priv->mq != NULL)
+  if (priv->mq.f_inode != NULL)
     {
       term_msg.msg_id  = AUDIO_MSG_ENQUEUE;
       term_msg.u.data = 0;
 
-      ret = nxmq_send(priv->mq, (FAR const char *)&term_msg,
-                      sizeof(term_msg), CONFIG_CS43L22_MSG_PRIO);
+      ret = file_mq_send(&priv->mq, (FAR const char *)&term_msg,
+                         sizeof(term_msg), CONFIG_CS43L22_MSG_PRIO);
       if (ret < 0)
         {
-          auderr("ERROR: nxmq_send failed: %d\n", ret);
+          auderr("ERROR: file_mq_send failed: %d\n", ret);
         }
     }
 
@@ -1682,7 +1685,8 @@ static void *cs43l22_workerthread(pthread_addr_t pvarg)
 
       /* Wait for messages from our message queue */
 
-      msglen = nxmq_receive(priv->mq, (FAR char *)&msg, sizeof(msg), &prio);
+      msglen = file_mq_receive(&priv->mq, (FAR char *)&msg,
+                               sizeof(msg), &prio);
 
       /* Handle the case when we return with no message */
 
@@ -1767,9 +1771,8 @@ static void *cs43l22_workerthread(pthread_addr_t pvarg)
 
   /* Close the message queue */
 
-  mq_close(priv->mq);
-  mq_unlink(priv->mqname);
-  priv->mq = NULL;
+  file_mq_close(&priv->mq);
+  file_mq_unlink(priv->mqname);
 
   /* Send an AUDIO_MSG_COMPLETE message to the client */
 
@@ -2008,7 +2011,7 @@ FAR struct audio_lowerhalf_s *
 
       /* Initialize I2C */
 
-      audinfo("address=%02x frequency=%d\n",
+      audinfo("address=%02x frequency=%" PRId32 "\n",
               lower->address, lower->frequency);
 
       /* Software reset.  This puts all CS43L22 registers back in their

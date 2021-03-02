@@ -3317,7 +3317,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep, const struct usb_epdesc_s *d
   if (!ep || !desc)
     {
       usbtrace(TRACE_DEVERROR(KHCI_TRACEERR_INVALIDPARMS), 0);
-      uerr("ERROR: ep=%p desc=%p\n");
+      uerr("ERROR: ep=%p desc=%p\n", ep, desc);
       return -EINVAL;
     }
 #endif
@@ -4322,7 +4322,7 @@ static void khci_hwinitialize(struct khci_usbdev_s *priv)
   khci_putreg((uint8_t)(((uint32_t)g_bdt >> 8) & USB_BDTPAGE1_MASK),
       KINETIS_USB0_BDTPAGE1);
 
-  uinfo("BDT Address %hhx \n", &g_bdt);
+  uinfo("BDT Address %p \n", (const void *)&g_bdt);
   uinfo("BDTPAGE3 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE3));
   uinfo("BDTPAGE2 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE2));
   uinfo("BDTPAGE1 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE1));

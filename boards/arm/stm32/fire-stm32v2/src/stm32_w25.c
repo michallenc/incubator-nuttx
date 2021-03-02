@@ -39,8 +39,6 @@
 
 #include <nuttx/config.h>
 
-#include <sys/mount.h>
-
 #include <stdbool.h>
 #include <stdio.h>
 #include <errno.h>
@@ -49,6 +47,7 @@
 #ifdef CONFIG_STM32_SPI1
 #  include <nuttx/spi/spi.h>
 #  include <nuttx/mtd/mtd.h>
+#  include <nuttx/fs/fs.h>
 #  include <nuttx/fs/nxffs.h>
 #endif
 
@@ -60,6 +59,7 @@
  ****************************************************************************/
 
 /* Configuration ************************************************************/
+
 /* Can't support the W25 device if it SPI1 or W25 support is not enabled */
 
 #define HAVE_W25  1
@@ -120,7 +120,7 @@ int stm32_w25initialize(int minor)
     }
 
 #ifndef CONFIG_FS_NXFFS
-  /* And finally, use the FTL layer to wrap the MTD driver as a block driver */
+  /* And use the FTL layer to wrap the MTD driver as a block driver */
 
   ret = ftl_initialize(minor, mtd);
   if (ret < 0)
@@ -141,13 +141,14 @@ int stm32_w25initialize(int minor)
   /* Mount the file system at /mnt/w25 */
 
   snprintf(devname, 12, "/mnt/w25%c", 'a' + minor);
-  ret = mount(NULL, devname, "nxffs", 0, NULL);
+  ret = nx_mount(NULL, devname, "nxffs", 0, NULL);
   if (ret < 0)
     {
-      ferr("ERROR: Failed to mount the NXFFS volume: %d\n", errno);
+      ferr("ERROR: Failed to mount the NXFFS volume: %d\n", ret);
       return ret;
     }
 #endif
 #endif
+
   return OK;
 }

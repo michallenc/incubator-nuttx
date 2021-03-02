@@ -45,6 +45,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -972,7 +973,7 @@ static uint32_t spi_setfrequency(struct spi_dev_s *dev, uint32_t frequency)
   uint32_t regval;
   unsigned int offset;
 
-  spiinfo("cs=%d frequency=%d\n", spics->cs, frequency);
+  spiinfo("cs=%d frequency=%" PRId32 "\n", spics->cs, frequency);
 
   /* Check if the requested frequency is the same as the frequency
    * selection
@@ -1045,14 +1046,15 @@ static uint32_t spi_setfrequency(struct spi_dev_s *dev, uint32_t frequency)
   /* Calculate the new actual frequency */
 
   actual = SAM_SPI_CLOCK / scbr;
-  spiinfo("csr[offset=%02x]=%08x actual=%d\n", offset, regval, actual);
+  spiinfo("csr[offset=%02x]=%08" PRIx32 " actual=%" PRId32 "\n",
+          offset, regval, actual);
 
   /* Save the frequency setting */
 
   spics->frequency = frequency;
   spics->actual    = actual;
 
-  spiinfo("Frequency %d->%d\n", frequency, actual);
+  spiinfo("Frequency %" PRId32 "->%" PRId32 "\n", frequency, actual);
   return actual;
 }
 
@@ -1121,7 +1123,7 @@ static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
         }
 
       spi_putreg(spi, regval, offset);
-      spiinfo("csr[offset=%02x]=%08x\n", offset, regval);
+      spiinfo("csr[offset=%02x]=%08" PRIx32 "\n", offset, regval);
 
       /* Save the mode so that subsequent re-configurations will be faster */
 
@@ -1137,7 +1139,7 @@ static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  * Input Parameters:
  *   dev -  Device-specific state data
- *   nbits - The number of bits requests
+ *   nbits - The number of bits requested
  *
  * Returned Value:
  *   none
@@ -1152,7 +1154,7 @@ static void spi_setbits(struct spi_dev_s *dev, int nbits)
   unsigned int offset;
 
   spiinfo("cs=%d nbits=%d\n", spics->cs, nbits);
-  DEBUGASSERT(spics && nbits > 7 && nbits < 17);
+  DEBUGASSERT(nbits > 7 && nbits < 17);
 
   /* NOTE:  The logic in spi_send and in spi_exchange only handles 8-bit
    * data at the present time.  So the following extra assertion is a
@@ -1173,10 +1175,10 @@ static void spi_setbits(struct spi_dev_s *dev, int nbits)
       regval |= SPI_CSR_BITS(nbits);
       spi_putreg(spi, regval, offset);
 
-      spiinfo("csr[offset=%02x]=%08x\n", offset, regval);
+      spiinfo("csr[offset=%02x]=%08" PRIx32 "\n", offset, regval);
 
-      /* Save the selection so the subsequence re-configurations will be
-       * faster
+      /* Save the selection so that subsequent re-configurations will be
+       * faster.
        */
 
       spics->nbits = nbits;
@@ -1834,7 +1836,7 @@ struct spi_dev_s *sam_spibus_initialize(int port)
   spi_putreg(spi, regval, offset);
 
   spics->nbits = 8;
-  spiinfo("csr[offset=%02x]=%08x\n", offset, regval);
+  spiinfo("csr[offset=%02x]=%08" PRIx32 "\n", offset, regval);
 
   return &spics->spidev;
 }

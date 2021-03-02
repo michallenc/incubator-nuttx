@@ -63,7 +63,6 @@
 #include "hardware/esp32_iomux.h"
 #include "hardware/esp32_gpio_sigmap.h"
 #include "hardware/esp32_uart.h"
-#include "rom/esp32_gpio.h"
 #include "esp32_config.h"
 #include "esp32_gpio.h"
 #include "esp32_cpuint.h"
@@ -529,17 +528,17 @@ static int esp32_setup(struct uart_dev_s *dev)
    */
 
   esp32_configgpio(priv->config->txpin, OUTPUT_FUNCTION_3);
-  gpio_matrix_out(priv->config->txpin, priv->config->txsig, 0, 0);
+  esp32_gpio_matrix_out(priv->config->txpin, priv->config->txsig, 0, 0);
 
   esp32_configgpio(priv->config->rxpin, INPUT_FUNCTION_3);
-  gpio_matrix_in(priv->config->rxpin, priv->config->rxsig, 0);
+  esp32_gpio_matrix_in(priv->config->rxpin, priv->config->rxsig, 0);
 
 #if defined(CONFIG_SERIAL_IFLOWCONTROL) || defined(CONFIG_SERIAL_OFLOWCONTROL)
   esp32_configgpio(priv->config->rtspin, OUTPUT_FUNCTION_3);
-  gpio_matrix_out(priv->config->rtspin, priv->config->rtssig, 0, 0);
+  esp32_gpio_matrix_out(priv->config->rtspin, priv->config->rtssig, 0, 0);
 
   esp32_configgpio(priv->config->ctspin, INPUT_FUNCTION_3);
-  gpio_matrix_in(priv->config->ctspin, priv->config->ctssig, 0);
+  esp32_gpio_matrix_in(priv->config->ctspin, priv->config->ctssig, 0);
 #endif
 
   /* Enable RX and error interrupts.  Clear and pending interrtupt */
@@ -596,17 +595,20 @@ static void esp32_shutdown(struct uart_dev_s *dev)
   /* Revert pins to inputs and detach UART signals */
 
   esp32_configgpio(priv->config->txpin, INPUT);
-  gpio_matrix_out(priv->config->txsig, MATRIX_DETACH_OUT_SIG, true, false);
+  esp32_gpio_matrix_out(priv->config->txsig,
+                        MATRIX_DETACH_OUT_SIG, true, false);
 
   esp32_configgpio(priv->config->rxpin, INPUT);
-  gpio_matrix_in(priv->config->rxsig, MATRIX_DETACH_IN_LOW_PIN, false);
+  esp32_gpio_matrix_in(priv->config->rxsig, MATRIX_DETACH_IN_LOW_PIN, false);
 
 #if defined(CONFIG_SERIAL_IFLOWCONTROL) || defined(CONFIG_SERIAL_OFLOWCONTROL)
   esp32_configgpio(priv->config->rtspin, INPUT);
-  gpio_matrix_out(priv->config->rtssig, MATRIX_DETACH_OUT_SIG, true, false);
+  esp32_gpio_matrix_out(priv->config->rtssig,
+                        MATRIX_DETACH_OUT_SIG, true, false);
 
   esp32_configgpio(priv->config->ctspin, INPUT);
-  gpio_matrix_in(priv->config->ctssig, MATRIX_DETACH_IN_LOW_PIN, false);
+  esp32_gpio_matrix_in(priv->config->ctssig,
+                       MATRIX_DETACH_IN_LOW_PIN, false);
 #endif
 
   /* Unconfigure and disable the UART */
@@ -845,10 +847,6 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
             break;
           }
 
-        /* Return baud */
-
-        cfsetispeed(termiosp, priv->baud);
-
         /* Return parity */
 
         termiosp->c_cflag = ((priv->parity != 0) ? PARENB : 0) |
@@ -863,6 +861,10 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 #if defined(CONFIG_SERIAL_IFLOWCONTROL) || defined(CONFIG_SERIAL_OFLOWCONTROL)
         termiosp->c_cflag |= (priv->flowc) ? (CCTS_OFLOW | CRTS_IFLOW): 0;
 #endif
+        /* Return baud */
+
+        cfsetispeed(termiosp, priv->baud);
+
         /* Return number of bits */
 
         switch (priv->bits)
@@ -1154,10 +1156,13 @@ static void esp32_txint(struct uart_dev_s *dev, bool enable)
 
 static bool esp32_txready(struct uart_dev_s *dev)
 {
+  uint32_t txcnt;
   struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
 
-  return ((esp32_serialin(priv, UART_STATUS_OFFSET) & UART_TXFIFO_CNT_M) <
-          0x7f);
+  txcnt = (esp32_serialin(priv, UART_STATUS_OFFSET) >> UART_TXFIFO_CNT_S) &
+          UART_TXFIFO_CNT_V;
+
+  return txcnt < 0x7f;
 }
 
 /****************************************************************************

@@ -40,7 +40,6 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <sys/mount.h>
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -49,6 +48,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/sdio.h>
 #include <nuttx/mmcsd.h>
 #include <nuttx/leds/userled.h>
@@ -71,7 +71,7 @@
  ****************************************************************************/
 
 #undef HAVE_I2C_DRIVER
-#if defined(CONFIG_STM32L4_I2C1) && defined(CONFIG_I2C_DRIVER)
+#if (defined(CONFIG_STM32L4_I2C1) || defined(CONFIG_STM32L4_I2C3)) && defined(CONFIG_I2C_DRIVER)
 #  define HAVE_I2C_DRIVER 1
 #endif
 
@@ -123,8 +123,11 @@ int board_app_initialize(uintptr_t arg)
 #ifdef HAVE_RTC_DRIVER
   FAR struct rtc_lowerhalf_s *rtclower;
 #endif
-#ifdef HAVE_I2C_DRIVER
-  FAR struct i2c_master_s *i2c;
+#ifdef CONFIG_STM32L4_I2C1
+  FAR struct i2c_master_s *i2c1;
+#endif
+#ifdef CONFIG_STM32L4_I2C3
+  FAR struct i2c_master_s *i2c3;
 #endif
 #ifdef CONFIG_SENSORS_QENCODER
   int index;
@@ -137,12 +140,12 @@ int board_app_initialize(uintptr_t arg)
 
   syslog(LOG_INFO, "Mounting procfs to /proc\n");
 
-  ret = mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
+  ret = nx_mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR,
-             "ERROR: Failed to mount the PROC filesystem: %d (%d)\n",
-             ret, errno);
+             "ERROR: Failed to mount the PROC filesystem: %d\n",
+             ret);
       return ret;
     }
 #endif
@@ -190,11 +193,11 @@ int board_app_initialize(uintptr_t arg)
     }
 #endif
 
-#ifdef HAVE_I2C_DRIVER
+#ifdef CONFIG_STM32L4_I2C1
   /* Get the I2C lower half instance */
 
-  i2c = stm32l4_i2cbus_initialize(1);
-  if (i2c == NULL)
+  i2c1 = stm32l4_i2cbus_initialize(1);
+  if (i2c1 == NULL)
     {
       i2cerr("ERROR: Initialize I2C1: %d\n", ret);
     }
@@ -202,10 +205,30 @@ int board_app_initialize(uintptr_t arg)
     {
       /* Register the I2C character driver */
 
-      ret = i2c_register(i2c, 1);
+      ret = i2c_register(i2c1, 1);
       if (ret < 0)
         {
           i2cerr("ERROR: Failed to register I2C1 device: %d\n", ret);
+        }
+    }
+#endif
+
+#ifdef CONFIG_STM32L4_I2C3
+  /* Get the I2C lower half instance */
+
+  i2c3 = stm32l4_i2cbus_initialize(3);
+  if (i2c3 == NULL)
+    {
+      i2cerr("ERROR: Initialize I2C3: %d\n", ret);
+    }
+  else
+    {
+      /* Register the I2C character driver */
+
+      ret = i2c_register(i2c3, 3);
+      if (ret < 0)
+        {
+          i2cerr("ERROR: Failed to register I2C3 device: %d\n", ret);
         }
     }
 #endif

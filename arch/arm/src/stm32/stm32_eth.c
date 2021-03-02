@@ -41,6 +41,7 @@
 #include <nuttx/config.h>
 #if defined(CONFIG_NET) && defined(CONFIG_STM32_ETHMAC)
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
@@ -1068,7 +1069,7 @@ static int stm32_transmit(FAR struct stm32_ethmac_s *priv)
   txdesc  = priv->txhead;
   txfirst = txdesc;
 
-  ninfo("d_len: %d d_buf: %p txhead: %p tdes0: %08x\n",
+  ninfo("d_len: %d d_buf: %p txhead: %p tdes0: %08" PRIx32 "\n",
         priv->dev.d_len, priv->dev.d_buf, txdesc, txdesc->tdes0);
 
   DEBUGASSERT(txdesc && (txdesc->tdes0 & ETH_TDES0_OWN) == 0);
@@ -1395,7 +1396,7 @@ static void stm32_dopoll(FAR struct stm32_ethmac_s *priv)
 
       if (dev->d_buf)
         {
-          devif_poll(dev, stm32_txpoll);
+          devif_timer(dev, 0, stm32_txpoll);
 
           /* We will, most likely end up with a buffer to be freed.  But it
            * might not be the same one that we allocated above.
@@ -1678,7 +1679,7 @@ static int stm32_recvframe(FAR struct stm32_ethmac_s *priv)
                * scanning logic, and continue scanning with the next frame.
                */
 
-              nerr("ERROR: Dropped, RX descriptor errors: %08x\n",
+              nerr("ERROR: Dropped, RX descriptor errors: %08" PRIx32 "\n",
                    rxdesc->rdes0);
               stm32_freesegment(priv, rxcurr, priv->segments);
             }
@@ -1912,7 +1913,8 @@ static void stm32_freeframe(FAR struct stm32_ethmac_s *priv)
            * TX descriptors.
            */
 
-          ninfo("txtail: %p tdes0: %08x tdes2: %08x tdes3: %08x\n",
+          ninfo("txtail: %p tdes0: %08" PRIx32
+                " tdes2: %08" PRIx32 " tdes3: %08" PRIx32 "\n",
                 txdesc, txdesc->tdes0, txdesc->tdes2, txdesc->tdes3);
 
           DEBUGASSERT(txdesc->tdes2 != 0);
@@ -2373,8 +2375,10 @@ static int stm32_ifup(struct net_driver_s *dev)
 
 #ifdef CONFIG_NET_IPv4
   ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-       (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",

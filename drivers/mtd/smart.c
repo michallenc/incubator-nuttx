@@ -45,6 +45,7 @@
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -409,9 +410,9 @@ static int     smart_close(FAR struct inode *inode);
 static ssize_t smart_reload(struct smart_struct_s *dev, FAR uint8_t *buffer,
                  off_t startblock, size_t nblocks);
 static ssize_t smart_read(FAR struct inode *inode, unsigned char *buffer,
-                 size_t start_sector, unsigned int nsectors);
+                 blkcnt_t start_sector, unsigned int nsectors);
 static ssize_t smart_write(FAR struct inode *inode,
-                 FAR const unsigned char *buffer, size_t start_sector,
+                 FAR const unsigned char *buffer, blkcnt_t start_sector,
                  unsigned int nsectors);
 static int     smart_geometry(FAR struct inode *inode,
                  FAR struct geometry *geometry);
@@ -875,8 +876,8 @@ static ssize_t smart_reload(struct smart_struct_s *dev, FAR uint8_t *buffer,
   nread = MTD_BREAD(dev->mtd, mtdstartblock, mtdblocks, buffer);
   if (nread != mtdblocks)
     {
-      ferr("ERROR: Read %d blocks starting at block %d failed: %d\n",
-           nblocks, startblock, nread);
+      ferr("ERROR: Read %zd blocks starting at block %jd failed: %zd\n",
+           nblocks, (intmax_t)startblock, nread);
     }
 
   return nread;
@@ -890,11 +891,11 @@ static ssize_t smart_reload(struct smart_struct_s *dev, FAR uint8_t *buffer,
  ****************************************************************************/
 
 static ssize_t smart_read(FAR struct inode *inode, unsigned char *buffer,
-                          size_t start_sector, unsigned int nsectors)
+                          blkcnt_t start_sector, unsigned int nsectors)
 {
   FAR struct smart_struct_s *dev;
 
-  finfo("SMART: sector: %d nsectors: %d\n", start_sector, nsectors);
+  finfo("SMART: sector: %" PRIu32 " nsectors: %u\n", start_sector, nsectors);
 
   DEBUGASSERT(inode && inode->i_private);
 #ifdef CONFIG_SMARTFS_MULTI_ROOT_DIRS
@@ -914,7 +915,7 @@ static ssize_t smart_read(FAR struct inode *inode, unsigned char *buffer,
 
 static ssize_t smart_write(FAR struct inode *inode,
                 FAR const unsigned char *buffer,
-                size_t start_sector, unsigned int nsectors)
+                blkcnt_t start_sector, unsigned int nsectors)
 {
   FAR struct smart_struct_s *dev;
   off_t  alignedblock;
@@ -930,7 +931,7 @@ static ssize_t smart_write(FAR struct inode *inode,
   off_t  mtdstartblock;
   off_t  mtdblockcount;
 
-  finfo("sector: %d nsectors: %d\n", start_sector, nsectors);
+  finfo("sector: %" PRIu32 " nsectors: %u\n", start_sector, nsectors);
 
   DEBUGASSERT(inode && inode->i_private);
 #ifdef CONFIG_SMARTFS_MULTI_ROOT_DIRS
@@ -955,7 +956,8 @@ static ssize_t smart_write(FAR struct inode *inode,
   mtdblockcount = nsectors * dev->mtdblkspersector;
   mtdblkspererase = dev->mtdblkspersector * dev->sectorsperblk;
 
-  finfo("mtdsector: %d mtdnsectors: %d\n", mtdstartblock, mtdblockcount);
+  finfo("mtdsector: %jd mtdnsectors: %jd\n",
+        (intmax_t)mtdstartblock, (intmax_t)mtdblockcount);
 
   /* Start at first block to be written */
 
@@ -977,7 +979,8 @@ static ssize_t smart_write(FAR struct inode *inode,
           ret = MTD_ERASE(dev->mtd, eraseblock, 1);
           if (ret < 0)
             {
-              ferr("ERROR: Erase block=%d failed: %d\n", eraseblock, ret);
+              ferr("ERROR: Erase block=%jd failed: %d\n",
+                   (intmax_t)eraseblock, ret);
 
               /* Unlock the mutex if we add one */
 
@@ -1000,13 +1003,15 @@ static ssize_t smart_write(FAR struct inode *inode,
 
       /* Try to write to the sector. */
 
-      finfo("Write MTD block %d from offset %d\n", nextblock, offset);
+      finfo("Write MTD block %jd from offset %jd\n",
+            (intmax_t)nextblock, (intmax_t)offset);
       nxfrd = MTD_BWRITE(dev->mtd, nextblock, blkstowrite, &buffer[offset]);
       if (nxfrd != blkstowrite)
         {
           /* The block is not empty!!  What to do? */
 
-          ferr("ERROR: Write block %d failed: %d.\n", nextblock, nxfrd);
+          ferr("ERROR: Write block %jd failed: %zd.\n",
+               (intmax_t)nextblock, nxfrd);
 
           /* Unlock the mutex if we add one */
 
@@ -1057,7 +1062,7 @@ static int smart_geometry(FAR struct inode *inode, struct geometry *geometry)
 
       finfo("available: true mediachanged: false writeenabled: %s\n",
             geometry->geo_writeenabled ? "true" : "false");
-      finfo("nsectors: %d sectorsize: %d\n",
+      finfo("nsectors: %" PRIu32 " sectorsize: %" PRIi16 "\n",
             geometry->geo_nsectors, geometry->geo_sectorsize);
 
       return OK;
@@ -1114,7 +1119,9 @@ static int smart_setsectorsize(FAR struct smart_struct_s *dev, uint16_t size)
     }
   else
     {
-      /* Set the sectors per erase block and available sectors per erase block */
+      /* Set the sectors per erase block and available sectors per erase
+       * block
+       */
 
       dev->sectorsperblk = erasesize / dev->sectorsize;
       if (dev->sectorsperblk == 256)
@@ -1181,7 +1188,7 @@ static int smart_setsectorsize(FAR struct smart_struct_s *dev, uint16_t size)
 
   if (totalsectors > 65536)
     {
-      ferr("ERROR: Invalid SMART sector count %ld\n", totalsectors);
+      ferr("ERROR: Invalid SMART sector count %" PRIu32 "\n", totalsectors);
       return -EINVAL;
     }
   else if (totalsectors == 65536)
@@ -1473,7 +1480,9 @@ static int smart_add_sector_to_cache(FAR struct smart_struct_s *dev,
     }
   else
     {
-      /* Cache is full.  We must find the least accessed entry and replace it */
+      /* Cache is full.  We must find the least accessed entry and replace
+       * it
+       */
 
       oldest = 0xffff;
       for (x = 0; x < CONFIG_MTD_SMART_SECTOR_CACHE_SIZE; x++)
@@ -1642,7 +1651,9 @@ static uint16_t smart_cache_lookup(FAR struct smart_struct_s *dev,
 
               if (logicalsector == logical)
                 {
-                  /* This is the sector we are looking for!  Add it to the cache */
+                  /* This is the sector we are looking for!  Add it to the
+                   * cache
+                   */
 
                   physical = block * dev->sectorsperblk + sector;
                   smart_add_sector_to_cache(dev, logical, physical,
@@ -2318,7 +2329,9 @@ static int smart_scan(FAR struct smart_struct_s *dev)
                   continue;
                 }
 
-              /* Now compare if this logical sector matches the current sector */
+              /* Now compare if this logical sector matches the current
+               * sector
+               */
 
               if (duplogsector == logicalsector)
                 {
@@ -2948,7 +2961,9 @@ static int smart_relocate_static_data(FAR struct smart_struct_s *dev,
                   continue;
                 }
 
-              /* Find a new sector where it can live, NOT in this erase block */
+              /* Find a new sector where it can live, NOT in this erase
+               * block
+               */
 
               newsector = nextsector++;
 
@@ -3117,11 +3132,11 @@ static inline int smart_llformat(FAR struct smart_struct_s *dev,
 
       ferr("ERROR:  Invalid geometery ... "
           "Sectors per erase block must be 1-256\n");
-      ferr("        Erase block size    = %d\n",
+      ferr("        Erase block size    = %" PRId32 "\n",
            dev->erasesize);
       ferr("        Sector size         = %d\n",
            dev->sectorsize);
-      ferr("        Sectors/erase block = %d\n",
+      ferr("        Sectors/erase block = %" PRId32 "\n",
            dev->erasesize / dev->sectorsize);
 
       return -EINVAL;
@@ -5286,7 +5301,9 @@ static inline int smart_allocsector(FAR struct smart_struct_s *dev,
 
 #else /* CONFIG_MTD_SMART_ENABLE_CRC */
 
-  /* Write the logical sector to the flash.  We will fill it in with data later. */
+  /* Write the logical sector to the flash.  We will fill it in with data
+   * later.
+   */
 
   ret = smart_write_alloc_sector(dev, logsector, physicalsector);
   if (ret != 1)
@@ -5351,7 +5368,7 @@ static inline int smart_freesector(FAR struct smart_struct_s *dev,
             (1 << (logicalsector & 0x07))))
 #endif
         {
-          ferr("ERROR: Invalid release - sector %d not allocated\n",
+          ferr("ERROR: Invalid release - sector %ld not allocated\n",
                logicalsector);
           ret = -EINVAL;
           goto errout;
@@ -5381,7 +5398,7 @@ static inline int smart_freesector(FAR struct smart_struct_s *dev,
        * code?
        */
 
-      ferr("ERROR: Sector %d logical sector in header doesn't match\n",
+      ferr("ERROR: Sector %ld logical sector in header doesn't match\n",
            logicalsector);
       ret = -EINVAL;
       goto errout;
@@ -5478,7 +5495,9 @@ static int smart_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
         }
 #endif
 
-      /* Just change the BIOC_XIPBASE command to the MTDIOC_XIPBASE command. */
+      /* Just change the BIOC_XIPBASE command to the MTDIOC_XIPBASE
+       * command.
+       */
 
       cmd = MTDIOC_XIPBASE;
       break;
@@ -5926,9 +5945,9 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
               (const char *) (cur + sizeof(struct smart_entry_header_s)),
               dev->namesize);
       entryname[dev->namesize] = '\0';
-#endif
       finfo("Check entry (name=%s flags=%02x logsector=%02x)\n",
             entryname, entry->flags, entry->firstsector);
+#endif
 
       if (entry->flags & SMARTFS_DIRENT_ACTIVE)
         {
@@ -5950,8 +5969,10 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
 
       if (ret != OK)
         {
+#ifdef CONFIG_DEBUG_FS_INFO
           finfo("Remove entry (name=%s flags=%02x)\n",
                 entryname, entry->flags);
+#endif
 
           if ((cur + (2 * entrysize)) <= bottom)
             {
@@ -6343,8 +6364,8 @@ static int smart_losetup(int minor, FAR const char *filename,
       for (x = 0; x < 256; x++)
         {
           snprintf(devpath, sizeof(devpath), "/dev/smart%d", x);
-          ret = stat(devpath, &sb);
-          if (ret != 0)
+          ret = nx_stat(devpath, &sb, 1);
+          if (ret < 0)
             {
               /* We can use this minor number */
 

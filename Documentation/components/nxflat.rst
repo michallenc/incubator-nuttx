@@ -1,3 +1,5 @@
+.. _nxflat:
+
 ======
 NXFLAT
 ======
@@ -30,7 +32,7 @@ support execution NXFLAT binaries from an SRAM copy as well.
 This NuttX feature includes:
 
   - A dynamic loader that is built into the NuttX core (See
-    `GIT <https://bitbucket.org/nuttx/nuttx/src/master/binfmt/>`__).
+    `GIT <https://github.com/apache/incubator-nuttx/blob/master/binfmt/>`__).
   - Minor changes to RTOS to support position independent code, and
   - A linker to bind ELF binaries to produce the NXFLAT binary format
     (See GIT).
@@ -42,7 +44,7 @@ NXFLAT is derived from `XFLAT <http://xflat.sourceforge.net/>`__. XFLAT
 is a toolchain add that provides full shared library and XIP executable
 support for processors that have no Memory Management Unit
 (MMU:sup:`1`). NXFLAT is greatly simplified for the deeply embedded
-environment targeted by Nuttx:
+environment targeted by NuttX:
 
   - NXFLAT does not support shared libraries, because
   - NXFLAT does not support *exportation* of symbol values from a module
@@ -77,7 +79,7 @@ Limitations
     of file system but will require copying of all NXFLAT executables to RAM.
 
   - **GCC/ARM/Cortex-M3/4 Only**:
-    At present, the NXFLAT toolchain is only available for ARM and Cortex-M3/4 (thumb2) targets. 
+    At present, the NXFLAT toolchain is only available for ARM and Cortex-M3/4 (thumb2) targets.
 
   - **Read-Only Data in RAM**:
     With older GCC compilers (at least up to 4.3.3), read-only data must
@@ -96,10 +98,10 @@ Limitations
   - **Globally Scoped Function Function Pointers**:
     If a function pointer is taken to a statically defined function,
     then (at least for ARM) GCC will generate a relocation that NXFLAT
-    cannot handle. The workaround is make all such functions global in 
+    cannot handle. The workaround is make all such functions global in
     scope. A fix would involve a change to the GCC compiler as described
-    in Appendix B. 
-    
+    in Appendix B.
+
   - **Special Handling of Callbacks**:
     Callbacks through function pointers must be avoided or, when
     then cannot be avoided, handled very specially. The reason
@@ -109,7 +111,7 @@ Limitations
     will be unable to correctly access data memory. Special logic
     is in place to handle some NuttX callbacks: Signal callbacks
     and watchdog timer callbacks. But other callbacks (like those
-    used with qsort() must be avoided in an NXFLAT module. 
+    used with qsort() must be avoided in an NXFLAT module.
 
 Supported Processors
 --------------------
@@ -124,7 +126,7 @@ Development Status
 The initial release of NXFLAT was made in NuttX version 0.4.9. Testing
 is limited to the tests found under ``apps/examples/nxflat`` in the
 source tree. Some known problems exist (see the
-`TODO <https://bitbucket.org/nuttx/nuttx/src/master/TODO>`__ list). As
+`TODO <https://github.com/apache/incubator-nuttx/blob/master/TODO>`__ list). As
 such, NXFLAT is currently in an early alpha phase.
 
 NXFLAT Toolchain
@@ -142,7 +144,7 @@ will need version 0.1.7 or later.
 
 Here are some general build instructions:
 
--  You must have already configured Nuttx in ``<some-dir>/nuttx``
+-  You must have already configured NuttX in ``<some-dir>/nuttx``
 -  Download the buildroot package ``buildroot-0.x.y`` into
    ``<some-dir>``
 -  Unpack ``<some-dir>/buildroot-0.x.y.tar.gz`` using a command like ``tar zxf buildroot-0.x.y``. This will result in a new directory like ``<some-dir>/buildroot-0.x.y``
@@ -217,7 +219,7 @@ files. In particular, the CSV files:
      interface, and
   #. ``nuttx/libc/libc.csv`` that describes the NuttX C library interface.
   #. ``nuttx/libc/math.cvs`` that descirbes any math library.
-  
+
 ::
 
   USAGE: ./mksymtab <cvs-file> <symtab-file>
@@ -241,7 +243,7 @@ Making an NXFLAT module
 
 Below is a snippet from an NXFLAT make file (simplified from NuttX
 `Hello,
-World! <https://bitbucket.org/nuttx/apps/src/master/apps/examples/nxflat/tests/hello/Makefile>`__
+World! <https://github.com/apache/incubator-nuttx-apps/blob/master/examples/nxflat/tests/hello/Makefile>`__
 example).
 
 * Target 1:
@@ -254,21 +256,21 @@ example).
 * Target 2:
 
   .. code-block:: makefile
-  
+
     hello-thunk.S: hello.r1
       mknxflat -o $@ $^
-      
+
 * Target 3:
 
   .. code-block:: makefile
-  
-    hello.r2: hello-thunk.S	
+
+    hello.r2: hello-thunk.S
       abc-nuttx-elf-ld -r -d -warn-common -T binfmt/libnxflat/gnu-nxflat-gotoff.ld -no-check-sections -o $@ hello.o hello-thunk.o
 
 * Target 4:
 
   .. code-block:: makefile
-  
+
     hello: hello.r2
       ldnxflat -e main -s 2048 -o $@ $^
 

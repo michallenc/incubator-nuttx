@@ -47,7 +47,6 @@
 #include <errno.h>
 
 #include <nuttx/fs/fs.h>
-#include <nuttx/drivers/drivers.h>
 #include <nuttx/semaphore.h>
 
 #include "pipe_common.h"
@@ -160,36 +159,13 @@ static int pipe_close(FAR struct file *filep)
 }
 
 /****************************************************************************
- * Public Functions
+ * Name: pipe_register
  ****************************************************************************/
 
-/****************************************************************************
- * Name: nx_pipe
- *
- * Description:
- *   nx_pipe() creates a pair of file descriptors, pointing to a pipe inode,
- *   and  places them in the array pointed to by 'fd'. fd[0] is for reading,
- *   fd[1] is for writing.
- *
- *   NOTE: nx_pipe is a special, non-standard, NuttX-only interface.  Since
- *   the NuttX FIFOs are based in in-memory, circular buffers, the ability
- *   to control the size of those buffers is critical for system tuning.
- *
- * Input Parameters:
- *   fd[2] - The user provided array in which to catch the pipe file
- *   descriptors
- *   bufsize - The size of the in-memory, circular buffer in bytes.
- *
- * Returned Value:
- *   0 is returned on success; otherwise, -1 is returned with errno set
- *   appropriately.
- *
- ****************************************************************************/
-
-int nx_pipe(int fd[2], size_t bufsize, int flags)
+static int pipe_register(size_t bufsize, int flags,
+                         FAR char *devname, size_t namesize)
 {
-  FAR struct pipe_dev_s *dev = NULL;
-  char devname[16];
+  FAR struct pipe_dev_s *dev;
   int pipeno;
   int ret;
 
@@ -206,14 +182,13 @@ int nx_pipe(int fd[2], size_t bufsize, int flags)
   pipeno = pipe_allocate();
   if (pipeno < 0)
     {
-      nxsem_post(&g_pipesem);
       ret = pipeno;
-      goto errout;
+      goto errout_with_sem;
     }
 
   /* Create a pathname to the pipe device */
 
-  snprintf(devname, sizeof(devname), "/dev/pipe%d", pipeno);
+  snprintf(devname, namesize, "/dev/pipe%d", pipeno);
 
   /* Check if the pipe device has already been created */
 
@@ -224,7 +199,6 @@ int nx_pipe(int fd[2], size_t bufsize, int flags)
       dev = pipecommon_allocdev(bufsize);
       if (!dev)
         {
-          nxsem_post(&g_pipesem);
           ret = -ENOMEM;
           goto errout_with_pipe;
         }
@@ -246,6 +220,100 @@ int nx_pipe(int fd[2], size_t bufsize, int flags)
     }
 
   nxsem_post(&g_pipesem);
+  return OK;
+
+errout_with_dev:
+  pipecommon_freedev(dev);
+
+errout_with_pipe:
+  pipe_free(pipeno);
+
+errout_with_sem:
+  nxsem_post(&g_pipesem);
+
+errout:
+  return ret;
+}
+
+/****************************************************************************
+ * Public Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: nx_pipe
+ *
+ * Description:
+ *   nx_pipe() creates a pair of file descriptors, pointing to a pipe inode,
+ *   and  places them in the array pointed to by 'fd'. fd[0] is for reading,
+ *   fd[1] is for writing.
+ *
+ *   NOTE: nx_pipe is a special, non-standard, NuttX-only interface.  Since
+ *   the NuttX FIFOs are based in in-memory, circular buffers, the ability
+ *   to control the size of those buffers is critical for system tuning.
+ *
+ * Input Parameters:
+ *   fd[2] - The user provided array in which to catch the pipe file
+ *   descriptors
+ *   bufsize - The size of the in-memory, circular buffer in bytes.
+ *   flags - The file status flags.
+ *
+ * Returned Value:
+ *   0 is returned on success; a negated errno value is returned on a
+ *   failure.
+ *
+ ****************************************************************************/
+
+int file_pipe(FAR struct file *filep[2], size_t bufsize, int flags)
+{
+  char devname[16];
+  int ret;
+
+  /* Register a new pipe device */
+
+  ret = pipe_register(bufsize, flags, devname, sizeof(devname));
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  /* Get a write file descriptor */
+
+  ret = file_open(filep[1], devname, O_WRONLY | flags);
+  if (ret < 0)
+    {
+      goto errout_with_driver;
+    }
+
+  /* Get a read file descriptor */
+
+  ret = file_open(filep[0], devname, O_RDONLY | flags);
+  if (ret < 0)
+    {
+      goto errout_with_wrfd;
+    }
+
+  return OK;
+
+errout_with_wrfd:
+  file_close(filep[1]);
+
+errout_with_driver:
+  unregister_driver(devname);
+  return ret;
+}
+
+int nx_pipe(int fd[2], size_t bufsize, int flags)
+{
+  char devname[16];
+  int ret;
+
+  /* Register a new pipe device */
+
+  ret = pipe_register(bufsize, flags, devname, sizeof(devname));
+  if (ret < 0)
+    {
+      return ret;
+    }
 
   /* Get a write file descriptor */
 
@@ -268,21 +336,10 @@ int nx_pipe(int fd[2], size_t bufsize, int flags)
   return OK;
 
 errout_with_wrfd:
-  close(fd[1]);
+  nx_close(fd[1]);
 
 errout_with_driver:
   unregister_driver(devname);
-
-errout_with_dev:
-  if (dev)
-    {
-      pipecommon_freedev(dev);
-    }
-
-errout_with_pipe:
-  pipe_free(pipeno);
-
-errout:
   return ret;
 }
 

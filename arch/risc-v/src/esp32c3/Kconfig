@@ -1,0 +1,161 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+if ARCH_CHIP_ESP32C3
+
+comment "ESP32-C3 Configuration Options"
+
+choice
+	prompt "ESP32-C3 Chip Selection"
+	default ARCH_CHIP_ESP32C3WROOM02
+	depends on ARCH_CHIP_ESP32C3
+
+config ARCH_CHIP_ESP32C3X
+	bool "ESP32-C3"
+	select ESP32C3_ESP32C3XXX
+	---help---
+		ESP32 chip with a single RISC-V IMC core, no embedded Flash memory
+
+config ARCH_CHIP_ESP32C3FX4
+	bool "ESP32-C3Fx4"
+	select ESP32C3_ESP32C3XXX
+	select ESP32C3_FLASH_4M
+	---help---
+		ESP32 chip with a single RISC-V IMC core, 4 MB of in-package Flash memory
+
+config ARCH_CHIP_ESP32C3MINI1
+	bool "ESP32-C3-MINI-1"
+	select ESP32C3_ESP32C3XXX
+	select ESP32C3_FLASH_4M
+	---help---
+		Generic module with an embedded ESP32-C3Fx4 chip
+
+config ARCH_CHIP_ESP32C3WROOM02
+	bool "ESP32-C3-WROOM-02"
+	select ESP32C3_ESP32C3XXX
+	select ESP32C3_FLASH_4M
+	---help---
+		Generic module with an embedded ESP32-C3 chip, 4 MB of Flash memory
+
+endchoice # ESP32-C3 Chip Selection
+
+comment "Selected ESP32-C3 chip without embedded Flash, an external Flash memory is required."
+	depends on ARCH_CHIP_ESP32C3X
+
+config ESP32C3_SINGLE_CPU
+	bool
+	default n
+
+config ESP32C3_DUAL_CPU
+	bool
+	default n
+
+config ESP32C3_FLASH_2M
+	bool
+	default n
+
+config ESP32C3_FLASH_4M
+	bool
+	default n
+
+config ESP32C3_FLASH_8M
+	bool
+	default n
+
+config ESP32C3_FLASH_16M
+	bool
+	default n
+
+config ESP32C3_ESP32C3XXX
+	bool
+	default n
+	select ESP32C3_SINGLE_CPU
+
+choice ESP32C3_CPU_FREQ
+	prompt "CPU frequency"
+	default ESP32C3_CPU_FREQ_160
+	help
+		CPU frequency to be set on application startup.
+
+config ESP32C3_CPU_FREQ_40
+	bool "40 MHz"
+	help
+		Set the CPU to 40 MHz.  This frequency is obtained from the XTAL.
+
+config ESP32C3_CPU_FREQ_80
+	bool "80 MHz"
+	help
+		Set the CPU to 80 MHz.  This frequency is obtained from the 480 MHz PLL.
+
+config ESP32C3_CPU_FREQ_160
+	bool "160 MHz"
+	help
+		Set the CPU to 160 MHz.  This frequency is obtained from the 480 MHz PLL.
+
+endchoice # CPU frequency
+
+config ESP32C3_CPU_FREQ_MHZ
+	int
+	default 40 if ESP32C3_CPU_FREQ_40
+	default 80 if ESP32C3_CPU_FREQ_80
+	default 160 if ESP32C3_CPU_FREQ_160
+
+menu "ESP32-C3 Peripheral Support"
+
+config ESP32C3_UART
+	bool
+	default n
+
+config ESP32C3_WDT
+	bool
+	default n
+
+config ESP32C3_GPIO_IRQ
+	bool "GPIO pin interrupts"
+	---help---
+		Enable support for interrupting GPIO pins
+
+config ESP32C3_UART0
+	bool "UART0"
+	default y
+	select ESP32C3_UART
+	select UART0_SERIALDRIVER
+
+config ESP32C3_UART1
+	bool "UART1"
+	default n
+	select ESP32C3_UART
+	select UART1_SERIALDRIVER
+
+config ESP32C3_MWDT0
+	bool "Main System Watchdog Timer (Group 0)"
+	default n
+	select ESP32C3_WDT
+	---help---
+		Includes MWDT0. This watchdog timer is part of the Group 0
+		timer submodule.
+
+config ESP32C3_MWDT1
+	bool "Main System Watchdog Timer (Group 1)"
+	default n
+	select ESP32C3_WDT
+	---help---
+		Includes MWDT1. This watchdog timer is part of the Group 0
+		timer submodule.
+
+config ESP32C3_RWDT
+	bool "RTC Watchdog Timer"
+	default n
+	select ESP32C3_WDT
+	---help---
+		Includes RWDT. This watchdog timer is from the RTC module.
+		When it is selected, if the developer sets it to reset on expiration
+		it will reset Main System and the RTC module. If you don't want
+		to have the RTC module reset, please, use the Timers' Module WDTs.
+		They will only reset Main System.
+
+endmenu
+
+endif # ARCH_CHIP_ESP32C3

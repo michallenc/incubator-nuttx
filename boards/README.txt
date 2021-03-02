@@ -115,7 +115,7 @@ Make.defs -- This makefile fragment provides architecture and
   is the path to the root directory of the build.  This makefile
   fragment should include:
 
-    $(TOPDIR)/.config          : Nuttx configuration
+    $(TOPDIR)/.config          : NuttX configuration
     $(TOPDIR)/tools/Config.mk  : Common definitions
 
   Definitions in the Make.defs file probably depend on some of the
@@ -185,6 +185,9 @@ boards/arm/stm32/axoloti
 boards/arm/stm32/b-g474e-dpow1
   Initial support for booting NuttX to a functional NSH prompt on the
   STMicro B-G474E-DPOW1 Discovery kit with STM32G474RE MCU.
+
+boards/arm/stm32/nucleo-g431rb
+    STMicro Nucleo G431RB board based on the STMicro STM32G431RB MCU.
 
 boards/arm/stm32f0l0g0/b-l072z-lrwan1
   STMicro STM32L0 Discovery kit with LoRa/SigFox based on STM32L072CZ MCU.
@@ -433,16 +436,16 @@ boards/hc/mcs92s12ne6/ne64badge
   not yet been fully tested.
 
 boards/arm/nrf52/nrf52-feather
-  Nuttx port to the Adafruit nRF52832 Feather board
+  NuttX port to the Adafruit nRF52832 Feather board
 
 boards/arm/nrf52/nrf52832-dk
-  Nuttx port to the Nordic nRF52832 Development Kit (PCA10040)
+  NuttX port to the Nordic nRF52832 Development Kit (PCA10040)
 
 boards/arm/nrf52/nrf52840-dk
-	Nuttx port to the Nordic nRF52840 Development Kit (PCA10056)
+	NuttX port to the Nordic nRF52840 Development Kit (PCA10056)
 
 boards/arm/nrf52/nrf52840-dongle
-  Nuttx port to the Nordic nRF52840 Dongle (PCA10059)
+  NuttX port to the Nordic nRF52840 Dongle (PCA10059)
 
 boards/arm/dm320/ntosd-dm320
   This port uses the Neuros OSD v1.0 Dev Board with a GNU arm-nuttx-elf
@@ -819,6 +822,15 @@ boards/arm/kinetis/teensy-3.x
   Teensy-3.0).  the primary difference is that the Teensy 3.0 has a
   MK30DX128VLH5 with slightly less capability.
 
+boards/arm/imxrt/teensy-4.x
+		This is the port of NuttX to the PJRC Teensy++ 4.x board.  This board is
+		developed by http://pjrc.com/teensy/.  The Teensy++ 4.x is based
+		on an NXP MIMXRT1062DVL6A MCU. The port can support both Teensy 4.0 and
+		Teensy 4.1 boards.
+
+    https://www.pjrc.com/store/teensy40.html
+    https://www.pjrc.com/store/teensy41.html
+
 boards/arm/kl/teensy-lc
   This is the port of nuttx for the Teensy LC board.  The Teensy LC
   is a DIP style breakout board for the MKL25Z64 and comes with a USB
@@ -901,7 +913,7 @@ boards/arm/lpc214x/zp214xpa
 
 boards/arm/lpc17xx_40xx/zkit-arm-1769
   Zilogic System's ARM development Kit, ZKIT-ARM-1769.  This board is based
-  on the NXP LPC1769.  The Nuttx Buildroot toolchain is used by default.
+  on the NXP LPC1769.  The NuttX Buildroot toolchain is used by default.
 
 Configuring NuttX
 ^^^^^^^^^^^^^^^^^

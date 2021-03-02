@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -55,7 +56,7 @@
 #define DVFS_LINELEN  128
 
 #ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
+#  define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
 #ifndef CONFIG_SMP_NCPUS
@@ -234,7 +235,7 @@ static ssize_t dvfs_read(FAR struct file *filep, FAR char *buffer,
 
   linesize = snprintf(priv->line,
                       DVFS_LINELEN,
-                      "fstat %d %d %d \n",
+                      "fstat %" PRId32 " %" PRId32 " %" PRId32 " \n",
                       g_dvfs_freq_stat[0],
                       g_dvfs_freq_stat[1],
                       g_dvfs_freq_stat[2]);
@@ -285,7 +286,8 @@ static ssize_t dvfs_write(FAR struct file *filep, FAR const char *buffer,
   strncpy(line, buffer, n);
   line[n] = '\0';
 
-  n = MIN(strcspn(line, " "), sizeof(cmd) - 1);
+  n = strcspn(line, " ");
+  n = MIN(n, sizeof(cmd) - 1);
   strncpy(cmd, line, n);
   cmd[n] = '\0';
 

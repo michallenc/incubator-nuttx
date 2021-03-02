@@ -656,7 +656,7 @@ static int smartfs_readdir(struct fs_dirent_s *dir)
 
           dir->fd_dir.d_type = DTYPE_DIRECTORY;
           strncpy(dir->fd_dir.d_name, level1->mount->fs_blkdriver->i_name,
-                  NAME_MAX + 1);
+                  NAME_MAX);
 
           /* Advance to next entry */
 
@@ -669,7 +669,7 @@ static int smartfs_readdir(struct fs_dirent_s *dir)
 
           dir->fd_dir.d_type = g_direntry[level1->base.index].type;
           strncpy(dir->fd_dir.d_name, g_direntry[level1->base.index++].name,
-                  NAME_MAX + 1);
+                  NAME_MAX);
         }
       else if (level1->base.level == 3)
         {
@@ -677,7 +677,7 @@ static int smartfs_readdir(struct fs_dirent_s *dir)
 
           dir->fd_dir.d_type = g_direntry[level1->base.index].type;
           strncpy(dir->fd_dir.d_name, g_direntry[level1->direntry].name,
-                  NAME_MAX + 1);
+                  NAME_MAX);
           level1->base.index++;
         }
 
@@ -847,10 +847,11 @@ static size_t smartfs_status_read(FAR struct file *filep, FAR char *buffer,
                          "Total Sectors:     %d\nSector Size:       %d\n"
                          "Format Sector:     %d\nDir Sector:        %d\n"
                          "Free Sectors:      %d\nReleased Sectors:  %d\n"
-                         "Unused Sectors:    %d\nBlock Erases:      %d\n"
+                         "Unused Sectors:    %" PRIu32 "\n"
+                         "Block Erases:      %" PRIu32 "\n"
                          "Sectors Per Block: %d\nSector Utilization:%d%%\n"
 #ifdef CONFIG_MTD_SMART_WEAR_LEVEL
-                         "Uneven Wear Count: %d\n"
+                         "Uneven Wear Count: %" PRIu32 "\n"
 #endif
                   ,
                   procfs_data.formatversion, procfs_data.namelen,

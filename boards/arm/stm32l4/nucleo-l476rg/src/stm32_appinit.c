@@ -40,7 +40,6 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <sys/mount.h>
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -49,6 +48,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/sdio.h>
 #include <nuttx/mmcsd.h>
 
@@ -68,7 +68,7 @@
 
 /****************************************************************************
  * Private Data
- ***************************************************************************/
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -98,19 +98,19 @@ static void stm32_i2c_register(int bus)
 
   i2c = stm32l4_i2cbus_initialize(bus);
   if (i2c == NULL)
-  {
-    syslog(LOG_ERR, "ERROR: Failed to get I2C%d interface\n", bus);
-  }
-  else
-  {
-    ret = i2c_register(i2c, bus);
-    if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to register I2C%d driver: %d\n",
-             bus, ret);
-      stm32l4_i2cbus_uninitialize(i2c);
+      syslog(LOG_ERR, "ERROR: Failed to get I2C%d interface\n", bus);
     }
-  }
+  else
+    {
+      ret = i2c_register(i2c, bus);
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "ERROR: Failed to register I2C%d driver: %d\n",
+                bus, ret);
+          stm32l4_i2cbus_uninitialize(i2c);
+        }
+    }
 }
 #endif
 
@@ -181,12 +181,11 @@ int board_app_initialize(uintptr_t arg)
 
   syslog(LOG_INFO, "Mounting procfs to /proc\n");
 
-  ret = mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
+  ret = nx_mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR,
-             "ERROR: Failed to mount the PROC filesystem: %d (%d)\n",
-             ret, errno);
+             "ERROR: Failed to mount the PROC filesystem: %d\n", ret);
       return ret;
     }
 #endif
@@ -293,7 +292,7 @@ int board_app_initialize(uintptr_t arg)
     }
 #endif
 
-/* Initialize MMC and register the MMC driver. */
+  /* Initialize MMC and register the MMC driver. */
 
 #ifdef HAVE_MMCSD_SPI
   ret = stm32l4_mmcsd_initialize(MMCSD_MINOR);

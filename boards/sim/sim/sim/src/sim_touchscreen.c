@@ -111,7 +111,7 @@ static FAR void *sim_listener(FAR void *arg)
            * the server.
            */
 
-          fwarn("WARNING: Lost server connection: %d\n", errno);
+          fwarn("WARNING: Lost server connection: %d\n", ret);
           break;
         }
 
@@ -171,7 +171,7 @@ int sim_tsc_setup(int minor)
   ret = boardctl(BOARDIOC_NX_START, 0);
   if (ret < 0)
     {
-      gerr("ERROR: Failed to start the NX server: %d\n", errno);
+      gerr("ERROR: Failed to start the NX server: %d\n", ret);
       return ret;
     }
 
@@ -205,9 +205,11 @@ int sim_tsc_setup(int minor)
       pthread_attr_setstacksize(&attr, CONFIG_SIM_LISTENER_STACKSIZE);
 
       ret = pthread_create(&thread, &attr, sim_listener, NULL);
+      pthread_attr_destroy(&attr);
       if (ret != 0)
         {
           gerr("ERROR: pthread_create failed: %d\n", ret);
+          nx_disconnect(g_simtc.hnx);
           return -ret;
         }
 
@@ -224,10 +226,11 @@ int sim_tsc_setup(int minor)
     }
   else
     {
-      gerr("ERROR: nx_connect failed: %d\n", errno);
+      gerr("ERROR: nx_connect failed: %d\n", ret);
       return ERROR;
     }
 
+#ifdef CONFIG_NX
   /* Set the background to the configured background color */
 
   iinfo("Set background color=%d\n", CONFIG_EXAMPLES_TOUCHSCREEN_BGCOLOR);
@@ -239,6 +242,9 @@ int sim_tsc_setup(int minor)
       ierr("ERROR: nx_setbgcolor failed: %d\n", ret);
       goto errout_with_nx;
     }
+#else
+  UNUSED(color);
+#endif
 
   /* Finally, initialize the touchscreen simulation on the X window */
 

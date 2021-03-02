@@ -111,6 +111,10 @@
 
 /* DPORT_PERI_CLK_EN : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
 
+#define DPORT_PERI_CLK_EN_AES (1 << 0)
+#define DPORT_PERI_CLK_EN_SHA (1 << 1)
+#define DPORT_PERI_CLK_EN_RSA (1 << 2)
+
 #define DPORT_PERI_CLK_EN  0xFFFFFFFF
 #define DPORT_PERI_CLK_EN_M  ((DPORT_PERI_CLK_EN_V)<<(DPORT_PERI_CLK_EN_S))
 #define DPORT_PERI_CLK_EN_V  0xFFFFFFFF
@@ -119,6 +123,10 @@
 #define DPORT_PERI_RST_EN_REG          (DR_REG_DPORT_BASE + 0x020)
 
 /* DPORT_PERI_RST_EN : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
+
+#define DPORT_PERI_RST_EN_AES (1 << 0)
+#define DPORT_PERI_RST_EN_SHA (1 << 1)
+#define DPORT_PERI_RST_EN_RSA (1 << 2)
 
 #define DPORT_PERI_RST_EN  0xFFFFFFFF
 #define DPORT_PERI_RST_EN_M  ((DPORT_PERI_RST_EN_V)<<(DPORT_PERI_RST_EN_S))
@@ -1223,6 +1231,7 @@
 /* DPORT_WIFI_RST : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
 
 #define DPORT_EMAC_RST_EN              (BIT(7))
+#define DPORT_MAC_RST_EN               (BIT(2))
 
 #define DPORT_WIFI_RST  0xFFFFFFFF
 #define DPORT_WIFI_RST_M  ((DPORT_WIFI_RST_V)<<(DPORT_WIFI_RST_S))
@@ -4386,5 +4395,13 @@
 #define DPORT_DATE_V  0xFFFFFFF
 #define DPORT_DATE_S  0
 #define DPORT_DPORT_DATE_VERSION 0x1605190
+
+/* SPI Flash MMU table regitser base address for PRO CPU */
+
+#define DPORT_PRO_FLASH_MMU_TABLE_REG       (DR_REG_DPORT_BASE + 0x10000)
+
+/* SPI Flash MMU table regitser base address for APP CPU */
+
+#define DPORT_APP_FLASH_MMU_TABLE_REG       (DR_REG_DPORT_BASE + 0x12000)
 
 #endif /* __ARCH_XTENSA_SRC_ESP32_HARDWARE_ESP32_DPORT_H */

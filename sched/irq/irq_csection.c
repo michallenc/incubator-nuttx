@@ -105,7 +105,7 @@ volatile uint8_t g_cpu_nestcount[CONFIG_SMP_NCPUS];
  ****************************************************************************/
 
 #ifdef CONFIG_SMP
-static inline bool irq_waitlock(int cpu)
+bool irq_waitlock(int cpu)
 {
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
   FAR struct tcb_s *tcb = current_task(cpu);
@@ -265,6 +265,7 @@ try_again:
                    * no longer blocked by the critical section).
                    */
 
+try_again_in_irq:
                   if (!irq_waitlock(cpu))
                     {
                       /* We are in a deadlock condition due to a pending
@@ -273,6 +274,24 @@ try_again:
                        */
 
                       DEBUGVERIFY(up_cpu_paused(cpu));
+
+                      /* NOTE: As the result of up_cpu_paused(cpu), this CPU
+                       * might set g_cpu_irqset in nxsched_resume_scheduler()
+                       * However, another CPU might hold g_cpu_irqlock.
+                       * To avoid this situation, releae g_cpu_irqlock first.
+                       */
+
+                      if ((g_cpu_irqset & (1 << cpu)) != 0)
+                        {
+                          spin_clrbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
+                                      &g_cpu_irqlock);
+                        }
+
+                      /* NOTE: Here, this CPU does not hold g_cpu_irqlock,
+                       * so call irq_waitlock(cpu) to acquire g_cpu_irqlock.
+                       */
+
+                      goto try_again_in_irq;
                     }
                 }
 
@@ -334,10 +353,6 @@ try_again:
                    * and try again.  Briefly re-enabling interrupts should
                    * be sufficient to permit processing the pending pause
                    * request.
-                   *
-                   * NOTE: This should never happen on architectures like
-                   * the Cortex-A; the inter-CPU interrupt (SGI) is not
-                   * maskable.
                    */
 
                   up_irq_restore(ret);

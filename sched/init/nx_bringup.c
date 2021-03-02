@@ -28,10 +28,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <debug.h>
-#include <sys/mount.h>
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/init.h>
 #include <nuttx/symtab.h>
 #include <nuttx/wqueue.h>
@@ -269,9 +269,9 @@ static inline void nx_start_application(void)
 #ifdef CONFIG_INIT_MOUNT
   /* Mount the file system containing the init program. */
 
-  ret = mount(CONFIG_INIT_MOUNT_SOURCE, CONFIG_INIT_MOUNT_TARGET,
-              CONFIG_INIT_MOUNT_FSTYPE, CONFIG_INIT_MOUNT_FLAGS,
-              CONFIG_INIT_MOUNT_DATA);
+  ret = nx_mount(CONFIG_INIT_MOUNT_SOURCE, CONFIG_INIT_MOUNT_TARGET,
+                 CONFIG_INIT_MOUNT_FSTYPE, CONFIG_INIT_MOUNT_FLAGS,
+                 CONFIG_INIT_MOUNT_DATA);
   DEBUGASSERT(ret >= 0);
 #endif
 
@@ -401,6 +401,10 @@ int nx_bringup(void)
    * However, the environment containing the PATH variable will be inherited
    * by all of the threads created by the IDLE task.
    */
+
+#ifdef CONFIG_LIB_HOMEDIR
+  setenv("PWD", CONFIG_LIB_HOMEDIR, 1);
+#endif
 
 #ifdef CONFIG_PATH_INITIAL
   setenv("PATH", CONFIG_PATH_INITIAL, 1);

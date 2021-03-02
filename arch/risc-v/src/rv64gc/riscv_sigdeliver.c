@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/risc-v/src/rv64gc/up_sigdeliver.c
+ * arch/risc-v/src/rv64gc/riscv_sigdeliver.c
  *
  *   Copyright (C) 2011, 2015, 2018-2018 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -44,6 +44,7 @@
 
 #include <nuttx/config.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <sched.h>
 #include <syscall.h>
@@ -101,7 +102,7 @@ void up_sigdeliver(void)
 
   /* Save the return state on the stack. */
 
-  up_copystate(regs, rtcb->xcp.regs);
+  up_copyfullstate(regs, rtcb->xcp.regs);
 
 #ifdef CONFIG_SMP
   /* In the SMP case, up_schedule_sigaction(0) will have incremented
@@ -140,7 +141,7 @@ void up_sigdeliver(void)
    * errno that is needed by the user logic (it is probably EINTR).
    */
 
-  sinfo("Resuming EPC: %016x INT_CTX: %016x\n",
+  sinfo("Resuming EPC: %016" PRIx64 " INT_CTX: %016" PRIx64 "\n",
         regs[REG_EPC], regs[REG_INT_CTX]);
 
   /* Call enter_critical_section() to disable local interrupts before

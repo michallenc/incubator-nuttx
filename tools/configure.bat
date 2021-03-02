@@ -2,35 +2,20 @@
 
 rem tools/configure.bat
 rem
-rem   Copyright (C) 2012, 2017 Gregory Nutt. All rights reserved.
-rem   Author: Gregory Nutt <gnutt@nuttx.org>
-rem
-rem Redistribution and use in source and binary forms, with or without
-rem modification, are permitted provided that the following conditions
-rem are met:
-rem
-rem 1. Redistributions of source code must retain the above copyright
-rem    notice, this list of conditions and the following disclaimer.
-rem 2. Redistributions in binary form must reproduce the above copyright
-rem    notice, this list of conditions and the following disclaimer in
-rem    the documentation and/or other materials provided with the
-rem    distribution.
-rem 3. Neither the name NuttX nor the names of its contributors may be
-rem    used to endorse or promote products derived from this software
-rem    without specific prior written permission.
-rem
-rem THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-rem "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-rem LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-rem FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-rem COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-rem INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-rem BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
-rem OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
-rem AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-rem LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-rem ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-rem POSSIBILITY OF SUCH DAMAGE.
+rem Licensed to the Apache Software Foundation (ASF) under one or more
+rem  contributor license agreements.  See the NOTICE file distributed with
+rem  this work for additional information regarding copyright ownership.  The
+rem  ASF licenses this file to you under the Apache License, Version 2.0 (the
+rem  "License"); you may not use this file except in compliance with the
+rem  License.  You may obtain a copy of the License at
+rem 
+rem    http://www.apache.org/licenses/LICENSE-2.0
+rem 
+rem  Unless required by applicable law or agreed to in writing, software
+rem  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+rem  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+rem License for the specific language governing permissions and limitations
+rem under the License.
 rem
 
 if exist tools goto :GoToolDir
@@ -63,7 +48,6 @@ if "%1"=="-f" goto :SetFormat
 if "%1"=="-b" goto :SetFormat
 if "%1"=="-l" goto :SetHostOption
 if "%1"=="-c" goto :SetHostOption
-if "%1"=="-u" goto :SetHostOption
 if "%1"=="-n" goto :SetHostOption
 if "%1"=="-L" goto :SetList
 if "%1"=="-a" goto :SetAppDir
@@ -133,11 +117,11 @@ echo    style paths are used by default.
 echo  -f:
 echo    Informs the tool that it should use POSIX style paths like /usr/local/bin.
 echo    By default, Windows style paths like C:\\Program Files are used.
-echo  -l selects the Linux (l) host environment.  The [-c^|u^|n] options
+echo  -l selects the Linux (l) host environment.  The [-c^|n] options
 echo    select one of the Windows environments.  Default:  Use host setup
 echo    in the defconfig file
-echo  [-c^|u^|n] selects the Windows host and a Windows environment:  Cygwin (c),
-echo    Ubuntu under Windows 10 (u), or Windows native (n).  Default Cygwin
+echo  [-c^|n] selects the Windows host and a Windows environment:
+echo    Cygwin (c), or Windows native (n). Default Cygwin
 echo  -L:
 echo    List all available configurations.
 echo  -a ^<app-dir^>:

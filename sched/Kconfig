@@ -232,7 +232,6 @@ menu "Tasks and Scheduling"
 config SPINLOCK
 	bool "Support Spinlocks"
 	default n
-	depends on ARCH_HAVE_TESTSET
 	---help---
 		Enables support for spinlocks.  Spinlocks are used primarily for
 		synchronization in SMP configurations but are available for general
@@ -240,13 +239,6 @@ config SPINLOCK
 		most likely be fatal.  Note, however, that this does not depend on
 		CONFIG_ARCH_HAVE_MULTICPU.  This permits the use of spinlocks in
 		other novel architectures.
-
-config SPINLOCK_IRQ
-	bool "Support Spinlocks with IRQ control"
-	default n
-	---help---
-		Enables support for spinlocks with IRQ control. This feature can be
-		used to protect data in SMP mode.
 
 config IRQCHAIN
 	bool "Enable multi handler sharing a IRQ"
@@ -275,6 +267,7 @@ config SMP
 	bool "Symmetric Multi-Processing (SMP)"
 	default n
 	depends on ARCH_HAVE_MULTICPU
+	depends on ARCH_HAVE_TESTSET
 	select SPINLOCK
 	select SCHED_RESUMESCHEDULER
 	select IRQCOUNT
@@ -726,10 +719,10 @@ config SCHED_CRITMONITOR
 	---help---
 		Enables logic that monitors the duration of time that a thread keeps
 		interrupts or pre-emption disabled.  These global locks can have
-		negative consequences to real timer performance:  Disabling interrupts
-		adds jitter in the time when a interrupt request is asserted until
-		the hardware can responds with the interrupt.  Disabling pre-emption
-		adds jitter in the timer from when the event is posted in the
+		negative consequences to real time performance:  Disabling interrupts
+		adds jitter in the time when an interrupt request is asserted until
+		the hardware can respond with the interrupt.  Disabling pre-emption
+		adds jitter in the time from when the event is posted in the
 		interrupt handler until the task that responds to the event can run.
 
 		If this option is selected, then the following interfaces must be
@@ -749,7 +742,7 @@ config SCHED_CRITMONITOR
 		in unknown units) can be obtained by subtracting a start time from
 		the current time.
 
-		The second interface simple converts an elapsed time into well known
+		The second interface simply converts an elapsed time into well known
 		units for presentation by the ProcFS file system.
 
 config SCHED_CPULOAD
@@ -760,15 +753,15 @@ config SCHED_CPULOAD
 		If this option is selected, the timer interrupt handler will monitor
 		if the system is IDLE or busy at the time of that the timer interrupt
 		occurs.  This is a very coarse measurement, but over a period of time,
-		it can very accurately determined the percentage of the time that the
+		it can very accurately determine the percentage of the time that the
 		CPU is IDLE.
 
-		The statistics collected in this could be used, for example in the
+		The statistics collected in this could be used, for example, in the
 		PROCFS file system to provide CPU load measurements when read.
 
 		Note that in tickless mode of operation (SCHED_TICKLESS) there is
 		no system timer interrupt and CPU load measurements will not be
-		possible unless you provide an alternative clock to driver the
+		possible unless you provide an alternative clock to drive the
 		sampling and select SCHED_CPULOAD_EXTCLK.
 
 if SCHED_CPULOAD
@@ -920,7 +913,7 @@ config SCHED_INSTRUMENTATION_EXTERNAL
 	bool "System performance monitor endpoints are external"
 	default n
 	---help---
-		When this option is enabled, the board specific logic must implment all
+		When this option is enabled, the board specific logic must implement all
 		callbacks listed in SCHED_INSTRUMENTATION, SCHED_INSTRUMENTATION_CSECTION,
 		SCHED_INSTRUMENTATION_SPINLOCKS, SCHED_INSTRUMENTATION_SYSCALL and
 		SCHED_INSTRUMENTATION_IRQHANDLER. Otherwise the common code will implement
@@ -990,6 +983,12 @@ config SCHED_INSTRUMENTATION_IRQHANDLER
 
 			void sched_note_irqhandler(int irq, FAR void *handler, bool enter);
 
+config SCHED_INSTRUMENTATION_HIRES
+	bool "Use Hi-Res RTC for instrumentation"
+	default n
+	---help---
+		Use higher resolution system timer for instrumentation.
+
 config SCHED_INSTRUMENTATION_FILTER
 	bool "Instrumenation filter"
 	default n
@@ -1003,12 +1002,13 @@ config SCHED_INSTRUMENTATION_FILTER
 config SCHED_INSTRUMENTATION_FILTER_DEFAULT_MODE
 	hex "Default instrumentation filter mode"
 	depends on SCHED_INSTRUMENTATION_FILTER
-	default 0x7
+	default 0xf
 	---help---
 		Default mode of the instrumentation filter logic.
 			Bit 0 = Enable instrumentation
 			Bit 1 = Enable syscall instrumentation
 			Bit 2 = Enable IRQ instrumentation
+			Bit 3 = Enable collecting syscall arguments
 
 endif # SCHED_INSTRUMENTATION
 endmenu # Performance Monitoring
@@ -1302,6 +1302,12 @@ endmenu # RTOS hooks
 
 menu "Signal Configuration"
 
+config SIG_PREALLOC_IRQ_ACTIONS
+	int "Number of pre-allocated irq actions"
+	default 8
+	---help---
+		The number of pre-allocated irq action structures.
+
 config SIG_EVTHREAD
 	bool "Support SIGEV_THHREAD"
 	default n
@@ -1375,10 +1381,10 @@ config SIG_SIGPOLL_ACTION
 		sigaction() to ignore SIGPOLL.
 
 config SIG_SIGSTOP_ACTION
-	bool "SIGSTOP SIGSTP, and SIGCONT"
+	bool "SIGSTOP SIGTSTP, and SIGCONT"
 	default y
 	---help---
-		Enable the default action for SIGSTOP and SIGSTP (suspend the
+		Enable the default action for SIGSTOP and SIGTSTP (suspend the
 		task) and SIGCONT (resume the task).
 
 config SIG_SIGKILL_ACTION
@@ -1441,14 +1447,12 @@ if SIG_DEFAULT
 config SIG_STOP
 	int "SIGSTOP"
 	default 6
-	depends on SIG_SIGSTOP_ACTION
 	---help---
 		Suspend/pause a task.  SIGSTOP may not be caught or ignored.
 
-config SIG_STP
-	int "SIGSTP"
+config SIG_TSTP
+	int "SIGTSTP"
 	default 7
-	depends on SIG_SIGSTOP_ACTION
 	---help---
 		Suspend/pause a task.  Unlike SIGSTOP, this signal can be caught or
 		ignored.
@@ -1456,7 +1460,6 @@ config SIG_STP
 config SIG_CONT
 	int "SIGCONT"
 	default 8
-	depends on SIG_SIGSTOP_ACTION
 	---help---
 		Resume a suspended/paused task.  SIGSTOP only has an action when
 		send to a stopped task.  SIGCONT is ignored by other task.  SIGCONT
@@ -1465,7 +1468,6 @@ config SIG_CONT
 config SIG_KILL
 	int "SIGKILL"
 	default 9
-	depends on SIG_SIGKILL_ACTION
 	---help---
 		The SIGKILL signal is sent to cause a task termination event.
 		SIGKILL may not be caught or ignored.
@@ -1473,7 +1475,6 @@ config SIG_KILL
 config SIG_INT
 	int "SIGINT"
 	default 10
-	depends on SIG_SIGKILL_ACTION
 	---help---
 		The SIGINT signal is sent to cause a task termination event.
 		SIGINT may be ignored or caught by the receiving task.
@@ -1481,7 +1482,6 @@ config SIG_INT
 config SIG_QUIT
 	int "SIGQUIT"
 	default 11
-	depends on SIG_SIGKILL_ACTION
 	---help---
 		The SIGINT signal is sent to cause a task termination event.
 		SIGQUIT may be ignored or caught by the receiving task.
@@ -1489,7 +1489,6 @@ config SIG_QUIT
 config SIG_TERM
 	int "SIGTERM"
 	default 12
-	depends on SIG_SIGKILL_ACTION
 	---help---
 		The SIGINT signal is sent to cause a task termination event.
 		SIGTERM may be ignored or caught by the receiving task.
@@ -1498,7 +1497,7 @@ endif # SIG_DEFAULT
 
 config SIG_PIPE
 	int "SIGPIPE"
-	default 11
+	default 13
 	---help---
 		The SIGPIPE signal is sent to a task termination event.
 		This signal is generated when write on a pipe with no one to read it.
@@ -1535,6 +1534,12 @@ config PREALLOC_MQ_MSGS
 	---help---
 		The number of pre-allocated message structures.  The system manages
 		a pool of preallocated message structures to minimize dynamic allocations
+
+config PREALLOC_MQ_IRQ_MSGS
+	int "Number of pre-allocated irq messages"
+	default 8
+	---help---
+		The number of pre-allocated irq message structures.
 
 config MQ_MAXMSGSIZE
 	int "Maximum message size"

@@ -209,8 +209,10 @@ config ARCH_CHIP_NRF52
 	bool "Nordic NRF52"
 	select ARCH_CORTEXM4
 	select ARCH_HAVE_TICKLESS
+	select ARMV7M_HAVE_STACKCHECK
 	#select ARCH_HAVE_MPU
 	#select ARM_HAVE_MPU_UNIFIED
+	select ARCH_HAVE_SPI_BITORDER
 	select ARCH_HAVE_FPU
 	select ARCH_HAVE_PWM_MULTICHAN
 	select ARCH_HAVE_SERIAL_TERMIOS
@@ -223,12 +225,23 @@ config ARCH_CHIP_NUC1XX
 	---help---
 		Nuvoton NUC100/120 architectures (ARM Cortex-M0).
 
+config ARCH_CHIP_RP2040
+	bool "Raspberry Pi RP2040"
+	select ARCH_CORTEXM0
+	select ARCH_HAVE_RAMVECTORS
+	select ARCH_HAVE_MULTICPU
+	select ARCH_HAVE_TESTSET
+	select ARM_HAVE_WFE_SEV
+	---help---
+		Raspberry Pi RP2040 architectures (ARM dual Cortex-M0+).
+
 config ARCH_CHIP_S32K1XX
 	bool "NXP S32K1XX"
 	select ARCH_HAVE_MPU
 	select ARM_HAVE_MPU_UNIFIED
+	select ARCH_HAVE_RAMFUNCS
 	---help---
-		NPX LPC54XX architectures (ARM Cortex-M0+ and Cortex-M4F).
+		NPX S32K1XX architectures (ARM Cortex-M0+ and Cortex-M4F).
 
 config ARCH_CHIP_SAMA5
 	bool "Atmel SAMA5"
@@ -434,6 +447,12 @@ config ARCH_CHIP_CXD56XX
 	---help---
 		Sony CXD56XX (ARM Cortex-M4) architectures
 
+config ARCH_CHIP_ARM_CUSTOM
+	bool "Custom ARM chip"
+	select ARCH_CHIP_CUSTOM
+	---help---
+		Select this option if there is no directory for the chip under arch/arm/src/.
+
 endchoice
 
 config ARCH_ARM7TDMI
@@ -584,6 +603,7 @@ config ARCH_CORTEXM7
 config ARCH_ARMV7A
 	bool
 	default n
+	select ARM_HAVE_WFE_SEV
 
 config ARCH_CORTEXA5
 	bool
@@ -737,6 +757,7 @@ config ARCH_CHIP
 	default "moxart"	if ARCH_CHIP_MOXART
 	default "nrf52"		if ARCH_CHIP_NRF52
 	default "nuc1xx"	if ARCH_CHIP_NUC1XX
+	default "rp2040"	if ARCH_CHIP_RP2040
 	default "s32k1xx"	if ARCH_CHIP_S32K1XX
 	default "sama5"		if ARCH_CHIP_SAMA5
 	default "samd2l2"	if ARCH_CHIP_SAMD2X || ARCH_CHIP_SAML2X
@@ -782,6 +803,12 @@ config ARM_THUMB
 	bool
 	default n
 	depends on ARCH_ARMV7A
+
+config ARM_HAVE_WFE_SEV
+	bool
+	default n
+	---help---
+		Use WFE and SEV instructions for spinlock to reduce power consumption
 
 config ARM_HAVE_MPU_UNIFIED
 	bool
@@ -877,19 +904,6 @@ config ARM_SEMIHOSTING_HOSTFS
 		This doesn't support some directory operations like readdir because
 		of the limitations of semihosting mechanism.
 
-config ARM_LWL_CONSOLE
-	bool "Lightweight Link Console Support"
-	default n
-	depends on DEV_CONSOLE && ARCH_CHIP_STM32
-	---help---
-		Use the lightweight link console which provides console over a
-		debug channel by means of shared memory.  A terminal application
-		for openocd as the debugger is available in tools/ocdconsole.py.
-
-		Currently only available for STM32 architectures, but easily
-		added to other ARM architectures be add up_low_console.c to the
-		architecture Make.defs file.
-
 if ARCH_ARMV6M
 source arch/arm/src/armv6-m/Kconfig
 endif
@@ -979,6 +993,9 @@ source arch/arm/src/nrf52/Kconfig
 endif
 if ARCH_CHIP_NUC1XX
 source arch/arm/src/nuc1xx/Kconfig
+endif
+if ARCH_CHIP_RP2040
+source arch/arm/src/rp2040/Kconfig
 endif
 if ARCH_CHIP_SAMA5
 source arch/arm/src/sama5/Kconfig

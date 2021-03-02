@@ -1,35 +1,20 @@
 #!/usr/bin/env bash
 # tools/testbuild.sh
 #
-#   Copyright (C) 2016-2020 Gregory Nutt. All rights reserved.
-#   Author: Gregory Nutt <gnutt@nuttx.org>
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.  The
+# ASF licenses this file to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance with the
+# License.  You may obtain a copy of the License at
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in
-#    the documentation and/or other materials provided with the
-#    distribution.
-# 3. Neither the name NuttX nor the names of its contributors may be
-#    used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
-# OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
-# AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+# License for the specific language governing permissions and limitations
+# under the License.
 #
 
 WD=$(cd $(dirname $0) && cd .. && pwd)
@@ -38,6 +23,9 @@ nuttx=$WD/../nuttx
 progname=$0
 fail=0
 APPSDIR=$WD/../apps
+if [ -z $ARTIFACTDIR ]; then
+  ARTIFACTDIR=$WD/../buildartifacts
+fi
 MAKE_FLAGS=-k
 EXTRA_FLAGS="EXTRAFLAGS="
 MAKE=make
@@ -46,22 +34,43 @@ unset HOPTION
 unset JOPTION
 PRINTLISTONLY=0
 GITCLEAN=0
+SAVEARTIFACTS=0
+CHECKCLEAN=1
+
+case $(uname -s) in
+  Darwin*)
+    HOST=Darwin
+    ;;
+  CYGWIN*)
+    HOST=Cygwin
+    ;;
+  MINGW32*)
+    HOST=MinGw
+    ;;
+  *)
+
+    # Assume linux as a fallback
+    HOST=Linux
+    ;;
+esac
 
 function showusage {
   echo ""
-  echo "USAGE: $progname [-l|m|c|u|g|n] [-d] [-e <extraflags>] [-x] [-j <ncpus>] [-a <appsdir>] [-t <topdir>] [-p] [-G] <testlist-file>"
+  echo "USAGE: $progname [-l|m|c|g|n] [-d] [-e <extraflags>] [-x] [-j <ncpus>] [-a <appsdir>] [-t <topdir>] [-p] [-G] <testlist-file>"
   echo "       $progname -h"
   echo ""
   echo "Where:"
-  echo "  -l|m|c|u|g|n selects Linux (l), macOS (m), Cygwin (c),"
-  echo "     Ubuntu under Windows 10 (u), MSYS/MSYS2 (g) or Windows native (n).  Default Linux"
+  echo "  -l|m|c|g|n selects Linux (l), macOS (m), Cygwin (c),"
+  echo "     MSYS/MSYS2 (g) or Windows native (n). Default Linux"
   echo "  -d enables script debug output"
   echo "  -e pass extra c/c++ flags such as -Wno-cpp via make command line"
   echo "  -x exit on build failures"
   echo "  -j <ncpus> passed on to make.  Default:  No -j make option."
   echo "  -a <appsdir> provides the relative path to the apps/ directory.  Default ../apps"
-  echo "  -t <topdir> provides the absolute path to top nuttx/ directory.  Default $PWD/../nuttx"
+  echo "  -t <topdir> provides the absolute path to top nuttx/ directory.  Default ../nuttx"
   echo "  -p only print the list of configs without running any builds"
+  echo "  -A store the build executable artifact in ARTIFACTDIR (defaults to ../buildartifacts"
+  echo "  -C Skip tree cleanness check."
   echo "  -G Use \"git clean -xfdq\" instead of \"make distclean\" to clean the tree."
   echo "     This option may speed up the builds. However, note that:"
   echo "       * This assumes that your trees are git based."
@@ -81,7 +90,7 @@ function showusage {
 
 while [ ! -z "$1" ]; do
   case $1 in
-  -l | -m | -c | -u | -g | -n )
+  -l | -m | -c | -g | -n )
     HOPTION+=" $1"
     ;;
   -d )
@@ -112,6 +121,12 @@ while [ ! -z "$1" ]; do
     ;;
   -G )
     GITCLEAN=1
+    ;;
+  -A )
+    SAVEARTIFACTS=1
+    ;;
+  -C )
+    CHECKCLEAN=0
     ;;
   -h )
     showusage
@@ -183,14 +198,16 @@ function distclean {
 
       # Ensure nuttx and apps directory in clean state even with --ignored
 
-      if [ -d $nuttx/.git ] || [ -d $APPSDIR/.git ]; then
-        if [[ -n $(git -C $nuttx status --ignored -s) ]]; then
-          git -C $nuttx status --ignored
-          fail=1
-        fi
-        if [[ -n $(git -C $APPSDIR status --ignored -s) ]]; then
-          git -C $APPSDIR status --ignored
-          fail=1
+      if [ ${CHECKCLEAN} -ne 0 ]; then
+        if [ -d $nuttx/.git ] || [ -d $APPSDIR/.git ]; then
+          if [[ -n $(git -C $nuttx status --ignored -s) ]]; then
+            git -C $nuttx status --ignored
+            fail=1
+          fi
+          if [[ -n $(git -C $APPSDIR status --ignored -s) ]]; then
+            git -C $APPSDIR status --ignored
+            fail=1
+          fi
         fi
       fi
     fi
@@ -212,20 +229,11 @@ function configure {
     varname=`echo $setting | cut -d'=' -f1`
     if [ ! -z "$varname" ]; then
       echo "  Disabling $varname"
-      sed -i -e "/$varname/d" $nuttx/.config
+      kconfig-tweak --file $nuttx/.config -d $varname
     fi
 
     echo "  Enabling $toolchain"
-    sed -i -e "/$toolchain/d" $nuttx/.config
-    echo "$toolchain=y" >> $nuttx/.config
-
-    if [ "X$sizet" == "Xuint" ]; then
-      echo "  Disabling CONFIG_ARCH_SIZET_LONG"
-      sed -i -e "/CONFIG_ARCH_SIZET_LONG/d" $nuttx/.config
-    elif [ "X$sizet" == "Xulong" ]; then
-      echo "  Enabling CONFIG_ARCH_SIZET_LONG"
-      sed -i -e "\$aCONFIG_ARCH_SIZET_LONG=y" $nuttx/.config
-    fi
+    kconfig-tweak --file $nuttx/.config -e $toolchain
 
     makefunc olddefconfig
   fi
@@ -238,6 +246,11 @@ function configure {
 function build {
   echo "  Building NuttX..."
   makefunc
+  if [ ${SAVEARTIFACTS} -eq 1 ]; then
+    artifactconfigdir=$ARTIFACTDIR/$(echo $config | sed "s/:/\//")/
+    mkdir -p $artifactconfigdir
+    xargs -I "{}" cp "{}" $artifactconfigdir < $nuttx/nuttx.manifest
+  fi
 
   # Ensure defconfig in the canonical form
 
@@ -247,14 +260,16 @@ function build {
 
   # Ensure nuttx and apps directory in clean state
 
-  if [ -d $nuttx/.git ] || [ -d $APPSDIR/.git ]; then
-    if [[ -n $(git -C $nuttx status -s) ]]; then
-      git -C $nuttx status
-      fail=1
-    fi
-    if [[ -n $(git -C $APPSDIR status -s) ]]; then
-      git -C $APPSDIR status
-      fail=1
+  if [ ${CHECKCLEAN} -ne 0 ]; then
+    if [ -d $nuttx/.git ] || [ -d $APPSDIR/.git ]; then
+      if [[ -n $(git -C $nuttx status -s) ]]; then
+        git -C $nuttx status
+        fail=1
+      fi
+      if [[ -n $(git -C $APPSDIR status -s) ]]; then
+        git -C $APPSDIR status
+        fail=1
+      fi
     fi
   fi
 
@@ -266,58 +281,55 @@ function build {
 function dotest {
   echo "===================================================================================="
   config=`echo $1 | cut -d',' -f1`
-  re="-${config/\//:}[[:space:]]"
-  if [[ "${blacklist} " =~ $re ]]; then
-    echo "Skipping: $1"
-  else
-    echo "Configuration/Tool: $1"
-    if [ ${PRINTLISTONLY} -eq 1 ]; then
+  check=${HOST},${config/\//:}
+
+  for re in $blacklist; do
+    if [[ "${check}" =~ ${re:1}$ ]]; then
+      echo "Skipping: $1"
       return
     fi
+  done
 
-    # Parse the next line
-
-    configdir=`echo $config | cut -s -d':' -f2`
-    if [ -z "${configdir}" ]; then
-      configdir=`echo $config | cut -s -d'/' -f2`
-      if [ -z "${configdir}" ]; then
-        echo "ERROR: Malformed configuration: ${config}"
-        showusage
-      else
-        boarddir=`echo $config | cut -d'/' -f1`
-      fi
-    else
-      boarddir=`echo $config | cut -d':' -f1`
-    fi
-
-    path=$nuttx/boards/*/*/$boarddir/configs/$configdir
-    if [ ! -r $path/defconfig ]; then
-      echo "ERROR: no configuration found at $path"
-      showusage
-    fi
-
-    unset toolchain
-    unset sizet
-    if [ "X$config" != "X$1" ]; then
-      toolchain=`echo $1 | cut -d',' -f2`
-      if [ -z "$toolchain" ]; then
-        echo "  Warning: no tool configuration"
-      fi
-      archsizet=`echo $line | cut -d',' -f3`
-      if [ "X$archsizet" == "XCONFIG_ARCH_SIZET_LONG" ]; then
-        sizet=ulong
-      elif [ "X$archsizet" == "X-CONFIG_ARCH_SIZET_LONG" ]; then
-        sizet=uint
-      fi
-    fi
-
-    # Perform the build test
-
-    echo "------------------------------------------------------------------------------------"
-    distclean
-    configure
-    build
+  echo "Configuration/Tool: $1"
+  if [ ${PRINTLISTONLY} -eq 1 ]; then
+    return
   fi
+
+  # Parse the next line
+
+  configdir=`echo $config | cut -s -d':' -f2`
+  if [ -z "${configdir}" ]; then
+    configdir=`echo $config | cut -s -d'/' -f2`
+    if [ -z "${configdir}" ]; then
+      echo "ERROR: Malformed configuration: ${config}"
+      showusage
+    else
+      boarddir=`echo $config | cut -d'/' -f1`
+    fi
+  else
+    boarddir=`echo $config | cut -d':' -f1`
+  fi
+
+  path=$nuttx/boards/*/*/$boarddir/configs/$configdir
+  if [ ! -r $path/defconfig ]; then
+    echo "ERROR: no configuration found at $path"
+    showusage
+  fi
+
+  unset toolchain
+  if [ "X$config" != "X$1" ]; then
+    toolchain=`echo $1 | cut -d',' -f2`
+    if [ -z "$toolchain" ]; then
+      echo "  Warning: no tool configuration"
+    fi
+  fi
+
+  # Perform the build test
+
+  echo "------------------------------------------------------------------------------------"
+  distclean
+  configure
+  build
 }
 
 # Perform the build test for each entry in the test list file

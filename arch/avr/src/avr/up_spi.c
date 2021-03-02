@@ -40,6 +40,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -250,7 +251,7 @@ static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
       actual          = priv->actual;
     }
 
-  spiinfo("Frequency %d->%d\n", frequency, actual);
+  spiinfo("Frequency %" PRId32 "->%" PRId32 "\n", frequency, actual);
   return actual;
 }
 
@@ -308,7 +309,7 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
 
       SPSR = regval;
 
-      /* Save the mode so that subsequent re-configuratins will be faster */
+      /* Save the mode so that subsequent re-configurations will be faster */
 
       priv->mode = mode;
     }
@@ -322,7 +323,7 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  * Input Parameters:
  *   dev -  Device-specific state data
- *   nbits - The number of bits requests (only nbits == 8 is supported)
+ *   nbits - The number of bits requested (only nbits == 8 is supported)
  *
  * Returned Value:
  *   none

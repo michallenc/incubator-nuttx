@@ -31,6 +31,8 @@
 #include <stdint.h>
 #include <nuttx/mtd/mtd.h>
 
+#include "xtensa_attr.h"
+
 #ifndef __ASSEMBLY__
 
 #undef EXTERN
@@ -77,6 +79,22 @@ FAR struct mtd_dev_s *esp32_spiflash_alloc_mtdpart(void);
  ****************************************************************************/
 
 FAR struct mtd_dev_s *esp32_spiflash_get_mtd(void);
+
+/****************************************************************************
+ * Name: esp32_spiflash_get_mtd
+ *
+ * Description:
+ *   Get ESP32 SPI Flash encryption raw MTD.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   ESP32 SPI Flash encryption raw MTD data pointer.
+ *
+ ****************************************************************************/
+
+FAR struct mtd_dev_s *esp32_spiflash_encrypt_get_mtd(void);
 
 #ifdef __cplusplus
 }

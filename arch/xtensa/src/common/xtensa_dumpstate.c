@@ -32,11 +32,13 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 
+#include <arch/xtensa/xtensa_corebits.h>
 #include <arch/board/board.h>
 #include <arch/chip/core-isa.h>
-
 #include "sched/sched.h"
 #include "xtensa.h"
+#include "chip_memory.h"
+#include "chip_macros.h"
 
 #ifdef CONFIG_DEBUG_ALERT
 
@@ -149,6 +151,109 @@ static inline void xtensa_registerdump(void)
 #endif
 }
 
+#ifdef CONFIG_XTENSA_DUMPBT_ON_ASSERT
+
+/****************************************************************************
+ * Name: xtensa_getcause
+ ****************************************************************************/
+
+static inline uint32_t xtensa_getcause(void)
+{
+  uint32_t cause;
+
+  __asm__ __volatile__
+  (
+    "rsr %0, EXCCAUSE"  : "=r"(cause)
+  );
+
+  return cause;
+}
+
+/****************************************************************************
+ * Name: stackpc
+ ****************************************************************************/
+
+static inline uint32_t stackpc(uint32_t pc)
+{
+  if (pc & 0x80000000)
+    {
+      /* Top two bits of a0 (return address) specify window increment.
+       * Overwrite to map to address space.
+       */
+
+      pc = (pc & 0x3fffffff) | 0x40000000;
+    }
+
+  /* Minus 3 to get PC of previous instruction (i.e. instruction executed
+   * before return address).
+   */
+
+  return pc - 3;
+}
+
+/****************************************************************************
+ * Name: corruptedframe
+ ****************************************************************************/
+
+static inline bool corruptedframe(uint32_t pc, uint32_t sp)
+{
+  return !(xtensa_ptr_exec((void *)stackpc(pc)) || xtensa_sp_sane(sp));
+}
+
+/****************************************************************************
+ * Name: nextframe
+ ****************************************************************************/
+
+static bool nextframe(uint32_t *pc, uint32_t *sp, uint32_t *npc)
+{
+  /* Use frame(i - 1)'s base save area located below frame(i)'s sp to get
+   * frame(i - 1)'s sp and frame(i - 2)'s pc. Base save area consists of
+   * 4 words under SP.
+   */
+
+  void *bsa = (void *)*sp;
+
+  *pc  = *npc;
+  *npc = *((uint32_t *)(bsa - 16));
+  *sp  = *((uint32_t *)(bsa - 12));
+
+  return !corruptedframe(*pc, *sp);
+}
+
+/****************************************************************************
+ * Name: xtensa_btdump
+ ****************************************************************************/
+
+static inline void xtensa_btdump(void)
+{
+  uint32_t pc;
+  uint32_t sp;
+  uint32_t npc;
+  int i;
+  bool corrupted = false;
+
+  xtensa_backtrace_start(&pc, &sp, &npc);
+
+  _alert("Backtrace0: %x:%x\n", stackpc(pc), sp);
+
+  corrupted = corruptedframe(pc, sp) &&
+              !(xtensa_getcause() == EXCCAUSE_INSTR_PROHIBITED);
+
+  for (i = 1; i <= CONFIG_XTENSA_BTDEPTH && npc != 0 && !corrupted; i++)
+    {
+      if (!nextframe(&pc, &sp, &npc))
+        {
+          corrupted = true;
+        }
+
+      _alert("Backtrace%d: %x:%x\n", i, stackpc(pc), sp);
+    }
+
+  _alert("BACKTRACE %s\n",
+         (corrupted ? "CORRUPTED!" : (npc == 0 ? "Done":"CONTINUES...")));
+}
+#endif /* CONFIG_XTENSA_DUMPBT_ON_ASSERT */
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -163,7 +268,7 @@ void xtensa_dumpstate(void)
   uint32_t sp = xtensa_getsp();
   uint32_t ustackbase;
   uint32_t ustacksize;
-#ifdef HAVE_INTERRUPTSTACK
+#if CONFIG_ARCH_INTERRUPTSTACK > 15
   uint32_t istackbase;
   uint32_t istacksize;
 #endif
@@ -178,6 +283,12 @@ void xtensa_dumpstate(void)
 
   xtensa_registerdump();
 
+  /* Dump the backtrace */
+
+#ifdef CONFIG_XTENSA_DUMPBT_ON_ASSERT
+  xtensa_btdump();
+#endif
+
   /* Get the limits on the user stack memory */
 
   ustackbase = (uint32_t)rtcb->adj_stack_ptr;
@@ -185,10 +296,13 @@ void xtensa_dumpstate(void)
 
   /* Get the limits on the interrupt stack memory */
 
-#warning REVISIT interrupt stack
-#ifdef HAVE_INTERRUPTSTACK
-  istackbase = (uint32_t)&g_intstack[INTERRUPT_STACKWORDS - 1];
-  istacksize = INTERRUPTSTACK_SIZE;
+#if CONFIG_ARCH_INTERRUPTSTACK > 15
+#ifdef CONFIG_SMP
+  istackbase = (uint32_t)xtensa_intstack_base();
+#else
+  istackbase = (uint32_t)&g_intstackbase;
+#endif
+  istacksize = INTSTACK_SIZE;
 
   /* Show interrupt stack info */
 
@@ -209,18 +323,22 @@ void xtensa_dumpstate(void)
       /* Yes.. dump the interrupt stack */
 
       xtensa_stackdump(sp, istackbase);
-
-      /* Extract the user stack pointer which should lie
-       * at the base of the interrupt stack.
-       */
-
-      sp = &g_instack[INTERRUPTSTACK_SIZE - sizeof(uint32_t)];
-      _alert("sp:     %08x\n", sp);
     }
   else if (CURRENT_REGS)
     {
       _alert("ERROR: Stack pointer is not within the interrupt stack\n");
       xtensa_stackdump(istackbase - istacksize, istackbase);
+    }
+
+  /* Extract the user stack pointer if we are in an interrupt handler.
+   * If we are not in an interrupt handler.  Then sp is the user stack
+   * pointer (and the above range check should have failed).
+   */
+
+  if (CURRENT_REGS)
+    {
+      sp = CURRENT_REGS[REG_A1];
+      _alert("sp:     %08x\n", sp);
     }
 
   /* Show user stack info */
@@ -259,4 +377,4 @@ void xtensa_dumpstate(void)
   up_showtasks();
 }
 
-#endif /* CONFIG_ARCH_STACKDUMP */
+#endif /* CONFIG_DEBUG_ALERT */

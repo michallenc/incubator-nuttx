@@ -838,7 +838,7 @@ static ssize_t cromfs_read(FAR struct file *filep, FAR char *buffer,
   unsigned int copysize;
   unsigned int copyoffs;
 
-  finfo("Read %d bytes from offset %d\n", buflen, filep->f_pos);
+  finfo("Read %zu bytes from offset %jd\n", buflen, (intmax_t)filep->f_pos);
   DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
 
   /* Get the mountpoint inode reference from the file structure and the
@@ -1285,7 +1285,7 @@ static int cromfs_readdir(struct inode *mountpt, struct fs_dirent_s *dir)
 
   name = (FAR char *)cromfs_offset2addr(fs, node->cn_name);
   finfo("Entry %lu: %s\n", (unsigned long)offset, name);
-  strncpy(dir->fd_dir.d_name, name, NAME_MAX + 1);
+  strncpy(dir->fd_dir.d_name, name, NAME_MAX);
 
   switch (node->cn_mode & S_IFMT)
     {

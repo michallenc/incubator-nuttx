@@ -51,6 +51,7 @@
 
 #include <sys/types.h>
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -254,19 +255,6 @@ static void sam_tsd_notify(struct sam_tsd_s *priv)
 {
   int i;
 
-  /* If there are threads waiting for read data, then signal one of them
-   * that the read data is available.
-   */
-
-  if (priv->nwaiters > 0)
-    {
-      /* After posting this semaphore, we need to exit because the
-       * touchscreen is no longer available.
-       */
-
-      nxsem_post(&priv->waitsem);
-    }
-
   /* If there are threads waiting on poll() for touchscreen data to become
    * available, then wake them up now.  NOTE: we wake up all waiting threads
    * because we do not know that they are going to do.  If they all try to
@@ -282,6 +270,19 @@ static void sam_tsd_notify(struct sam_tsd_s *priv)
           iinfo("Report events: %02x\n", fds->revents);
           nxsem_post(fds->sem);
         }
+    }
+
+  /* If there are threads waiting for read data, then signal one of them
+   * that the read data is available.
+   */
+
+  if (priv->nwaiters > 0)
+    {
+      /* After posting this semaphore, we need to exit because the
+       * touchscreen is no longer available.
+       */
+
+      nxsem_post(&priv->waitsem);
     }
 }
 
@@ -527,7 +528,7 @@ static void sam_tsd_bottomhalf(void *arg)
 
   /* Handle the change from pen down to pen up */
 
-  iinfo("pending: %08x pendown: %d contact: %d\n",
+  iinfo("pending: %08" PRIx32 " pendown: %d contact: %d\n",
         pending, pendown, priv->sample.contact);
 
   if (!pendown)
@@ -634,7 +635,10 @@ static void sam_tsd_bottomhalf(void *arg)
 
       if (xraw == 0 || xraw >= xscale || yraw == 0 || yraw > yscale)
         {
-          iwarn("WARNING: Discarding: x %d:%d y %d:%d\n", xraw, xscale);
+          iwarn("WARNING: Discarding: x %" PRId32 ":%" PRId32
+                " y %" PRId32 ":%" PRId32 "\n",
+                xraw, xscale,
+                yraw, yscale);
           goto ignored;
         }
 

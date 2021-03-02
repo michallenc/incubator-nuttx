@@ -37,7 +37,7 @@
 /****************************************************************************
  *  This UART IP has no flow control. So ioctl is limited.
  *  Note that here we don't use the uDMA to send multiple bytes, because
- *  Nuttx serial drivers don't have abstraction for puts().
+ *  NuttX serial drivers don't have abstraction for puts().
  ****************************************************************************/
 
 /****************************************************************************
@@ -115,7 +115,7 @@ static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
-static int  up_receive(struct uart_dev_s *dev, uint32_t *status);
+static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
 static bool up_rxavailable(struct uart_dev_s *dev);
 static void up_send(struct uart_dev_s *dev, int ch);
@@ -211,7 +211,7 @@ static uart_dev_t g_uart0port =
  *
  * Description:
  *   These are the UART interrupt handler.  It is called on uDMA ISR. It
- *   should call uart_transmitchars or uart_receivechar to invoke the Nuttx
+ *   should call uart_transmitchars or uart_receivechar to invoke the NuttX
  *   kernel.
  *
  ****************************************************************************/
@@ -434,7 +434,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-static int up_receive(struct uart_dev_s *dev, uint32_t *status)
+static int up_receive(struct uart_dev_s *dev, unsigned int *status)
 {
   struct gap8_uart_t *the_uart = (struct gap8_uart_t *)dev->priv;
   uint8_t ch = the_uart->rx_buf[0];
@@ -598,8 +598,8 @@ static bool up_txempty(struct uart_dev_s *dev)
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
  *   before up_serialinit.  NOTE:  This function depends on GPIO pin
- *   configuration performed in up_consoleinit() and main clock iniialization
- *   performed in up_clkinitialize().
+ *   configuration performed in up_consoleinit() and main clock
+ *   initialization performed in up_clkinitialize().
  *
  ****************************************************************************/
 

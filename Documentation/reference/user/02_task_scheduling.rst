@@ -6,7 +6,7 @@ priority have exclusive access to the CPU until they become blocked. At
 that time, the CPU is available to tasks of lower priority. Tasks of
 equal priority are scheduled FIFO.
 
-Optionally, a Nuttx task or thread can be configured with round-robin or
+Optionally, a NuttX task or thread can be configured with round-robin or
 *sporadic* scheduler. The round-robin is similar to priority scheduling
 *except* that tasks with equal priority and share CPU time via
 *time-slicing*. The time-slice interval is a constant determined by the
@@ -55,13 +55,13 @@ Functions
   name. Differences from the full POSIX implementation include:
 
     -  The range of priority values for the POSIX call is 0 to 255.
-  
+
   .. note:: Setting a task's priority to the same value has the similar effect
     to ``sched_yield()``: The task will be moved to after all other tasks
-    with the same priority.  
+    with the same priority.
 
 .. c:function:: int sched_getparam(pid_t pid, FAR struct sched_param *param)
-       
+
   This function gets the scheduling priority of the task
   specified by pid.
 

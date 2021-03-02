@@ -138,8 +138,8 @@ static int pwd_foreach(pwd_foreach_match_t match, uintptr_t arg,
   stream = fopen(CONFIG_LIBC_PASSWD_FILEPATH, "r");
   if (stream == NULL)
     {
-      int errcode = errno;
-      DEBUGASSERT(errno > 0);
+      int errcode = get_errno();
+      DEBUGASSERT(errcode > 0);
       return -errcode;
     }
 
@@ -289,7 +289,8 @@ static int pwd_foreach(pwd_foreach_match_t match, uintptr_t arg,
 int pwd_findby_name(FAR const char *uname, FAR struct passwd *entry,
                     FAR char *buffer, size_t buflen)
 {
-  return pwd_foreach(pwd_match_name, (uintptr_t)uname, entry, buffer, buflen);
+  return pwd_foreach(pwd_match_name, (uintptr_t)uname,
+                     entry, buffer, buflen);
 }
 
 /****************************************************************************

@@ -1,35 +1,20 @@
 /****************************************************************************
  * net/tcp/tcp_recvwindow.c
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -70,7 +55,8 @@
  *
  ****************************************************************************/
 
-uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev)
+uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev,
+                            FAR struct tcp_conn_s *conn)
 {
   uint16_t iplen;
   uint16_t mss;
@@ -114,24 +100,6 @@ uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev)
   niob_avail    = iob_navail(true);
   nqentry_avail = iob_qentry_navail();
 
-  /* Are the read-ahead allocations throttled?  If so, then not all of these
-   * IOBs are available for read-ahead buffering.
-   *
-   * REVISIT: Should also check that there is at least one available IOB
-   * chain.
-   */
-
-#if CONFIG_IOB_THROTTLE > 0
-  if (niob_avail > CONFIG_IOB_THROTTLE)
-    {
-      niob_avail -= CONFIG_IOB_THROTTLE;
-    }
-  else
-    {
-      niob_avail = 0;
-    }
-#endif
-
   /* Is there a a queue entry and IOBs available for read-ahead buffering? */
 
   if (nqentry_avail > 0 && niob_avail > 0)
@@ -139,13 +107,13 @@ uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev)
       uint32_t rwnd;
 
       /* The optimal TCP window size is the amount of TCP data that we can
-       * currently buffer via TCP read-ahead buffering plus MSS for the
-       * device packet buffer.  This logic here assumes that all IOBs are
-       * available for TCP buffering.
+       * currently buffer via TCP read-ahead buffering for the device packet
+       * buffer.  This logic here assumes that all IOBs are available for
+       * TCP buffering.
        *
        * Assume that all of the available IOBs are can be used for buffering
-       * on this connection.  Also assume that at least one chain is available
-       * concatenate the IOBs.
+       * on this connection.  Also assume that at least one chain is
+       * available concatenate the IOBs.
        *
        * REVISIT:  In an environment with multiple, active read-ahead TCP
        * sockets (and perhaps multiple network devices) or if there are
@@ -154,7 +122,7 @@ uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev)
        * buffering for this connection.
        */
 
-      rwnd = (niob_avail * CONFIG_IOB_BUFSIZE) + mss;
+      rwnd = (niob_avail * CONFIG_IOB_BUFSIZE);
       if (rwnd > UINT16_MAX)
         {
           rwnd = UINT16_MAX;
@@ -164,17 +132,24 @@ uint16_t tcp_get_recvwindow(FAR struct net_driver_s *dev)
 
       recvwndo = (uint16_t)rwnd;
     }
+  else if (IOB_QEMPTY(&conn->readahead))
+    {
+      /* Advertise maximum segment size for window edge if here is no
+       * available iobs on current "free" connection.
+       */
+
+      recvwndo = mss;
+    }
   else /* nqentry_avail == 0 || niob_avail == 0 */
     {
-      /* No IOB chains or noIOBs are available.  The only buffering
-       * available is within the packet buffer itself.  We can buffer no
-       * more than the MSS (unless we are very fast).
+      /* No IOB chains or noIOBs are available.
+       * Advertise the edge of window to zero.
        *
        * NOTE:  If no IOBs are available, then the next packet will be
        * lost if there is no listener on the connection.
        */
 
-      recvwndo = mss;
+      recvwndo = 0;
     }
 
   return recvwndo;

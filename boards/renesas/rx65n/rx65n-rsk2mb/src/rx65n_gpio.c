@@ -38,7 +38,7 @@
  * LED Port Initialization for RX65N RSK2MB Board
  ****************************************************************************/
 
-#if   defined (CONFIG_ARCH_BOARD_RX65N_RSK2MB) 
+#if   defined (CONFIG_ARCH_BOARD_RX65N_RSK2MB)
 void led_port_create(void)
 {
   /* LED Port initialization of RX65N RSK2MB */
@@ -214,6 +214,33 @@ void r_usbdev_port_enable(void)
   MPC.P16PFS.BYTE = 0x11;
   PORT1.PMR.BIT.B6 = 1;
 }
+#endif
+
+/****************************************************************************
+ * Name: r_usb_port_enable
+ *
+ * Description:
+ * USB Enabling for RX65N RSK2MB
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_BOARD_RX65N_RSK2MB)
+#if defined(CONFIG_USBHOST)
+void r_usb_port_enable(void)
+{
+  /* Set VBUS pin for USB */
+
+  MPC.P16PFS.BYTE = 0x12u;
+
+  /* PORT1.PMR.BYTE |= 0x40; */
+
+  PORT1.PMR.BIT.B6 = 1u;
+
+  /* set USB0_OVRCURA pin */
+
+  MPC.P14PFS.BYTE  = 0x12u;
+  PORT1.PMR.BIT.B4 = 1u;
+}
+#endif
 #endif
 
 /****************************************************************************
@@ -460,7 +487,7 @@ void rspi_pinconfig(int bus)
         break;
     }
 }
-#endif 
+#endif
 
 /****************************************************************************
  * Name: riic0_init_port

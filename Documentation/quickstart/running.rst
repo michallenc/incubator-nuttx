@@ -20,32 +20,33 @@ Flashing
 ========
 
 There are various tools you can use to flash the NuttX binary to your Nucleo
-board. One common option is to use `openocd` which supports a large number
-of programmers and target microcontrollers. 
+board. One common option is to use ``openocd`` which supports a large number
+of programmers and target microcontrollers.
 
-To install the stable version of openocd you can do:
-
-.. code-block:: console
-
-  $ apt install openocd
-  
-.. todo:: add instructions for other platforms
-
-You should note that openocd project has not made stable releases for long
+You should note that ``openocd`` project has not made stable releases for long
 time and support for newer hardware will probably be only available in the
-latest Git version. To install it you should:
+latest Git version, so it is actually recommended to install latest development 
+version.
 
-.. code-block:: console
+.. tabs::
 
-  $ git clone git://git.code.sf.net/p/openocd/code openocd
-  $ cd openocd
-  $ ./bootstrap
-  $ ./configure --prefix install/
-  $ make install
+  .. code-tab:: console Install stable version (Ubuntu)
+
+     $ apt install openocd
+
+  .. tab:: Install latest version from source
+
+     .. code-block:: console
+     
+        $ git clone git://git.code.sf.net/p/openocd/code openocd
+        $ cd openocd
+        $ ./bootstrap
+        $ ./configure --prefix=install/
+        $ make install
+
+     The resulting installation will be under ``openocd/install``. You can add
+     ``openocd/install/bin`` to your ``PATH``.
   
-The resulting installation will be under ``openocd/install``. You can add
-``openocd/install/bin`` to your ``PATH``.
-
 Now, to flash the binary to your board, connect the USB cable and do:
 
 .. code-block:: console
@@ -53,140 +54,33 @@ Now, to flash the binary to your board, connect the USB cable and do:
   $ cd nuttx/
   $ openocd -f interface/st-link-v2.cfg -f target/stm32f1x.cfg -c 'init' \
     -c 'program nuttx/nuttx.bin verify reset' -c 'shutdown'
-  
+
 Access NuttShell
 ================
 
 Once you flash your board, it will reset and offer a prompt over the serial
 console. With the Nucleo board, you can simply open the terminal program
-of your choice where you will see the ``nsh>`` prompt:
+of your choice where you will see the ``nsh>`` prompt (press :kbd:`enter`
+if you don't see anything):
 
 .. tabs::
 
   .. code-tab:: console picocom (CLI)
-  
+
     $ picocom -b 115200 /dev/ttyUSB0
-    
+
   .. code-tab:: console gtkterm (GUI)
-  
+
     $ gtkterm -s 115200 -p /dev/ttyUSB0
     
+.. tip::
 
-Debugging
-=========
-
-Using ``openocd`` you can also debug NuttX. To do so, first run:
-
-.. code-block:: console
-
-  $ openocd -f interface/st-link-v2.cfg -f target/stm32f1x.cfg
+  You may have to add yourself to the ``dialout`` group on Linux to have permission
+  to access serial ports:
   
-which will start a GDB server. Then, start ``gdb`` as:
-
-.. code-block:: console
-
-  $ cd nuttx/
-  $ gdb-multiarch nuttx/nuttx
+  .. code-block:: console
   
-Inside ``gdb`` console, connect to the ``openocd`` server with:
-
-.. code-block::
-
-  (gdb) target extended-remote :3333
-  
-You can debug using standard ``gdb`` commands.
-
-Advanced Debugging with JTAG
-----------------------------
-
-If your board does not have an embedded programmer and uses
-`JTAG <https://en.wikipedia.org/wiki/JTAG>`_ connector instead,
-things are a bit different. This guide assumes you have a JTAG hardware debugger like a
-`Segger J-Link <https://www.segger.com/products/debug-probes/j-link/>`_.
-JTAG is a set of standards that let you
-attach a hardware device to your embedded board, and then remotely control the CPU.
-You can load code, start, stop, step through the program, and examine variables and memory.
-
-#. Attach the Debugger Cables
-
-#. Start the Debugger
-
-   Refer to your JTAG debugger's documentation for information on how to start a GDB Server process that gdb can
-   communicate with to load code and start, stop, and step the embedded board's CPU. Your command line may be
-   different from this one.
-
-    .. code-block:: console
-
-       $ JLinkGDBServer -device ATSAMA5D27 -if JTAG -speed 1000 -JTAGConf -1,-1
-
-#. Launch the GNU Debugger
-
-   In another terminal window, launch the GDB. In the case of this guide, this came with the
-   ARM Embedded GNU Toolchain we downloaded in the Install step.
-
-    .. code-block:: console
-
-       $ cd nuttx/
-       $ gdb-multiarch nuttx/nuttx
-
-#. Set gdb to talk with the J-Link
-
-    ::
-
-       (gdb) target extended-remote :2331
-
-#. Reset the board
-
-    ::
-
-       (gdb) mon reset
-
-#. You may need to switch to the serial console to hit a key to stop the board from booting from its boot monitor
-   (U-Boot, in the case of the SAMA5 boards from Microchip).
-
-#. Halt the board
-
-    ::
-
-       (gdb) mon halt
-
-#. Load nuttx
-
-    ::
-
-       (gdb) load nuttx
-       `/home/adamf/src/nuttx-sama5d36-xplained/nuttx/nuttx' has changed; re-reading symbols.
-       Loading section .text, size 0x9eae4 lma 0x20008000
-       Loading section .ARM.exidx, size 0x8 lma 0x200a6ae4
-       Loading section .data, size 0x125c lma 0x200a6aec
-       Start address 0x20008040, load size 654664
-       Transfer rate: 75 KB/sec, 15587 bytes/write.
-       (gdb)
-
-#. Set a breakpoint
-
-    ::
-
-       (gdb) breakpoint nsh_main
-
-#. Start nuttx
-
-    ::
-
-       (gdb) continue
-       Continuing.
-
-       Breakpoint 1, nsh_main (argc=1, argv=0x200ddfac) at nsh_main.c:208
-       208	  sched_getparam(0, &param);
-       (gdb) continue
-       Continuing.
-
-Debugging Shortcuts
--------------------
-
-Note that you can abbreviate ``gdb`` commands, ``info b`` is a shortcut for
-``information breakpoints``; ``c`` works the same as ``continue``, etc.
-
-----
-
-Next up is :ref:`configuring`.
+    $ gpasswd -a <user> dialout
+    
+  Where ``<user>`` is your username. You will need to log out from your desktop
+  for the change to have effect.

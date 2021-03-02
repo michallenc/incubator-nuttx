@@ -40,6 +40,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -114,7 +115,7 @@ static inline int up_set_rs485_mode(struct up_dev_s *priv,
 static inline int up_get_rs485_mode(struct up_dev_s *priv,
                                     struct serial_rs485 *mode);
 #endif
-static int  up_receive(struct uart_dev_s *dev, uint32_t *status);
+static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
 static bool up_rxavailable(struct uart_dev_s *dev);
 static void up_send(struct uart_dev_s *dev, int ch);
@@ -770,7 +771,7 @@ static int up_interrupt(int irq, void *context, void *arg)
               /* Read the modem status register (MSR) to clear */
 
               status = up_serialin(priv, LPC43_UART_MSR_OFFSET);
-              _info("MSR: %02x\n", status);
+              _info("MSR: %02" PRIx32 "\n", status);
               break;
             }
 
@@ -781,7 +782,7 @@ static int up_interrupt(int irq, void *context, void *arg)
               /* Read the line status register (LSR) to clear */
 
               status = up_serialin(priv, LPC43_UART_LSR_OFFSET);
-              _info("LSR: %02x\n", status);
+              _info("LSR: %02" PRIx32 "\n", status);
               break;
             }
 
@@ -789,7 +790,7 @@ static int up_interrupt(int irq, void *context, void *arg)
 
           default:
             {
-              _err("ERROR: Unexpected IIR: %02x\n", status);
+              _err("ERROR: Unexpected IIR: %02" PRIx32 "\n", status);
               break;
             }
         }
@@ -1139,7 +1140,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-static int up_receive(struct uart_dev_s *dev, uint32_t *status)
+static int up_receive(struct uart_dev_s *dev, unsigned int *status)
 {
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
   uint32_t rbr;

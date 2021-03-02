@@ -1,4 +1,4 @@
-/*****************************************************************************
+/****************************************************************************
  * boards/arm/lpc17xx_40xx/pnev5180b/src/lpc17_40_bringup.c
  *
  *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
@@ -31,20 +31,20 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- *****************************************************************************/
+ ****************************************************************************/
 
-/*****************************************************************************
+/****************************************************************************
  * Included Files
- *****************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
 #include <stdio.h>
 #include <syslog.h>
 #include <errno.h>
-#include <sys/mount.h>
 
 #include <nuttx/board.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/binfmt/elf.h>
 #include <nuttx/binfmt/nxflat.h>
@@ -76,11 +76,11 @@
 #include "lpc17_40_symtab.h"
 #include "lpc17_40_progmem.h"
 
-/*****************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- *****************************************************************************/
+ ****************************************************************************/
 
-/* Configuration *************************************************************/
+/* Configuration ************************************************************/
 
 /* PORT and SLOT number probably depend on the board configuration */
 
@@ -97,9 +97,9 @@
 #  undef CONFIG_NSH_HAVEUSBDEV
 #endif
 
-/*****************************************************************************
+/****************************************************************************
  * Public Functions
- *****************************************************************************/
+ ****************************************************************************/
 
 /****************************************************************************
  * Name: pnev5180b_bringup
@@ -120,21 +120,21 @@ int pnev5180b_bringup(void)
   int ret = OK;
 
 #ifdef CONFIG_FS_PROCFS
-  ret = mount(NULL, "/proc", "procfs", 0, NULL);
+  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to mount the PROC filesystem: %d (%d)\n",
-             ret, errno);
+      syslog(LOG_ERR, "ERROR: Failed to mount the PROC filesystem: %d\n",
+             ret);
       goto done;
     }
 #endif
 
 #ifdef CONFIG_FS_BINFS
-  ret = mount(NULL, "/bin", "binfs", 0, NULL);
+  ret = nx_mount(NULL, "/bin", "binfs", 0, NULL);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to mount the BIN filesystem: %d (%d)\n",
-             ret, errno);
+      syslog(LOG_ERR, "ERROR: Failed to mount the BIN filesystem: %d\n",
+             ret);
       goto done;
     }
 #endif
@@ -167,7 +167,8 @@ int pnev5180b_bringup(void)
   ret = lpc17_40_romfs_initialize();
   if (ret != OK)
     {
-      syslog(LOG_ERR, "ERROR: lpc17_40_romfs_initialize() failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: lpc17_40_romfs_initialize() failed: %d\n",
+             ret);
       goto done;
     }
 #endif

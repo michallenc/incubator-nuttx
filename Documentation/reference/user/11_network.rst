@@ -3,8 +3,8 @@ Network Interfaces
 ==================
 
 NuttX supports a BSD-compatible socket interface layer. These socket
-interface can be enabled by settings in the architecture `configuration
-file <NuttXConfigVariables.html>`__. Those socket APIs are discussed in
+interface can be enabled by settings in the architecture configuration
+file. Those socket APIs are discussed in
 the following paragraphs.
 
   - :c:func:`socket`
@@ -28,7 +28,7 @@ the following paragraphs.
   :param type: (see sys/socket.h)
   :param protocol: (see sys/socket.h)
 
-  :return: 
+  :return:
     0 on success; -1 on error with
     ``errno`` set appropriately:
 
@@ -278,7 +278,7 @@ the following paragraphs.
 
 
 .. c:function:: ssize_t recv(int sockfd, void *buf, size_t len, int flags);
-                 
+
   The ``recv()`` call is identical to
   ```recvfrom()`` <#recvfrom>`__ with a NULL ``from`` parameter.
 

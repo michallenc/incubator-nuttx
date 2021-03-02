@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -140,12 +141,8 @@ int g_console_disable;
 #  define HS_DMAACT_ACT2      3
 #endif
 
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? a : b)
-#endif
-
 #ifndef MIN
-#define MIN(a, b) ((a) > (b) ? b : a)
+#  define MIN(a, b) ((a) > (b) ? (b) : (a))
 #endif
 
 /****************************************************************************
@@ -186,7 +183,7 @@ static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
 static int  up_interrupt(int irq, void *context, FAR void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
-static int  up_receive(struct uart_dev_s *dev, uint32_t *status);
+static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
 static bool up_rxavailable(struct uart_dev_s *dev);
 static void up_send(struct uart_dev_s *dev, int ch);
@@ -474,7 +471,7 @@ static int up_setup(struct uart_dev_s *dev)
 
   if (udiv < 0)
     {
-      serr("ERROR: baud = %d\n", priv->baud);
+      serr("ERROR: baud = %" PRId32 "\n", priv->baud);
       return -EINVAL;
     }
 
@@ -757,8 +754,6 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
               break;
             }
 
-          cfsetispeed(termiosp, priv->baud);
-
           /* Note that since we only support 8/9 bit modes and
            * there is no way to report 9-bit mode, we always claim 8.
            */
@@ -773,6 +768,8 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
                               ((priv->iflow) ? CRTS_IFLOW : 0) |
 #endif
                               CS8;
+
+          cfsetispeed(termiosp, priv->baud);
         }
         break;
 
@@ -845,7 +842,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-static int up_receive(struct uart_dev_s *dev, uint32_t *status)
+static int up_receive(struct uart_dev_s *dev, unsigned int *status)
 {
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
   uint32_t rxd;

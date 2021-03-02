@@ -43,7 +43,7 @@
 
 #define NULL_SIGNAL_SET ((sigset_t)0x00000000)
 #define ALL_SIGNAL_SET  ((sigset_t)0xffffffff)
-#define MIN_SIGNO       0
+#define MIN_SIGNO       1
 #define MAX_SIGNO       31
 #define GOOD_SIGNO(s)   ((((unsigned)(s)) <= MAX_SIGNO))
 #define SIGNO2SET(s)    ((sigset_t)1 << (s))
@@ -166,23 +166,52 @@
 #  endif
 #endif
 
-#ifdef CONFIG_SIG_SIGSTOP_ACTION
-#  define SIGSTOP     CONFIG_SIG_STOP
-#  define SIGSTP      CONFIG_SIG_STP
-#  define SIGCONT     CONFIG_SIG_CONT
-#endif
-
-#ifdef CONFIG_SIG_SIGKILL_ACTION
-#  define SIGKILL     CONFIG_SIG_KILL
-#  define SIGINT      CONFIG_SIG_INT
-#  define SIGQUIT     CONFIG_SIG_QUIT
-#  define SIGTERM     CONFIG_SIG_TERM
-#endif
-
-#ifndef CONFIG_SIG_SIGPIPE
-#  define SIGPIPE       11
+#ifndef CONFIG_SIG_STOP
+#  define SIGSTOP       6
 #else
-#  define SIGPIPE       CONFIG_SIG_SIGPIPE
+#  define SIGSTOP       CONFIG_SIG_STOP
+#endif
+
+#ifndef CONFIG_SIG_TSTP
+#  define SIGTSTP       7
+#else
+#  define SIGTSTP       CONFIG_SIG_TSTP
+#endif
+
+#ifndef CONFIG_SIG_CONT
+#  define SIGCONT       8
+#else
+#  define SIGCONT       CONFIG_SIG_CONT
+#endif
+
+#ifndef CONFIG_SIG_KILL
+#  define SIGKILL       9
+#else
+#  define SIGKILL       CONFIG_SIG_KILL
+#endif
+
+#ifndef CONFIG_SIG_INT
+#  define SIGINT        10
+#else
+#  define SIGINT        CONFIG_SIG_INT
+#endif
+
+#ifndef CONFIG_SIG_QUIT
+#  define SIGQUIT       11
+#else
+#  define SIGQUIT       CONFIG_SIG_QUIT
+#endif
+
+#ifndef CONFIG_SIG_TERM
+#  define SIGTERM       12
+#else
+#  define SIGTERM       CONFIG_SIG_TERM
+#endif
+
+#ifndef CONFIG_SIG_PIPE
+#  define SIGPIPE       13
+#else
+#  define SIGPIPE       CONFIG_SIG_PIPE
 #endif
 
 /* The following are non-standard signal definitions */
@@ -213,7 +242,7 @@
 
 /* struct sigaction flag values */
 
-#define SA_NOCLDSTOP    (1 << 0) /* Do not generate SIGCHILD when
+#define SA_NOCLDSTOP    (1 << 0) /* Do not generate SIGCHLD when
                                   * children stop (ignored) */
 #define SA_SIGINFO      (1 << 1) /* Invoke the signal-catching function
                                   * with 3 args instead of 1

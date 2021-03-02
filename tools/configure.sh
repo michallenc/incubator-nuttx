@@ -1,36 +1,20 @@
 #!/usr/bin/env bash
 # tools/configure.sh
 #
-#   Copyright (C) 2007, 2008, 2011, 2015, 2017-2019 Gregory Nutt. All rights
-#     reserved.
-#   Author: Gregory Nutt <gnutt@nuttx.org>
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.  The
+# ASF licenses this file to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance with the
+# License.  You may obtain a copy of the License at
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in
-#    the documentation and/or other materials provided with the
-#    distribution.
-# 3. Neither the name NuttX nor the names of its contributors may be
-#    used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
-# OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
-# AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+# License for the specific language governing permissions and limitations
+# under the License.
 #
 
 set -e
@@ -39,7 +23,7 @@ WD=`test -d ${0%/*} && cd ${0%/*}; pwd`
 TOPDIR="${WD}/.."
 USAGE="
 
-USAGE: ${0} [-E] [-e] [-l|m|c|u|g|n] [L] [-a <app-dir>] <board-name>:<config-name> [make-opts]
+USAGE: ${0} [-E] [-e] [-l|m|c|g|n] [L] [-a <app-dir>] <board-name>:<config-name> [make-opts]
 
 Where:
   -E enforces distclean if already configured.
@@ -47,7 +31,6 @@ Where:
   -l selects the Linux (l) host environment.
   -m selects the macOS (m) host environment.
   -c selects the Windows host and Cygwin (c) environment.
-  -u selects the Windows host and Ubuntu under Windows 10 (u) environment.
   -g selects the Windows host and MinGW/MSYS environment.
   -n selects the Windows host and Windows native (n) environment.
   Default: Use host setup in the defconfig file
@@ -95,7 +78,7 @@ while [ ! -z "$1" ]; do
     shift
     appdir=$1
     ;;
-  -c | -g | -l | -m | -u )
+  -c | -g | -l | -m )
     winnative=n
     host+=" $1"
     ;;
@@ -149,11 +132,14 @@ if [ ! -d ${configpath} ]; then
 
   configpath=${TOPDIR}/${boardconfig}
   if [ ! -d ${configpath} ]; then
-    echo "Directory for ${boardconfig} does not exist."
-    echo ""
-    echo "Run tools/configure.sh -L to list available configurations."
-    echo "$USAGE"
-    exit 3
+    configpath=${boardconfig}
+    if [ ! -d ${configpath} ]; then
+      echo "Directory for ${boardconfig} does not exist."
+      echo ""
+      echo "Run tools/configure.sh -L to list available configurations."
+      echo "$USAGE"
+      exit 3
+    fi
   fi
 fi
 
@@ -164,10 +150,14 @@ if [ ! -r ${src_makedefs} ]; then
   src_makedefs=${TOPDIR}/boards/*/*/${boarddir}/scripts/Make.defs
 
   if [ ! -r ${src_makedefs} ]; then
-    src_makedefs=${TOPDIR}/${boardconfig}/Make.defs
+    src_makedefs=${configpath}/Make.defs
     if [ ! -r ${src_makedefs} ]; then
-      echo "File Make.defs could not be found"
-      exit 4
+      src_makedefs=${configpath}/../../scripts/Make.defs
+
+      if [ ! -r ${src_makedefs} ]; then
+        echo "File Make.defs could not be found"
+        exit 4
+      fi
     fi
   fi
 fi
@@ -183,7 +173,7 @@ fi
 
 if [ -r ${dest_config} ]; then
   if [ "X${enforce_distclean}" = "Xy" ]; then
-    make -C ${TOPDIR} distclean $*
+    make -C ${TOPDIR} distclean
   else
     if cmp -s ${src_config} ${backup_config}; then
       echo "No configuration change."
@@ -191,7 +181,7 @@ if [ -r ${dest_config} ]; then
     fi
 
     if [ "X${distclean}" = "Xy" ]; then
-      make -C ${TOPDIR} distclean $*
+      make -C ${TOPDIR} distclean
     else
       echo "Already configured!"
       echo "Please 'make distclean' and try again."
@@ -290,7 +280,7 @@ done
 
 if [ "X${defappdir}" = "Xy" ]; then
   # In-place edit can mess up permissions on Windows
-  # sed -i -e "/^CONFIG_APPS_DIR/d" "${dest_config}"
+  # sed -i.bak -e "/^CONFIG_APPS_DIR/d" "${dest_config}"
   sed -e "/^CONFIG_APPS_DIR/d" "${dest_config}" > "${dest_config}-temp"
   mv "${dest_config}-temp" "${dest_config}"
 

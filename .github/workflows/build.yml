@@ -124,7 +124,7 @@ jobs:
 
     strategy:
       matrix:
-        boards: [arm-01, arm-02, arm-03, arm-04, arm-05, arm-06, arm-07, arm-08, arm-09, arm-10, arm-11, arm-12, arm-13, avr-mips-riscv-x86-xtensa, sim, renesas]
+        boards: [arm-01, arm-02, arm-03, arm-04, arm-05, arm-06, arm-07, arm-08, arm-09, arm-10, arm-11, arm-12, arm-13, other, sim]
 
     steps:
       - name: Download Source Artifact
@@ -142,15 +142,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker Pull
-        uses: nick-invision/retry@v1
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          retry_wait_seconds: 10
-          command: docker pull docker.pkg.github.com/apache/incubator-nuttx-testing/nuttx-ci-linux
-
+        run: docker pull docker.pkg.github.com/apache/incubator-nuttx-testing/nuttx-ci-linux
       - name: Export NuttX Repo SHA
-        run:  echo "::set-env name=nuttx_sha::`git -C sources/nuttx rev-parse HEAD`"
+        run: echo "nuttx_sha=`git -C sources/nuttx rev-parse HEAD`" >> $GITHUB_ENV
       - name: Run builds
         uses: ./sources/testing/.github/actions/ci-container
         env:
@@ -161,15 +155,21 @@ jobs:
             export CCACHE_DIR=`pwd`/ccache
             mkdir $CCACHE_DIR
             cd sources/testing
-            ./cibuild.sh -c testlist/${{matrix.boards}}.dat
+            export ARTIFACTDIR=`pwd`/../../buildartifacts
+            ./cibuild.sh -A -c testlist/${{matrix.boards}}.dat
             ccache -s
+      - uses: actions/upload-artifact@v2
+        with:
+          name: linux-builds
+          path: buildartifacts/
+        continue-on-error: true
 
   macOS:
     runs-on: macos-10.15
     needs: Fetch-Source
     strategy:
       matrix:
-        boards: [arm-12, avr-mips-riscv-x86-xtensa, sim]
+        boards: [arm-12, other, sim]
     steps:
       - name: Download Source Artifact
         uses: actions/download-artifact@v1
@@ -188,12 +188,18 @@ jobs:
           key: ${{ runner.os }}-tools-${{ hashFiles('./sources/testing/cibuild.sh') }}
 
       - name: Export NuttX Repo SHA
-        run:  echo "::set-env name=nuttx_sha::`git -C sources/nuttx rev-parse HEAD`"
+        run: echo "nuttx_sha=`git -C sources/nuttx rev-parse HEAD`" >> $GITHUB_ENV
       - name: Run Builds
         run: |
           echo "::add-matcher::sources/nuttx/.github/gcc.json"
           export CCACHE_DIR=`pwd`/ccache
           mkdir $CCACHE_DIR
           cd sources/testing
-          ./cibuild.sh -i -c testlist/${{matrix.boards}}.dat
+          export ARTIFACTDIR=`pwd`/../../buildartifacts
+          ./cibuild.sh -i -A -c testlist/${{matrix.boards}}.dat
           ccache -s
+      - uses: actions/upload-artifact@v2
+        with:
+          name: macos-builds
+          path: buildartifacts/
+        continue-on-error: true

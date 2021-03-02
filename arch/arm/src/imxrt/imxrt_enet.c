@@ -39,6 +39,7 @@
 
 #include <nuttx/config.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -186,6 +187,7 @@
  *
  * The imxrt1050-evk board uses a KSZ8081 PHY
  * The Versiboard2 uses a LAN8720 PHY
+ * The Teensy-4.1 board uses a DP83825I PHY
  *
  * ...and further PHY descriptions here.
  */
@@ -208,6 +210,15 @@
 #  define BOARD_PHY_10BASET(s)  (((s)&MII_LAN8720_SPSCR_10MBPS) != 0)
 #  define BOARD_PHY_100BASET(s) (((s)&MII_LAN8720_SPSCR_100MBPS) != 0)
 #  define BOARD_PHY_ISDUPLEX(s) (((s)&MII_LAN8720_SPSCR_DUPLEX) != 0)
+#elif defined(CONFIG_ETH0_PHY_DP83825I)
+#  define BOARD_PHY_NAME        "DP83825I"
+#  define BOARD_PHYID1          MII_PHYID1_DP83825I
+#  define BOARD_PHYID2          MII_PHYID2_DP83825I
+#  define BOARD_PHY_STATUS      MII_DP83825I_PHYSTS
+#  define BOARD_PHY_ADDR        (0)
+#  define BOARD_PHY_10BASET(s)  (((s) & MII_DP83825I_PHYSTS_SPEED) != 0)
+#  define BOARD_PHY_100BASET(s) (((s) & MII_DP83825I_PHYSTS_SPEED) == 0)
+#  define BOARD_PHY_ISDUPLEX(s) (((s) & MII_DP83825I_PHYSTS_DUPLEX) != 0)
 #else
 #  error "Unrecognized or missing PHY selection"
 #endif
@@ -248,7 +259,8 @@
 
 #define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
 
-#define IMXRT_BUF_SIZE  ENET_ALIGN_UP(CONFIG_NET_ETH_PKTSIZE)
+#define IMXRT_BUF_SIZE  ENET_ALIGN_UP(CONFIG_NET_ETH_PKTSIZE + \
+                                      CONFIG_NET_GUARDSIZE)
 
 /****************************************************************************
  * Private Types
@@ -555,7 +567,7 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
 
   /* Make the following operations atomic */
 
-  flags = spin_lock_irqsave();
+  flags = spin_lock_irqsave(NULL);
 
   /* Enable TX interrupts */
 
@@ -572,7 +584,7 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
 
   putreg32(ENET_TDAR, IMXRT_ENET_TDAR);
 
-  spin_unlock_irqrestore(flags);
+  spin_unlock_irqrestore(NULL, flags);
   return OK;
 }
 
@@ -1015,7 +1027,7 @@ static void imxrt_enet_interrupt_work(FAR void *arg)
 
       NETDEV_ERRORS(&priv->dev);
 
-      nerr("ERROR: Network interface error occurred (0x%08X)\n",
+      nerr("ERROR: Network interface error occurred (0x%08" PRIX32 ")\n",
            (pending & ERROR_INTERRUPTS));
     }
 
@@ -1299,8 +1311,10 @@ static int imxrt_ifup_action(struct net_driver_s *dev, bool resetphy)
   int ret;
 
   ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Initialize ENET buffers */
 
@@ -1442,8 +1456,10 @@ static int imxrt_ifdown(struct net_driver_s *dev)
   irqstate_t flags;
 
   ninfo("Taking down: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+        (int)(dev->d_ipaddr & 0xff),
+        (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff),
+        (int)(dev->d_ipaddr >> 24));
 
   /* Flush and disable the Ethernet interrupts at the NVIC */
 
@@ -1507,7 +1523,7 @@ static void imxrt_txavail_work(FAR void *arg)
            * new XMIT data.
            */
 
-          devif_poll(&priv->dev, imxrt_txpoll);
+          devif_timer(&priv->dev, 0, imxrt_txpoll);
         }
     }
 
@@ -2164,6 +2180,25 @@ static inline int imxrt_initphy(struct imxrt_driver_s *priv, bool renogphy)
       /* ...and reset PHY */
 
       imxrt_writemii(priv, phyaddr, MII_MCR, MII_MCR_RESET);
+
+#elif defined (CONFIG_ETH0_PHY_DP83825I)
+
+      /* Reset PHY */
+
+      imxrt_writemii(priv, phyaddr, MII_MCR, MII_MCR_RESET);
+
+      /* Set RMII mode and Indicate 50MHz clock */
+
+      imxrt_writemii(priv, phyaddr, MII_DP83825I_RCSR,
+                    MII_DP83825I_RCSC_ELAST_2 | MII_DP83825I_RCSC_RMIICS);
+
+      imxrt_writemii(priv, phyaddr, MII_ADVERTISE,
+                     MII_ADVERTISE_100BASETXFULL |
+                     MII_ADVERTISE_100BASETXHALF |
+                     MII_ADVERTISE_10BASETXFULL |
+                     MII_ADVERTISE_10BASETXHALF |
+                     MII_ADVERTISE_CSMA);
+
 #endif
 
       /* Start auto negotiation */
@@ -2259,11 +2294,13 @@ static inline int imxrt_initphy(struct imxrt_driver_s *priv, bool renogphy)
 
 #ifdef CONFIG_IMXRT_ENETUSEMII
   rcr = ENET_RCR_CRCFWD |
-        CONFIG_NET_ETH_PKTSIZE << ENET_RCR_MAX_FL_SHIFT |
+        (CONFIG_NET_ETH_PKTSIZE + CONFIG_NET_GUARDSIZE)
+          << ENET_RCR_MAX_FL_SHIFT |
         ENET_RCR_MII_MODE;
 #else
   rcr = ENET_RCR_RMII_MODE | ENET_RCR_CRCFWD |
-        CONFIG_NET_ETH_PKTSIZE << ENET_RCR_MAX_FL_SHIFT |
+        (CONFIG_NET_ETH_PKTSIZE + CONFIG_NET_GUARDSIZE)
+          << ENET_RCR_MAX_FL_SHIFT |
         ENET_RCR_MII_MODE;
 #endif
   tcr = 0;

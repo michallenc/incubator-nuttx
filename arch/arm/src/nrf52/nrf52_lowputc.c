@@ -113,6 +113,7 @@ static const struct uart_config_s g_console_config =
  *
  ****************************************************************************/
 
+#ifdef HAVE_UART_DEVICE
 static void nrf52_setbaud(uintptr_t base, const struct uart_config_s *config)
 {
   uint32_t br = 0;
@@ -296,6 +297,7 @@ static void nrf52_sethwflow(uintptr_t base,
 {
   /* TODO */
 }
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -375,7 +377,6 @@ void nrf52_usart_configure(uintptr_t base,
 
   putreg32(NRF52_UART_ENABLE_ENABLE, base + NRF52_UART_ENABLE_OFFSET);
 }
-#endif
 
 /****************************************************************************
  * Name: nrf52_usart_disable
@@ -386,7 +387,6 @@ void nrf52_usart_configure(uintptr_t base,
  *
  ****************************************************************************/
 
-#ifdef HAVE_UART_DEVICE
 void nrf52_usart_disable(uintptr_t base, const struct uart_config_s *config)
 {
   /* Disable interrupts */
@@ -409,29 +409,6 @@ void nrf52_usart_disable(uintptr_t base, const struct uart_config_s *config)
 
   putreg32(UART_PSELTXD_RESET, base + NRF52_UART_PSELTXD_OFFSET);
   putreg32(UART_PSELRXD_RESET, base + NRF52_UART_PSELRXD_OFFSET);
-}
-#endif
-
-/****************************************************************************
- * Name: arm_lowputc
- *
- * Description:
- *   Output one byte on the serial console
- *
- ****************************************************************************/
-
-void arm_lowputc(char ch)
-{
-#ifdef HAVE_UART_CONSOLE
-  putreg32(1, CONSOLE_BASE + NRF52_UART_TASKS_STARTTX_OFFSET);
-  putreg32(0, CONSOLE_BASE + NRF52_UART_EVENTS_TXDRDY_OFFSET);
-  putreg32(ch, CONSOLE_BASE + NRF52_UART_TXD_OFFSET);
-  while (getreg32(CONSOLE_BASE + NRF52_UART_EVENTS_TXDRDY_OFFSET) == 0)
-    {
-    }
-
-  putreg32(1, CONSOLE_BASE + NRF52_UART_TASKS_STOPTX_OFFSET);
-#endif
 }
 
 /****************************************************************************
@@ -462,4 +439,27 @@ void nrf52_usart_setformat(uintptr_t base,
   /* Configure hardware flow control */
 
   nrf52_sethwflow(base, config);
+}
+#endif
+
+/****************************************************************************
+ * Name: arm_lowputc
+ *
+ * Description:
+ *   Output one byte on the serial console
+ *
+ ****************************************************************************/
+
+void arm_lowputc(char ch)
+{
+#ifdef HAVE_UART_CONSOLE
+  putreg32(1, CONSOLE_BASE + NRF52_UART_TASKS_STARTTX_OFFSET);
+  putreg32(0, CONSOLE_BASE + NRF52_UART_EVENTS_TXDRDY_OFFSET);
+  putreg32(ch, CONSOLE_BASE + NRF52_UART_TXD_OFFSET);
+  while (getreg32(CONSOLE_BASE + NRF52_UART_EVENTS_TXDRDY_OFFSET) == 0)
+    {
+    }
+
+  putreg32(1, CONSOLE_BASE + NRF52_UART_TASKS_STOPTX_OFFSET);
+#endif
 }

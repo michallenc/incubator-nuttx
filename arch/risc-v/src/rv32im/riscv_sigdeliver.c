@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/risc-v/src/rv32im/up_sigdeliver.c
+ * arch/risc-v/src/rv32im/riscv_sigdeliver.c
  *
  *   Copyright (C) 2011, 2015, 2018-2018 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -44,6 +44,7 @@
 
 #include <nuttx/config.h>
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <sched.h>
 #include <syscall.h>
@@ -92,7 +93,7 @@ void up_sigdeliver(void)
 
   /* Save the return state on the stack. */
 
-  up_copystate(regs, rtcb->xcp.regs);
+  up_copyfullstate(regs, rtcb->xcp.regs);
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Then make sure that interrupts are enabled.  Signal handlers must always
@@ -111,7 +112,7 @@ void up_sigdeliver(void)
    * errno that is needed by the user logic (it is probably EINTR).
    */
 
-  sinfo("Resuming EPC: %08x INT_CTX: %08x\n",
+  sinfo("Resuming EPC: %08" PRIx32 " INT_CTX: %08" PRIx32 "\n",
         regs[REG_EPC], regs[REG_INT_CTX]);
 
   up_irq_save();

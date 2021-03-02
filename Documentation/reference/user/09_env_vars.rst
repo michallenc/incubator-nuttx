@@ -25,7 +25,7 @@ Programming Interfaces
 ======================
 
 The following environment variable
-programming interfaces are provided by Nuttx and are described in detail
+programming interfaces are provided by NuttX and are described in detail
 in the following paragraphs.
 
   - :c:func:`getenv`
@@ -45,12 +45,12 @@ Functions
 =========
 
 .. c:function:: FAR char *getenv(const char *name)
-     
+
   Searches the environment list for a string that matches
   the string pointed to by ``name``.
 
   :param name: The name of the variable to find.
-  
+
   :return:
     The value of the variable (read-only) or NULL on failure.
 
@@ -64,7 +64,7 @@ Functions
 
   :param string: ``name=value`` string describing the environment setting to
      add/modify.
-     
+
   :return: Zero on success.
 
 .. c:function:: int clearenv(void)

@@ -1,37 +1,20 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_sdhci.c
  *
- *   Copyright (C) 2008-2013 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- *   Copyright 2018 Sony Semiconductor Solutions Corporation
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -41,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -1137,8 +1121,9 @@ static int cxd56_interrupt(int irq, FAR void *context, FAR void *arg)
 
   regval  = getreg32(CXD56_SDHCI_IRQSIGEN);
   enabled = getreg32(CXD56_SDHCI_IRQSTAT) & regval;
-  mcinfo("IRQSTAT: %08x IRQSIGEN %08x enabled: %08x\n",
-          getreg32(CXD56_SDHCI_IRQSTAT), regval, enabled);
+  mcinfo("IRQSTAT: %08" PRIx32 " IRQSIGEN %08" PRIx32
+         " enabled: %08" PRIx32 "\n",
+         getreg32(CXD56_SDHCI_IRQSTAT), regval, enabled);
 
   /* Disable card interrupts to clear the card interrupt to the host
    * system.
@@ -1218,7 +1203,7 @@ static int cxd56_interrupt(int irq, FAR void *context, FAR void *arg)
     {
       /* Clear error interrupts */
 
-      mcerr("ERROR: Occur error interrupts: %08x\n", enabled);
+      mcerr("ERROR: Occur error interrupts: %08" PRIx32 "\n", enabled);
       putreg32(enabled & SDHCI_EINT_MASK, CXD56_SDHCI_IRQSTAT);
     }
 
@@ -1347,9 +1332,10 @@ static void cxd56_sdio_sdhci_reset(FAR struct sdio_dev_s *dev)
 
   putreg32(SDHCI_INT_ALL & (~SDHCI_INT_CINT), CXD56_SDHCI_IRQSTATEN);
 
-  mcinfo("SYSCTL: %08x PRSSTAT: %08x IRQSTATEN: %08x\n",
-        getreg32(CXD56_SDHCI_SYSCTL), getreg32(CXD56_SDHCI_PRSSTAT),
-        getreg32(CXD56_SDHCI_IRQSTATEN));
+  mcinfo("SYSCTL: %08" PRIx32 " PRSSTAT: %08" PRIx32
+         " IRQSTATEN: %08" PRIx32 "\n",
+         getreg32(CXD56_SDHCI_SYSCTL), getreg32(CXD56_SDHCI_PRSSTAT),
+         getreg32(CXD56_SDHCI_IRQSTATEN));
 
   /* Initialize the SDHC slot structure data structure */
 
@@ -1546,7 +1532,7 @@ static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
   regval  = getreg32(CXD56_SDHCI_SYSCTL);
   regval &= ~SDHCI_SYSCTL_SDCLKEN;
   putreg32(regval, CXD56_SDHCI_SYSCTL);
-  mcinfo("SYSCTRL: %08x\n", getreg32(CXD56_SDHCI_SYSCTL));
+  mcinfo("SYSCTRL: %08" PRIx32 "\n", getreg32(CXD56_SDHCI_SYSCTL));
 
   /* sel_ttclk bit[16] */
 
@@ -1593,7 +1579,7 @@ static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
         regval &= ~(SDHCI_SYSCTL_SDCLKFS_MASK | SDHCI_SYSCTL_SDCLKFSUP_MASK);
         putreg32(regval, CXD56_SDHCI_SYSCTL);
         cxd56_sdio_frequency(CONFIG_CXD56_IDMODE_FREQ);
-        mcinfo("SYSCTRL: %08x\n", getreg32(CXD56_SDHCI_SYSCTL));
+        mcinfo("SYSCTRL: %08" PRIx32 "\n", getreg32(CXD56_SDHCI_SYSCTL));
         return;
       }
 
@@ -1635,7 +1621,7 @@ static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
       putreg32(regval | SDHCI_SYSCTL_SDCLKEN, CXD56_SDHCI_SYSCTL);
     }
   while ((getreg32(CXD56_SDHCI_SYSCTL) & SDHCI_SYSCTL_SDCLKEN) == 0);
-  mcinfo("SYSCTRL: %08x\n", getreg32(CXD56_SDHCI_SYSCTL));
+  mcinfo("SYSCTRL: %08" PRIx32 "\n", getreg32(CXD56_SDHCI_SYSCTL));
 }
 
 /****************************************************************************
@@ -1821,7 +1807,8 @@ static int cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
 
   /* Other bits? What about CMDTYP? */
 
-  mcinfo("cmd: %08x arg: %08x regval: %08x\n", cmd, arg, regval);
+  mcinfo("cmd: %08" PRIx32 " arg: %08" PRIx32 " regval: %08" PRIx32 "\n",
+         cmd, arg, regval);
 
   /* The Command Inhibit (CIHB) bit is set in the PRSSTAT bit immediately
    * after the transfer type register is written.  This bit is cleared when
@@ -1837,8 +1824,8 @@ static int cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
     {
       if (--timeout <= 0)
         {
-          mcerr("ERROR: Timeout cmd: %08x PRSSTAT: %08x\n",
-               cmd, getreg32(CXD56_SDHCI_PRSSTAT));
+          mcerr("ERROR: Timeout cmd: %08" PRIx32 " PRSSTAT: %08" PRIx32 "\n",
+                cmd, getreg32(CXD56_SDHCI_PRSSTAT));
 
           return -EBUSY;
         }
@@ -1851,8 +1838,9 @@ static int cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
         {
           if (--timeout <= 0)
             {
-              mcerr("ERROR: Timeout cmd data: %08x PRSSTAT: %08x\n",
-                   cmd, getreg32(CXD56_SDHCI_PRSSTAT));
+              mcerr("ERROR: Timeout cmd data: %08" PRIx32
+                    " PRSSTAT: %08" PRIx32 "\n",
+                    cmd, getreg32(CXD56_SDHCI_PRSSTAT));
 
               return -EBUSY;
             }
@@ -2185,7 +2173,7 @@ static int cxd56_sdio_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
       timeout -= 1;
       if (timeout <= 0)
         {
-          mcerr("ERROR: Timeout cmd: %08x IRQSTAT: %08x\n",
+          mcerr("ERROR: Timeout cmd: %08" PRIx32 " IRQSTAT: %08" PRIx32 "\n",
                cmd, getreg32(CXD56_SDHCI_IRQSTAT));
           putreg32(0, CXD56_SDHCI_IRQSIGEN);
 
@@ -2197,8 +2185,9 @@ static int cxd56_sdio_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
 
   if ((getreg32(CXD56_SDHCI_IRQSTAT) & errors) != 0)
     {
-      mcerr("ERROR: cmd: %08x errors: %08x IRQSTAT: %08x\n",
-           cmd, errors, getreg32(CXD56_SDHCI_IRQSTAT));
+      mcerr("ERROR: cmd: %08" PRIx32 " errors: %08" PRIx32
+            " IRQSTAT: %08" PRIx32 "\n",
+            cmd, errors, getreg32(CXD56_SDHCI_IRQSTAT));
       ret = -EIO;
     }
 
@@ -2295,7 +2284,7 @@ static int cxd56_sdio_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
            (cmd & MMCSD_RESPONSE_MASK) != MMCSD_R1B_RESPONSE &&
            (cmd & MMCSD_RESPONSE_MASK) != MMCSD_R6_RESPONSE)
     {
-      mcerr("ERROR: Wrong response CMD=%08x\n", cmd);
+      mcerr("ERROR: Wrong response CMD=%08" PRIx32 "\n", cmd);
       ret = -EINVAL;
     }
   else
@@ -2306,12 +2295,12 @@ static int cxd56_sdio_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
       regval = getreg32(CXD56_SDHCI_IRQSTAT);
       if ((regval & SDHCI_INT_CTOE) != 0)
         {
-          mcerr("ERROR: Command timeout: %08x\n", regval);
+          mcerr("ERROR: Command timeout: %08" PRIx32 "\n", regval);
           ret = -ETIMEDOUT;
         }
       else if ((regval & SDHCI_INT_CCE) != 0)
         {
-          mcerr("ERROR: CRC failure: %08x\n", regval);
+          mcerr("ERROR: CRC failure: %08" PRIx32 "\n", regval);
           ret = -EIO;
         }
     }
@@ -2354,7 +2343,7 @@ static int cxd56_sdio_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
 
   if ((cmd & MMCSD_RESPONSE_MASK) != MMCSD_R2_RESPONSE)
     {
-      mcerr("ERROR: Wrong response CMD=%08x\n", cmd);
+      mcerr("ERROR: Wrong response CMD=%08" PRIx32 "\n", cmd);
       ret = -EINVAL;
     }
   else
@@ -2365,12 +2354,12 @@ static int cxd56_sdio_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
       regval = getreg32(CXD56_SDHCI_IRQSTAT);
       if (regval & SDHCI_INT_CTOE)
         {
-          mcerr("ERROR: Timeout IRQSTAT: %08x\n", regval);
+          mcerr("ERROR: Timeout IRQSTAT: %08" PRIx32 "\n", regval);
           ret = -ETIMEDOUT;
         }
       else if (regval & SDHCI_INT_CCE)
         {
-          mcerr("ERROR: CRC fail IRQSTAT: %08x\n", regval);
+          mcerr("ERROR: CRC fail IRQSTAT: %08" PRIx32 "\n", regval);
           ret = -EIO;
         }
     }
@@ -2452,7 +2441,7 @@ static int cxd56_sdio_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
       (cmd & MMCSD_RESPONSE_MASK) != MMCSD_R5_RESPONSE &&
       (cmd & MMCSD_RESPONSE_MASK) != MMCSD_R7_RESPONSE)
     {
-      mcerr("ERROR: Wrong response CMD=%08x\n", cmd);
+      mcerr("ERROR: Wrong response CMD=%08" PRIx32 "\n", cmd);
       ret = -EINVAL;
     }
   else
@@ -2465,7 +2454,7 @@ static int cxd56_sdio_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
       regval = getreg32(CXD56_SDHCI_IRQSTAT);
       if (regval & SDHCI_INT_CTOE)
         {
-          mcerr("ERROR: Timeout IRQSTAT: %08x\n", regval);
+          mcerr("ERROR: Timeout IRQSTAT: %08" PRIx32 "\n", regval);
           ret = -ETIMEDOUT;
         }
     }

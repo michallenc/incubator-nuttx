@@ -43,12 +43,14 @@
 #include <syslog.h>
 
 #ifdef CONFIG_NRF52_WDT
-#  include "nrf52_wdt.h"
+#  include "nrf52_wdt_lowerhalf.h"
 #endif
 
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
 #endif
+
+#include "nrf52-feather.h"
 
 /****************************************************************************
  * Public Functions
@@ -90,6 +92,10 @@ int nrf52_bringup(void)
     {
       syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
     }
+#endif
+
+#if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
+  nrf52_i2ctool();
 #endif
 
   UNUSED(ret);

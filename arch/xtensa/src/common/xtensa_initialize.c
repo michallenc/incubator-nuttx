@@ -57,6 +57,44 @@
 #include <arch/board/board.h>
 
 #include "xtensa.h"
+#include "chip_macros.h"
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: xtensa_color_intstack
+ *
+ * Description:
+ *   Set the interrupt stack to a value so that later we can determine how
+ *   much stack space was used by interrupt handling logic
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_STACK_COLORATION) && CONFIG_ARCH_INTERRUPTSTACK > 15
+static inline void xtensa_color_intstack(void)
+{
+#ifdef CONFIG_SMP
+  uint32_t *ptr = (uint32_t *)xtensa_intstack_alloc();
+#else
+  uint32_t *ptr = (uint32_t *)&g_intstackalloc;
+#endif
+  ssize_t size;
+
+#ifdef CONFIG_SMP
+  for (size = INTSTACK_SIZE * CONFIG_SMP_NCPUS;
+#else
+  for (size = INTSTACK_SIZE;
+#endif
+       size > 0; size -= sizeof(uint32_t))
+    {
+      *ptr++ = INTSTACK_COLOR;
+    }
+}
+#else
+#  define xtensa_color_intstack()
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -81,6 +119,8 @@
 
 void up_initialize(void)
 {
+  xtensa_color_intstack();
+
 #ifdef CONFIG_SMP
   int i;
 
@@ -106,6 +146,12 @@ void up_initialize(void)
    */
 
   xtensa_pminitialize();
+#endif
+
+  /* Initialize the internal heap */
+
+#ifdef CONFIG_XTENSA_USE_SEPARATE_IMEM
+  xtensa_imm_initialize();
 #endif
 
 #ifdef CONFIG_ARCH_DMA
@@ -208,5 +254,6 @@ void up_initialize(void)
   /* Initialize USB -- device and/or host */
 
   up_usbinitialize();
+
   board_autoled_on(LED_IRQSENABLED);
 }
