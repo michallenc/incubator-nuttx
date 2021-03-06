@@ -537,10 +537,10 @@ static void imxrt_reset(struct imxrt_driver_s *priv);
 
 static bool imxrt_txringfull(FAR struct imxrt_driver_s *priv)
 {
-  uint32_t mbi = RXMBCOUNT;
+  uint32_t mbi = RXMBCOUNT+1;
   struct mb_s *mb;
 
-  while (mbi < TXMBCOUNT)
+  while (mbi < TOTALMBCOUNT)
     {
       mb = flexcan_get_mb(priv, mbi);
       if (mb->cs.code != CAN_TXMB_DATAORREMOTE)
@@ -589,14 +589,7 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
   int32_t timeout;
 #endif
 
-  if ((getreg32(priv->base + IMXRT_CAN_ESR2_OFFSET) &
-      (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
-      (CAN_ESR2_IMB | CAN_ESR2_VPS))
-    {
-      mbi  = ((getreg32(priv->base + IMXRT_CAN_ESR2_OFFSET) &
-        CAN_ESR2_LPTM_MASK) >> CAN_ESR2_LPTM_SHIFT);
-    }
-
+  mbi = RXMBCOUNT+1;
   mb_bit = 1 << mbi;
 
   while (mbi < TOTALMBCOUNT)
@@ -796,9 +789,7 @@ static int imxrt_txpoll(struct net_driver_s *dev)
            * not, return a non-zero value to terminate the poll.
            */
 
-          if (!((getreg32(priv->base + IMXRT_CAN_ESR2_OFFSET) &
-              (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
-              (CAN_ESR2_IMB | CAN_ESR2_VPS)) || (imxrt_txringfull(priv)))
+          if (imxrt_txringfull(priv))
                 {
                   return -EBUSY;
                 }
@@ -1392,9 +1383,7 @@ static void imxrt_txavail_work(FAR void *arg)
        * packet.
        */
 
-      if (imxrt_waitesr2_change(priv->base,
-                             (CAN_ESR2_IMB | CAN_ESR2_VPS),
-                             (CAN_ESR2_IMB | CAN_ESR2_VPS)))
+      if (!imxrt_txringfull(priv))
         {
           /* No, there is space for another transfer.  Poll the network for
            * new XMIT data.
