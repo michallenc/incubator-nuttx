@@ -119,21 +119,6 @@
 #define NENET_NBUFFERS \
   (CONFIG_IMXRT_ENET_NTXBUFFERS + CONFIG_IMXRT_ENET_NRXBUFFERS)
 
-/* Normally you would clean the cache after writing new values to the DMA
- * memory so assure that the dirty cache lines are flushed to memory
- * before the DMA occurs.  And you would invalid the cache after a data is
- * received via DMA so that you fetch the actual content of the data from
- * the cache.
- *
- * These conditions are not fully supported here.  If the write-throuch
- * D-Cache is enabled, however, then many of these issues go away:  The
- * cache clean operation does nothing (because there are not dirty cache
- * lines) and the cache invalid operation is innocuous (because there are
- * never dirty cache lines to be lost; valid data will always be reloaded).
- *
- * At present, we simply insist that write through cache be enabled.
- */
-
 /* TX poll delay = 1 seconds. CLK_TCK is the number of clock ticks per
  * second.
  */
@@ -519,7 +504,6 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
 
   up_clean_dcache((uintptr_t)priv->dev.d_buf,
                   (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
-  
 
   txdesc = &priv->txdesc[priv->txhead];
 
@@ -554,13 +538,12 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
   if (priv->rxdesc[priv->rxtail].data == buf)
     {
       struct enet_desc_s *rxdesc = &priv->rxdesc[priv->rxtail];
+
       /* Data was written into the RX buffer, so swap the TX and RX buffers */
 
       DEBUGASSERT((rxdesc->status1 & RXDESC_E) == 0);
       rxdesc->data = txdesc->data;
       txdesc->data = buf;
-      up_clean_dcache((uintptr_t)rxdesc,
-                      (uintptr_t)rxdesc + sizeof(struct enet_desc_s));
     }
   else
     {
@@ -659,9 +642,6 @@ static int imxrt_txpoll(struct net_driver_s *dev)
           priv->dev.d_buf = (uint8_t *)
               imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
 
-          up_clean_dcache((uintptr_t)priv->dev.d_buf,
-                          (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
-
           /* Check if there is room in the device to hold another packet. If
            * not, return a non-zero value to terminate the poll.
            */
@@ -705,7 +685,7 @@ static inline void imxrt_dispatch(FAR struct imxrt_driver_s *priv)
   NETDEV_RXPACKETS(&priv->dev);
 
   up_invalidate_dcache((uintptr_t)priv->dev.d_buf,
-                          (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+                       (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
 
 #ifdef CONFIG_NET_PKT
   /* When packet sockets are enabled, feed the frame into the tap */
@@ -797,8 +777,9 @@ static inline void imxrt_dispatch(FAR struct imxrt_driver_s *priv)
   else
 #endif
 #ifdef CONFIG_NET_ARP
+
   /* Check for an ARP packet */
-  
+
   if (BUF->type == htons(ETHTYPE_ARP))
     {
       NETDEV_RXARP(&priv->dev);
@@ -2424,7 +2405,6 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
       addr                   += IMXRT_BUF_SIZE;
     }
 
-
   /* Then fill in the RX descriptors */
 
   for (i = 0; i < CONFIG_IMXRT_ENET_NRXBUFFERS; i++)
@@ -2437,7 +2417,6 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
       priv->rxdesc[i].status2 = RXDESC_INT;
 #endif
       addr                   += IMXRT_BUF_SIZE;
-
     }
 
   /* Set the wrap bit in the last descriptors to form a ring */
@@ -2456,11 +2435,11 @@ static void imxrt_initbuffers(struct imxrt_driver_s *priv)
   priv->dev.d_buf =
     (uint8_t *)imxrt_swap32((uint32_t)priv->txdesc[priv->txhead].data);
   up_clean_dcache((uintptr_t)priv->rxdesc,
-                 (uintptr_t)priv->rxdesc + CONFIG_IMXRT_ENET_NRXBUFFERS * sizeof(struct enet_desc_s));
+                 (uintptr_t)priv->rxdesc + CONFIG_IMXRT_ENET_NRXBUFFERS
+                  * sizeof(struct enet_desc_s));
   up_clean_dcache((uintptr_t)priv->txdesc,
-                 (uintptr_t)priv->txdesc + CONFIG_IMXRT_ENET_NTXBUFFERS * sizeof(struct enet_desc_s));
-  up_clean_dcache((uintptr_t)priv->dev.d_buf,
-                  (uintptr_t)priv->dev.d_buf + priv->dev.d_len);
+                 (uintptr_t)priv->txdesc + CONFIG_IMXRT_ENET_NTXBUFFERS
+                 * sizeof(struct enet_desc_s));
 }
 
 /****************************************************************************
