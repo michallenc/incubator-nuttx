@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/xtensa/src/common/xtensa_irq.S
+ * arch/xtensa/src/common/xtensa_attr.h
  *
  * Adapted from use in NuttX by:
  *
@@ -26,6 +26,12 @@
 
 #ifndef __ARCH_XTENSA_SRC_COMMON_XTENSA_ATTR_H
 #define __ARCH_XTENSA_SRC_COMMON_XTENSA_ATTR_H
+
+/****************************************************************************
+ * Included Files
+ ****************************************************************************/
+
+#include <nuttx/config.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -62,5 +68,13 @@
  */
 
 #define RTC_RODATA_ATTR __attribute__((section(".rtc.rodata")))
+
+/* Allow bss variables into external memory. */
+
+#ifdef CONFIG_XTENSA_EXTMEM_BSS
+#  define EXT_RAM_ATTR __attribute__((section(".extmem.bss")))
+#else
+#  define EXT_RAM_ATTR
+#endif
 
 #endif /* __ARCH_XTENSA_SRC_COMMON_XTENSA_ATTR_H */

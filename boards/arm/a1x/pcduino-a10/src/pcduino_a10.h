@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/a1x/pcduino-a10/src/pcduino-a10.h
+ * boards/arm/a1x/pcduino-a10/src/pcduino_a10.h
  *
  *   Copyright (C) 2013, 2019 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -102,9 +102,9 @@
  *   LED_PANIC         The system has crashed   N/C  N/C  2Hz Flashing
  *   LED_IDLE          MCU is is sleep mode         Not used
  *
- * After booting, LED1 and 3 are not longer used by the system and can be used
- * for other purposes by the application (Of course, all LEDs are available to
- * the application if CONFIG_ARCH_LEDS is not defined.
+ * After booting, LED1 and 3 are not longer used by the system and can be
+ * used for other purposes by the application (Of course, all LEDs are
+ * available to the application if CONFIG_ARCH_LEDS is not defined.
  */
 
 /* Buttons ******************************************************************/
@@ -142,13 +142,13 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Public data
+ * Public Data
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
 
 /****************************************************************************
- * Public Functions
+ * Public Functions Definitions
  ****************************************************************************/
 
 /****************************************************************************

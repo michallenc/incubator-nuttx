@@ -180,6 +180,10 @@ int esp32_configgpio(int pin, gpio_pinattr_t attr)
           putreg32((1ul << (pin - 32)), GPIO_ENABLE1_W1TC_REG);
         }
 
+      /* Input enable */
+
+      func |= FUN_IE;
+
       if ((attr & PULLUP) != 0)
         {
           func |= FUN_PU;
@@ -192,7 +196,7 @@ int esp32_configgpio(int pin, gpio_pinattr_t attr)
 
   /* Handle output pins */
 
-  else if ((attr & OUTPUT) != 0)
+  if ((attr & OUTPUT) != 0)
     {
       if (pin < 32)
         {
@@ -208,10 +212,6 @@ int esp32_configgpio(int pin, gpio_pinattr_t attr)
 
   func |= (uint32_t)(2ul << FUN_DRV_S);
 
-  /* Input enable... Required for output as well? */
-
-  func |= FUN_IE;
-
   /* Select the pad's function.  If no function was given, consider it a
    * normal input or output (i.e. function3).
    */
@@ -222,12 +222,12 @@ int esp32_configgpio(int pin, gpio_pinattr_t attr)
     }
   else
     {
-      func |= (uint32_t)((2 >> FUNCTION_SHIFT) << MCU_SEL_S);
+      func |= (uint32_t)(PIN_FUNC_GPIO << MCU_SEL_S);
     }
 
   if ((attr & OPEN_DRAIN) != 0)
     {
-      cntrl = (1 << GPIO_PIN_PAD_DRIVER_S);
+      cntrl |= (1 << GPIO_PIN_PAD_DRIVER_S);
     }
 
   regaddr = DR_REG_IO_MUX_BASE + g_pin2func[pin];

@@ -118,7 +118,6 @@ struct file_section_s
  * Private data
  ********************************************************************************/
 
-static char *g_file_name        = "";
 static enum file_e g_file_type  = UNKNOWN;
 static enum section_s g_section = NO_SECTION;
 static int g_maxline            = DEFAULT_WIDTH;
@@ -127,6 +126,7 @@ static int g_verbose            = 2;
 static int g_rangenumber        = 0;
 static int g_rangestart[RANGE_NUMBER];
 static int g_rangecount[RANGE_NUMBER];
+static char g_file_name[PATH_MAX];
 
 static const struct file_section_s g_section_info[] =
 {
@@ -206,10 +206,63 @@ static const char *g_white_prefix[] =
 
 static const char *g_white_list[] =
 {
-  "__EIT_entry",             /* Ref:  gnu_unwind_find_exidx.c */
-  "__gnu_Unwind_Find_exidx", /* Ref:  gnu_unwind_find_exidx.c */
-  "_Exit",                   /* Ref:  stdlib.h */
-  "_Unwind_Ptr",             /* Ref:  unwind-arm-common.h */
+  /* Ref:  gnu_unwind_find_exidx.c */
+
+  "__EIT_entry",
+
+  /* Ref:  gnu_unwind_find_exidx.c */
+
+  "__gnu_Unwind_Find_exidx",
+
+  /* Ref:  stdlib.h */
+
+  "_Exit",
+
+  /* Ref:  unwind-arm-common.h */
+
+  "_Unwind_Ptr",
+
+  /* Ref:
+   * https://pubs.opengroup.org/onlinepubs/9699919799/functions/tempnam.html
+   */
+
+  "P_tmpdir",
+
+  /* Ref:
+   * https://pubs.opengroup.org/onlinepubs/9699919799/functions/tempnam.html
+   */
+
+  "L_tmpnam",
+
+  /* Ref: ascii.h */
+
+  "ASCII_a",
+  "ASCII_b",
+  "ASCII_c",
+  "ASCII_d",
+  "ASCII_e",
+  "ASCII_f",
+  "ASCII_g",
+  "ASCII_h",
+  "ASCII_i",
+  "ASCII_j",
+  "ASCII_k",
+  "ASCII_l",
+  "ASCII_m",
+  "ASCII_n",
+  "ASCII_o",
+  "ASCII_p",
+  "ASCII_q",
+  "ASCII_r",
+  "ASCII_s",
+  "ASCII_t",
+  "ASCII_u",
+  "ASCII_v",
+  "ASCII_w",
+  "ASCII_x",
+  "ASCII_y",
+  "ASCII_z",
+
   NULL
 };
 
@@ -653,7 +706,13 @@ int main(int argc, char **argv, char **envp)
       show_usage(argv[0], 1, "No file name given.");
     }
 
-  g_file_name = argv[optind];
+  /* Resolve the absolute path for the input file */
+
+  if (realpath(argv[optind], g_file_name) == NULL)
+    {
+      FATALFL("Failed to resolve absolute path.", g_file_name);
+      return 1;
+    }
 
   /* Are we parsing a header file? */
 
@@ -805,6 +864,108 @@ int main(int argc, char **argv, char **envp)
           if (lineno == 1 && (line[n] != '/' || line[n + 1] != '*'))
             {
                ERROR("Missing file header comment block", lineno, 1);
+            }
+
+          if (lineno == 2)
+            {
+              if (line[n] == '*' && line[n + 1] == '\n')
+                {
+                  ERROR("Missing relative file path in file header", lineno,
+                        n);
+                }
+              else if (isspace(line[n + 2]))
+                {
+                  ERROR("Too many whitespaces before relative file path",
+                        lineno, n);
+                }
+              else
+                {
+                  const char *apps_dir = "apps/";
+                  const size_t apps_len = strlen(apps_dir);
+                  size_t offset;
+
+#ifdef TOPDIR
+                  /* TOPDIR macro contains the absolute path to the "nuttx"
+                   * root directory. It should have been defined via Makefile
+                   * and it is required to accurately evaluate the relative
+                   * path contained in the file header. Otherwise, skip this
+                   * verification.
+                   */
+
+                  char *basedir = strstr(g_file_name, TOPDIR);
+                  if (basedir != NULL)
+                    {
+                      /* Add 1 to the offset for the slash character */
+
+                      offset = strlen(TOPDIR) + 1;
+
+                      /* Duplicate the line from the beginning of the
+                       * relative file path, removing the '\n' at the end of
+                       * the string.
+                       */
+
+                      char *line_dup = strndup(&line[n + 2],
+                                               strlen(&line[n + 2]) - 1);
+
+                      if (strcmp(line_dup, basedir + offset) != 0)
+                        {
+                          ERROR("Relative file path does not match actual file",
+                                lineno, n);
+                        }
+
+                      free(line_dup);
+                    }
+                  else if (strncmp(&line[n + 2], apps_dir, apps_len) != 0)
+                    {
+                      /* g_file_name neither belongs to "nuttx" repository
+                       * nor begins with the root dir of the other
+                       * repository (e.g. "apps/")
+                       */
+
+                      ERROR("Path relative to repository other than \"nuttx\" "
+                            "must begin with the root directory", lineno, n);
+                    }
+                  else
+                    {
+#endif
+
+                      offset = 0;
+
+                      if (strncmp(&line[n + 2], apps_dir, apps_len) == 0)
+                        {
+                          /* Input file belongs to the "apps" repository */
+
+                          /* Calculate the offset to the first directory
+                           * after the "apps/" folder.
+                           */
+
+                          offset += apps_len;
+                        }
+
+                      /* Duplicate the line from the beginning of the
+                       * relative file path, removing the '\n' at the end of
+                       * the string.
+                       */
+
+                      char *line_dup = strndup(&line[n + 2],
+                                              strlen(&line[n + 2]) - 1);
+
+                      ssize_t base =
+                        strlen(g_file_name) - strlen(&line_dup[offset]);
+
+                      if (base < 0 ||
+                          (base != 0 && g_file_name[base - 1] != '/') ||
+                          strcmp(&g_file_name[base], &line_dup[offset]) != 0)
+                        {
+                          ERROR("Relative file path does not match actual file",
+                                lineno, n);
+                        }
+
+                      free(line_dup);
+#ifdef TOPDIR
+                    }
+#endif
+                }
             }
 
           /* Check for a blank line following a right brace */

@@ -38,8 +38,20 @@ ifeq ($(CONFIG_DEV_GPIO),y)
 CSRCS += esp32c3_gpio.c
 endif
 
+ifeq ($(CONFIG_I2C_DRIVER),y)
+CSRCS += esp32c3_i2c.c
+endif
+
+ifeq ($(CONFIG_SENSORS_BMP180),y)
+CSRCS += esp32c3_bmp180.c
+endif
+
 ifeq ($(CONFIG_WATCHDOG),y)
 CSRCS += esp32c3_wdt.c
+endif
+
+ifeq ($(CONFIG_TIMER),y)
+CSRCS += esp32c3_timer.c
 endif
 
 SCRIPTIN = $(SCRIPTDIR)$(DELIM)esp32c3.template.ld

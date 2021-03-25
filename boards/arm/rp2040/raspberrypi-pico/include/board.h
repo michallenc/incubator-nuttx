@@ -27,6 +27,11 @@
 
 #include <nuttx/config.h>
 
+#include "rp2040_i2cdev.h"
+#include "rp2040_spidev.h"
+
+#include "rp2040_spisd.h"
+
 #ifndef __ASSEMBLY__
 # include <stdint.h>
 #endif
@@ -56,7 +61,6 @@
 
 /* GPIO definitions *********************************************************/
 
-#define BOARD_GPIO_UART_PIN     0
 #define BOARD_GPIO_LED_PIN      25
 
 /****************************************************************************

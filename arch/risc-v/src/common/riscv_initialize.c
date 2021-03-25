@@ -123,7 +123,7 @@ void up_initialize(void)
    * with the power management subsystem).
    */
 
-  up_pminitialize();
+  riscv_pminitialize();
 #endif
 
   /* Register devices */
@@ -143,7 +143,7 @@ void up_initialize(void)
   /* Initialize the serial device driver */
 
 #ifdef USE_SERIALDRIVER
-  up_serialinit();
+  riscv_serialinit();
 #endif
 
 #ifdef CONFIG_RPMSG_UART
@@ -162,6 +162,12 @@ void up_initialize(void)
   /* Register the master pseudo-terminal multiplexor device */
 
   ptmx_register();
+#endif
+
+#ifdef CONFIG_NET_LOOPBACK
+  /* Initialize the local loopback device */
+
+  localhost_initialize();
 #endif
 
   board_autoled_on(LED_IRQSENABLED);

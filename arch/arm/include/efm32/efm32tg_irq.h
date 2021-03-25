@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/include/efm32s/efm32tg_irq.h
+ * arch/arm/include/efm32/efm32tg_irq.h
  *
  *   Copyright (C) 2014 Pierre-noel Bouteville . All rights reserved.
  *   Author: Pierre-noel Bouteville <pnb990@gmail.com>
@@ -45,7 +45,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Pre-processor Definitions
+ * Pre-processor Prototypes
  ****************************************************************************/
 
 /* IRQ numbers.  The IRQ number corresponds vector number and hence map
@@ -103,7 +103,7 @@ extern "C"
 #endif
 
 /****************************************************************************
- * Public Functions
+ * Public Functions Prototypes
  ****************************************************************************/
 
 #undef EXTERN

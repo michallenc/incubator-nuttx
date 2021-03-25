@@ -54,3 +54,14 @@ uint8_t esp32_spi2_status(FAR struct spi_dev_s *dev, uint32_t devid)
 
   return status;
 }
+
+/****************************************************************************
+ * Name:  esp32_spi3_status
+ ****************************************************************************/
+
+uint8_t esp32_spi3_status(FAR struct spi_dev_s *dev, uint32_t devid)
+{
+  uint8_t status = 0;
+
+  return status;
+}

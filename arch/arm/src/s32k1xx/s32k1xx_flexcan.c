@@ -53,9 +53,7 @@
 
 #include <arch/board/board.h>
 
-#ifdef CONFIG_NET_CMSG
 #include <sys/time.h>
-#endif
 
 #ifdef CONFIG_S32K1XX_FLEXCAN
 
@@ -92,11 +90,7 @@
 
 #define POOL_SIZE                   1
 
-#ifdef CONFIG_NET_CMSG
 #define MSG_DATA                    sizeof(struct timeval)
-#else
-#define MSG_DATA                    0
-#endif
 
 /* CAN bit timing values  */
 #define CLK_FREQ                    80000000
@@ -1587,6 +1581,15 @@ static int s32k1xx_initialize(struct s32k1xx_driver_s *priv)
       ninfo("FLEXCAN: freeze fail\r\n");
       return -1;
     }
+
+  /* Reset CTRL1 register to reset value */
+
+  regval  = getreg32(priv->base + S32K1XX_CAN_CTRL1_OFFSET);
+  regval &= ~(CAN_CTRL1_LOM | CAN_CTRL1_LBUF | CAN_CTRL1_TSYN |
+              CAN_CTRL1_BOFFREC | CAN_CTRL1_SMP | CAN_CTRL1_RWRNMSK |
+              CAN_CTRL1_TWRNMSK | CAN_CTRL1_LPB | CAN_CTRL1_ERRMSK |
+              CAN_CTRL1_BOFFMSK);
+  putreg32(regval, priv->base + S32K1XX_CAN_CTRL1_OFFSET);
 
 #ifndef CONFIG_NET_CAN_CANFD
   regval  = getreg32(priv->base + S32K1XX_CAN_CTRL1_OFFSET);

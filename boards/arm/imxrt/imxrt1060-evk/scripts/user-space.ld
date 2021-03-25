@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/imxrt/simxrt1060-evk/scripts/user-space.ld
+ * boards/arm/imxrt/imxrt1060-evk/scripts/user-space.ld
  *
  *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
  *   Authors: Gregory Nutt <gnutt@nuttx.org>
@@ -45,8 +45,6 @@
 
 EXTERN(umm_initialize)
 EXTERN(umm_addregion)
-EXTERN(umm_trysemaphore)
-EXTERN(umm_givesemaphore)
 
 EXTERN(malloc)
 EXTERN(realloc)

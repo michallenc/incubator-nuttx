@@ -1,5 +1,5 @@
 /****************************************************************************
- * common/up_exit.c
+ * arch/or1k/src/common/up_exit.c
  *
  *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -84,18 +84,23 @@ static void _up_dumponexit(FAR struct tcb_s *tcb, FAR void *arg)
   FAR struct file_struct *filep;
 #endif
   int i;
+  int j;
 
   sinfo("  TCB=%p name=%s pid=%d\n", tcb, tcb->argv[0], tcb->pid);
   sinfo("    priority=%d state=%d\n", tcb->sched_priority, tcb->task_state);
 
   filelist = tcb->group->tg_filelist;
-  for (i = 0; i < CONFIG_NFILE_DESCRIPTORS; i++)
+  for (i = 0; i < filelist->fl_rows; i++)
     {
-      struct inode *inode = filelist->fl_files[i].f_inode;
-      if (inode != NULL)
+      for (j = 0; j < CONFIG_NFILE_DESCRIPTORS_PER_BLOCK; j++)
         {
-          sinfo("      fd=%d refcount=%d\n",
-                i, inode->i_crefssinfo);
+          struct inode *inode = filelist->fl_files[i][j].f_inode;
+          if (inode)
+            {
+              sinfo("      fd=%d refcount=%d\n",
+                    i * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK + j,
+                    inode->i_crefs);
+            }
         }
     }
 

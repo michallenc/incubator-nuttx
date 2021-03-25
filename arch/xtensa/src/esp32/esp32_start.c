@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/xtensa/src/common/esp32_start.c
+ * arch/xtensa/src/esp32/esp32_start.c
  *
  *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -157,6 +157,14 @@ void IRAM_ATTR __start(void)
       PANIC();
 #  endif
     }
+
+  /* Set external memory bss section to zero */
+
+#  ifdef CONFIG_XTENSA_EXTMEM_BSS
+     memset(&_sbss_extmem, 0,
+            (&_ebss_extmem - &_sbss_extmem) * sizeof(_sbss_extmem));
+#  endif
+
 #endif
 
   /* Initialize onboard resources */

@@ -1,5 +1,5 @@
 /****************************************************************************
- * lib/unistd/lib_sysconf.c
+ * libs/libc/unistd/lib_sysconf.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -208,7 +208,7 @@ long sysconf(int name)
   switch (name)
     {
       case _SC_OPEN_MAX:
-        return CONFIG_NFILE_DESCRIPTORS;
+        return _POSIX_OPEN_MAX;
 
       case _SC_ATEXIT_MAX:
 #ifdef CONFIG_SCHED_EXIT_MAX

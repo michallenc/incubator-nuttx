@@ -52,6 +52,12 @@ config ESP32C3_DUAL_CPU
 	bool
 	default n
 
+config ESP32C3_ESP32C3XXX
+	bool
+	default n
+	select ESP32C3_SINGLE_CPU
+	select ARCH_HAVE_I2CRESET
+
 config ESP32C3_FLASH_2M
 	bool
 	default n
@@ -68,10 +74,54 @@ config ESP32C3_FLASH_16M
 	bool
 	default n
 
-config ESP32C3_ESP32C3XXX
-	bool
+config ESP32C3_FLASH_DETECT
+	bool "Auto-detect FLASH size (to be used with master esptool)"
 	default n
-	select ESP32C3_SINGLE_CPU
+	help
+		Auto detect flash size when flashing.
+		Current released version of esptool doesn't support auto-detecting flash size.
+		Use latest master from https://github.com/espressif/esptool.
+
+choice ESP32C3_FLASH_MODE
+	prompt "SPI FLASH mode"
+	default ESP32C3_FLASH_MODE_DIO
+	help
+		These options control how many I/O pins are used for communication with the attached SPI flash chip.
+		The option selected here is then used by esptool when flashing.
+
+	config ESP32C3_FLASH_MODE_DIO
+		bool "Dual IO (DIO)"
+
+	config ESP32C3_FLASH_MODE_DOUT
+		bool "Dual Output (DOUT)"
+
+	config ESP32C3_FLASH_MODE_QIO
+		bool "Quad IO (QIO)"
+
+	config ESP32C3_FLASH_MODE_QOUT
+		bool "Quad Output (QOUT)"
+
+endchoice # ESP32C3_FLASH_MODE
+
+choice ESP32C3_FLASH_FREQ
+	prompt "SPI FLASH frequency"
+	default ESP32C3_FLASH_FREQ_40M
+	help
+		SPI FLASH frequency
+		
+	config ESP32C3_FLASH_FREQ_80M
+		bool "80 MHz"
+
+	config ESP32C3_FLASH_FREQ_40M
+		bool "40 MHz"
+
+	config ESP32C3_FLASH_FREQ_26M
+		bool "26 MHz"
+
+	config ESP32C3_FLASH_FREQ_20M
+		bool "20 MHz"
+
+endchoice # ESP32C3_FLASH_FREQ
 
 choice ESP32C3_CPU_FREQ
 	prompt "CPU frequency"
@@ -102,9 +152,25 @@ config ESP32C3_CPU_FREQ_MHZ
 	default 80 if ESP32C3_CPU_FREQ_80
 	default 160 if ESP32C3_CPU_FREQ_160
 
+config ESP32C3_RT_TIMER
+	bool "Real-time Timer"
+	default n
+
+config ESP32C3_DISABLE_STDC_ATOMIC
+	bool "Disable standard C atomic"
+	default n
+
 menu "ESP32-C3 Peripheral Support"
 
 config ESP32C3_UART
+	bool
+	default n
+
+config ESP32C3_I2C
+	bool
+	default n
+
+config ESP32C3_TIMER
 	bool
 	default n
 
@@ -122,12 +188,33 @@ config ESP32C3_UART0
 	default y
 	select ESP32C3_UART
 	select UART0_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
 
 config ESP32C3_UART1
 	bool "UART1"
 	default n
 	select ESP32C3_UART
 	select UART1_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config ESP32C3_I2C0
+	bool "I2C 0"
+	default n
+	select ESP32C3_I2C
+
+config ESP32C3_TIMER0
+	bool "54-bit Timer 0 (Group 0 Timer 0)"
+	default n
+	select ESP32C3_TIMER
+	---help---
+		Enables Timer 0
+
+config ESP32C3_TIMER1
+	bool "54-bit Timer 0 (Group 1 Timer 0)"
+	default n
+	select ESP32C3_TIMER
+	---help---
+		Enables Timer 1
 
 config ESP32C3_MWDT0
 	bool "Main System Watchdog Timer (Group 0)"
@@ -156,6 +243,144 @@ config ESP32C3_RWDT
 		to have the RTC module reset, please, use the Timers' Module WDTs.
 		They will only reset Main System.
 
+config ESP32C3_WIRELESS
+	bool "Wireless"
+	default n
+	select NET
+	select ARCH_PHY_INTERRUPT
+	select ESP32C3_RT_TIMER
+	select ESP32C3_TIMER0
+	---help---
+		Enable Wireless support
+
+endmenu # ESP32-C3 Peripheral Support
+
+menu "I2C Configuration"
+	depends on ESP32C3_I2C
+
+if ESP32C3_I2C0
+
+config ESP32C3_I2C0_SCLPIN
+	int "I2C0 SCL Pin"
+	default 6
+	range 0 21
+
+config ESP32C3_I2C0_SDAPIN
+	int "I2C0 SDA Pin"
+	default 5
+	range 0 21
+
+endif # ESP32C3_I2C0
+
+endmenu # I2C configuration
+
+menu "UART configuration"
+	depends on ESP32C3_UART
+
+if ESP32C3_UART0
+
+config ESP32C3_UART0_TXPIN
+	int "UART0 TX Pin"
+	default 21
+
+config ESP32C3_UART0_RXPIN
+	int "UART0 RX Pin"
+	default 20
+
+endif # ESP32C3_UART0
+
+if ESP32C3_UART1
+
+config ESP32C3_UART1_TXPIN
+	int "UART1 TX Pin"
+	default 18
+
+config ESP32C3_UART1_RXPIN
+	int "UART1 RX Pin"
+	default 19
+
+endif # ESP32C3_UART1
+
 endmenu
+
+menu "Real-Time Timer"
+	depends on ESP32C3_RT_TIMER
+
+config ESP32C3_RT_TIMER_TASK_NAME
+	string "Timer task name"
+	default "rt_timer"
+
+config ESP32C3_RT_TIMER_TASK_PRIORITY
+	int "Timer task priority"
+	default 223 # Lower than high priority workqueue
+
+config ESP32C3_RT_TIMER_TASK_STACK_SIZE
+	int "Timer task stack size"
+	default 2048
+
+endmenu # Real-Time Timer
+
+menu "Wi-Fi configuration"
+	depends on ESP32C3_WIRELESS
+
+config ESP32C3_WIFI_STATIC_RXBUF_NUM
+	int "Wi-Fi static RX buffer number"
+	default 10
+
+config ESP32C3_WIFI_DYNAMIC_RXBUF_NUM
+	int "Wi-Fi dynamic RX buffer number"
+	default 32
+
+config ESP32C3_WIFI_DYNAMIC_TXBUF_NUM
+	int "Wi-Fi dynamic TX buffer number"
+	default 32
+
+config ESP32C3_WIFI_TX_AMPDU
+	bool "Wi-Fi TX AMPDU"
+	default y
+
+config ESP32C3_WIFI_RX_AMPDU
+	bool "Wi-Fi RX AMPDU"
+	default y
+
+config ESP32C3_WIFI_RXBA_AMPDU_WZ
+	int "Wi-Fi RX BA AMPDU windown size"
+	default 6
+
+config ESP32C3_WLAN_RXBUF_NUM
+	int "WLAN netcard RX buffer number"
+	default 16
+
+config ESP32C3_WIFI_CONNECT_TIMEOUT
+	int "Connect timeout by second"
+	default 10
+	help
+		Max waiting time of connecting to AP.
+
+config ESP32C3_WIFI_SAVE_PARAM
+	bool "Save Wi-Fi Parameters"
+	default n
+	depends on !DISABLE_MOUNTPOINT
+	help
+		If you enable this option, Wi-Fi adapter parameters will be saved
+		into the file system instead of computing them each time.
+
+		These parameters mainly contains:
+		  - SSID
+		  - Password
+		  - BSSID
+		  - PMK(compute when connecting)
+		  - Author mode
+		  - MAC address
+		  - Wi-Fi hardware configuration parameters
+
+config ESP32C3_WIFI_FS_MOUNTPT
+	string "Save Wi-Fi Parameters"
+	default "/mnt/esp/wifi"
+	depends on ESP32C3_WIFI_SAVE_PARAM
+	help
+		Mount point of Wi-Fi storage file system.
+
+endmenu # ESP32C3_WIRELESS
 
 endif # ARCH_CHIP_ESP32C3

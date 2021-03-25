@@ -37,6 +37,8 @@
 
 #include <nuttx/fs/fs.h>
 
+#include "esp32c3_wlan.h"
+
 #include "esp32c3-devkit.h"
 
 /****************************************************************************
@@ -78,7 +80,7 @@ int esp32c3_bringup(void)
 #ifdef CONFIG_FS_TMPFS
   /* Mount the tmpfs file system */
 
-  ret = mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
+  ret = nx_mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to mount tmpfs at %s: %d\n",
@@ -95,6 +97,30 @@ int esp32c3_bringup(void)
     }
 #endif
 
+#if defined(CONFIG_I2C_DRIVER)
+  /* Configure I2C peripheral interfaces */
+
+  ret = board_i2c_init();
+
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize I2C driver: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_BMP180
+  /* Try to register BMP180 device in I2C0 */
+
+  ret = board_bmp180_initialize(0, 0);
+
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize BMP180 "
+                       "Driver for I2C0: %d\n", ret);
+      return ret;
+    }
+#endif
+
 #ifdef CONFIG_WATCHDOG
   /* Configure watchdog timer */
 
@@ -104,6 +130,27 @@ int esp32c3_bringup(void)
       syslog(LOG_ERR,
              "ERROR: Failed to initialize watchdog drivers: %d\n",
              ret);
+    }
+#endif
+
+#ifdef CONFIG_TIMER
+  /* Configure timer timer */
+
+  ret = board_tim_init();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to initialize timer drivers: %d\n",
+             ret);
+    }
+#endif
+
+#ifdef CONFIG_ESP32C3_WIRELESS
+  ret = esp32c3_wlan_sta_initialize();
+  if (ret)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize Wi-Fi\n");
+      return ret;
     }
 #endif
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/xtensa/common/xtensa.h
+ * arch/xtensa/src/common/xtensa.h
  *
  *   Copyright (C) 2016, 2018 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -216,6 +216,8 @@ extern uint32_t _sbss;              /* Start of .bss */
 extern uint32_t _ebss;              /* End+1 of .bss */
 extern uint32_t _sheap;             /* Start of heap */
 extern uint32_t _eheap;             /* End+1 of heap */
+extern uint32_t _sbss_extmem;       /* start of external memory bss */
+extern uint32_t _ebss_extmem;       /* End+1 of external memory bss */
 
 /****************************************************************************
  * Inline Functions

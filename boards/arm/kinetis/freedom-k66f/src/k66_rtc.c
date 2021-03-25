@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/kinetis/freedom-k66f/src/k66_bringup.c
+ * boards/arm/kinetis/freedom-k66f/src/k66_rtc.c
  *
  *   Copyright (C) 2016-2017 Gregory Nutt. All rights reserved.
  *   Authors: Gregory Nutt <gnutt@nuttx.org>
@@ -52,13 +52,13 @@
  * Public Functions
  ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Name: k66_rtc_initialize
  *
  * Description:
  *   Called to initialize the RTC FREEDOM-K66F board.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 int k66_rtc_initialize(void)
 {
@@ -88,5 +88,6 @@ int k66_rtc_initialize(void)
                  ret);
         }
     }
+
   return ret;
 }

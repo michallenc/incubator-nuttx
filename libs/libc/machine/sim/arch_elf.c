@@ -1,5 +1,5 @@
 /****************************************************************************
- * machine/sim/arm_elf.c
+ * libs/libc/machine/sim/arch_elf.c
  *
  *   Copyright (C) 2012, 2014, 2017 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -84,7 +84,7 @@ bool up_checkarch(FAR const Elf32_Ehdr *hdr)
  * Name: up_relocate and up_relocateadd
  *
  * Description:
- *   Perform on architecture-specific ELF relocation.  Every architecture
+ *   Perform an architecture-specific ELF relocation.  Every architecture
  *   that uses the ELF loader must provide this function.
  *
  * Input Parameters:

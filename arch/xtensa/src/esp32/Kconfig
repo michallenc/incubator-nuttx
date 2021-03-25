@@ -111,6 +111,12 @@ config ESP32_FLASH_16M
 	bool
 	default n
 
+config ESP32_FLASH_DETECT
+	bool "Auto-detect FLASH size"
+	default y
+	help
+		Auto detect flash size when flashing.
+
 config ESP32_PSRAM_8M
 	bool
 	default n
@@ -119,16 +125,60 @@ config ESP32_ESP32SXWDXX
 	bool
 	default n
 	select ESP32_SINGLE_CPU
+	select ARCH_HAVE_I2CRESET
 
 config ESP32_ESP32UXWDXX
 	bool
 	default n
 	select ESP32_SINGLE_CPU
+	select ARCH_HAVE_I2CRESET
 
 config ESP32_ESP32DXWDXX
 	bool
 	default n
 	select ESP32_DUAL_CPU
+	select ARCH_HAVE_I2CRESET
+
+choice ESP32_FLASH_MODE
+	prompt "SPI FLASH mode"
+	default ESP32_FLASH_MODE_DIO
+	help
+		These options control how many I/O pins are used for communication with the attached SPI flash chip.
+		The option selected here is then used by esptool when flashing.
+
+	config ESP32_FLASH_MODE_DIO
+		bool "Dual IO (DIO)"
+
+	config ESP32_FLASH_MODE_DOUT
+		bool "Dual Output (DOUT)"
+
+	config ESP32_FLASH_MODE_QIO
+		bool "Quad IO (QIO)"
+
+	config ESP32_FLASH_MODE_QOUT
+		bool "Quad Output (QOUT)"
+
+endchoice # ESP32_FLASH_MODE
+
+choice ESP32_FLASH_FREQ
+	prompt "SPI FLASH frequency"
+	default ESP32_FLASH_FREQ_40M
+	help
+		SPI FLASH frequency
+		
+	config ESP32_FLASH_FREQ_80M
+		bool "80 MHz"
+
+	config ESP32_FLASH_FREQ_40M
+		bool "40 MHz"
+
+	config ESP32_FLASH_FREQ_26M
+		bool "26 MHz"
+
+	config ESP32_FLASH_FREQ_20M
+		bool "20 MHz"
+
+endchoice # ESP32_FLASH_FREQ
 
 choice ESP32_DEFAULT_CPU_FREQ
 	prompt "CPU frequency"
@@ -285,6 +335,7 @@ config ESP32_SPIRAM
 	bool "SPI RAM Support"
 	default n
 	select ARCH_HAVE_HEAP2
+	select XTENSA_IMEM_USE_SEPARATE_HEAP
 
 if ESP32_SPIRAM && SMP
 
@@ -401,15 +452,11 @@ config ESP32_I2C0
 	bool "I2C 0"
 	default n
 	select ESP32_I2C
-	select I2C
-	select I2C_DRIVER
 
 config ESP32_I2C1
 	bool "I2C 1"
 	default n
 	select ESP32_I2C
-	select I2C
-	select I2C_DRIVER
 
 config ESP32_AES_ACCELERATOR
 	bool "AES Accelerator"
@@ -528,7 +575,7 @@ if ESP32_I2C0
 
 config ESP32_I2C0_SCLPIN
 	int "I2C0 SCL Pin"
-	default 24
+	default 22
 	range 0 39
 
 config ESP32_I2C0_SDAPIN
@@ -588,6 +635,14 @@ config SPI_SLAVE_BUFSIZE
 	int "SPI slave buffer size"
 	default 2048
 	depends on SPI_SLAVE
+
+config ESP32_SPI_DMATHRESHOLD
+	int "SPI DMA threshold"
+	default 64
+	depends on ESP32_SPI2_DMA || ESP32_SPI3_DMA
+	---help---
+		When SPI DMA is enabled, DMA transfers whose size are below the
+		defined threshold will be performed by polling logic.
 
 if ESP32_SPI2
 
@@ -805,6 +860,21 @@ endmenu # ESP32_EMAC
 menu "WiFi configuration"
 	depends on ESP32_WIRELESS
 
+choice
+	prompt "ESP32 WiFi mode"
+	default ESP32_WIFI_STATION
+
+config ESP32_WIFI_STATION
+	bool "Station mode"
+
+config ESP32_WIFI_SOFTAP
+	bool "SoftAP mode"
+
+config ESP32_WIFI_STATION_SOFTAP_COEXISTENCE
+	bool "Station + SoftAP coexistence"
+
+endchoice # ESP32 WiFi mode
+
 config ESP32_WIFI_STATIC_RXBUF_NUM
     int "WiFi static RX buffer number"
 	default 10
@@ -829,8 +899,8 @@ config ESP32_WIFI_RXBA_AMPDU_WZ
     int "WiFi RX BA AMPDU windown size"
 	default 6
 
-config ESP32_WLAN_RXBUF_NUM
-	int "WLAN netcard RX buffer number"
+config ESP32_WLAN_PKTBUF_NUM
+	int "WLAN netcard packet buffer number per netcard"
 	default 16
 
 config ESP32_WIFI_CONNECT_TIMEOUT
@@ -838,6 +908,12 @@ config ESP32_WIFI_CONNECT_TIMEOUT
 	default 10
 	help
 		Max waiting time of connecting to AP.
+
+config ESP32_WIFI_SCAN_RESULT_SIZE
+	int "Scan result buffer"
+	default 4096
+	help
+		Maximum scan result buffer size.
 
 config ESP32_WIFI_SAVE_PARAM
 	bool "Save WiFi Parameters"
@@ -880,6 +956,19 @@ config ESP32_RT_TIMER_TASK_STACK_SIZE
 	default 2048
 
 endmenu # Real-Time Timer
+
+if ESP32_TIMER
+menu "Timer/counter Configuration"
+
+config ESP32_ONESHOT
+	bool "One-shot wrapper"
+	default n
+	---help---
+		Enable a wrapper around the low level timer/counter functions to
+		support one-shot timer.
+
+endmenu # Timer/counter Configuration
+endif # ESP32_TIMER
 
 menu "Partition Configuration"
 	depends on ESP32_PARTITION

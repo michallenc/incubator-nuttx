@@ -52,9 +52,6 @@
 #ifndef CONFIG_DISABLE_MQUEUE
 #  include "mqueue/mqueue.h"
 #endif
-#ifndef CONFIG_DISABLE_PTHREAD
-#  include "pthread/pthread.h"
-#endif
 #include "clock/clock.h"
 #include "timer/timer.h"
 #include "irq/irq.h"
@@ -658,17 +655,6 @@ void nx_start(void)
     }
 #endif
 
-#ifndef CONFIG_DISABLE_PTHREAD
-  /* Initialize the thread-specific data facility (if in link) */
-
-#ifdef CONFIG_HAVE_WEAKFUNCTIONS
-  if (pthread_initialize != NULL)
-#endif
-    {
-      pthread_initialize();
-    }
-#endif
-
 #ifdef CONFIG_NET
   /* Initialize the networking system */
 
@@ -776,12 +762,6 @@ void nx_start(void)
 
   DEBUGASSERT(this_cpu() == 0 && CONFIG_MAX_TASKS > CONFIG_SMP_NCPUS);
 
-  /* Take the memory manager semaphore on this CPU so that it will not be
-   * available on the other CPUs until we have finished initialization.
-   */
-
-  DEBUGVERIFY(kmm_trysemaphore());
-
   /* Then start the other CPUs */
 
   DEBUGVERIFY(nx_smp_start());
@@ -798,13 +778,6 @@ void nx_start(void)
 
   DEBUGVERIFY(nx_bringup());
 
-#ifdef CONFIG_SMP
-  /* Let other threads have access to the memory manager */
-
-  kmm_givesemaphore();
-
-#endif /* CONFIG_SMP */
-
   /* The IDLE Loop **********************************************************/
 
   /* When control is return to this point, the system is idle. */
@@ -812,6 +785,17 @@ void nx_start(void)
   sinfo("CPU0: Beginning Idle Loop\n");
   for (; ; )
     {
+      /* Check heap & stack in idle thread */
+
+      kmm_checkcorruption();
+
+#if defined(CONFIG_STACK_COLORATION) && defined(CONFIG_DEBUG_MM)
+      for (i = 0; i < CONFIG_MAX_TASKS && g_pidhash[i].tcb; i++)
+        {
+          assert(up_check_tcbstack_remain(g_pidhash[i].tcb) > 0);
+        }
+#endif
+
       /* Perform any processor-specific idle state operations */
 
       up_idle();

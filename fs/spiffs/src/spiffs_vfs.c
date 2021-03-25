@@ -1,5 +1,5 @@
 /****************************************************************************
- * fs/spiffs/spiffs.c
+ * fs/spiffs/src/spiffs_vfs.c
  * Interface between SPIFFS and the NuttX VFS
  *
  *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
@@ -1016,7 +1016,7 @@ static int spiffs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
       return ret;
     }
 
-  /* Handle the IOCTL according tot he command */
+  /* Handle the IOCTL according to the command */
 
   switch (cmd)
     {
