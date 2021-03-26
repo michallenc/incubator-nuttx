@@ -764,15 +764,19 @@ static int imxrt_txpoll(struct net_driver_s *dev)
 {
   FAR struct imxrt_driver_s *priv =
     (FAR struct imxrt_driver_s *)dev->d_private;
+  irqstate_t flags;
 
   /* If the polling resulted in data that should be sent out on the network,
    * the field d_len is set to a value > 0.
    */
 
+  flags = spin_lock_irqsave(NULL);
+
   if (priv->dev.d_len > 0)
     {
       if (!devif_loopback(&priv->dev))
         {
+
           imxrt_txdone(priv);
 
           /* Send the packet */
@@ -784,11 +788,13 @@ static int imxrt_txpoll(struct net_driver_s *dev)
            */
 
           if (imxrt_txringfull(priv))
-                {
-                  return -EBUSY;
-                }
+            {
+              spin_unlock_irqrestore(NULL, flags);
+              return -EBUSY;
+            }
         }
     }
+  spin_unlock_irqrestore(NULL, flags);
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
