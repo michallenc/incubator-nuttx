@@ -184,6 +184,15 @@ config ARCH_CHIP_STM32H753ZI
 		STM32 H7 Cortex M7, 2048 Kb FLASH, 1024K Kb SRAM,
 		with cryptographic accelerator, LQFP144
 
+config ARCH_CHIP_STM32H755ZI
+	bool "STM32H755ZI"
+	select STM32H7_STM32H7X7XX
+	select STM32H7_FLASH_CONFIG_I
+	select STM32H7_IO_CONFIG_Z
+	---help---
+		Dual core STM32 H7 Cortex M7+M4, 2048 Kb FLASH, 1024K Kb SRAM
+		TFBGA240
+
 endchoice # STM32 H7 Chip Selection
 
 config STM32H7_IO_CONFIG_A
