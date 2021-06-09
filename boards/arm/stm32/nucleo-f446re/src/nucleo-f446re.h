@@ -192,6 +192,19 @@
 #define GPIO_BUTTON_G \
   (GPIO_INPUT | GPIO_PULLUP |GPIO_EXTI | GPIO_PORTC | GPIO_PIN7)
 
+/* GPIO subsystem */
+
+/* GPIO pins used by the GPIO Subsystem */
+
+#define BOARD_NGPIOIN     0 /* Amount of GPIO Input pins */
+#define BOARD_NGPIOOUT    2 /* Amount of GPIO Output pins */
+#define BOARD_NGPIOINT    0 /* Amount of GPIO Input w/ Interruption pins */
+
+#define GPIO_OUT1         (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz |\
+                           GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN7)
+#define GPIO_OUT2         (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz |\
+                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN6)
+
 /* Itead Joystick Signal interpretation:
  *
  *   --------- ----------------------- ---------------------------
@@ -343,6 +356,10 @@ int stm32_foc_setup(void);
 
 #ifdef CONFIG_PWM
 int stm32_pwm_setup(void);
+#endif
+
+#ifdef CONFIG_DEV_GPIO
+int stm32_gpio_initialize(void);
 #endif
 
 #endif /* __BOARDS_ARM_STM32_NUCLEO_F401RE_SRC_NUCLEO_F446RE_H */
