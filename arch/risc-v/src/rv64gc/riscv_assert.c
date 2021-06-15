@@ -1,35 +1,20 @@
 /****************************************************************************
  * arch/risc-v/src/rv64gc/riscv_assert.c
  *
- *   Copyright (C) 2011-2015, 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -86,14 +71,16 @@
  * Name: up_stackdump
  ****************************************************************************/
 
-static void up_stackdump(uint64_t sp, uintptr_t stack_base)
+static void up_stackdump(uint64_t sp, uintptr_t stack_top)
 {
   uintptr_t stack;
 
-  for (stack = sp & ~0x1f; stack < stack_base; stack += 32)
+  for (stack = sp & ~0x1f; stack < stack_top; stack += 32)
     {
       uint32_t *ptr = (uint32_t *)stack;
-      _alert("%08x: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+      _alert("%08" PRIxPTR ": %08" PRIx32 " %08" PRIx32 " %08" PRIx32
+             " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32
+             " %08" PRIx32 "\n",
              stack, ptr[0], ptr[1], ptr[2], ptr[3],
              ptr[4], ptr[5], ptr[6], ptr[7]);
     }
@@ -145,44 +132,52 @@ static inline void up_registerdump(void)
 
   if (CURRENT_REGS)
     {
-      _alert("EPC:%016x \n",
+      _alert("EPC:%016" PRIx64 " \n",
              CURRENT_REGS[REG_EPC]);
 
-      _alert("A0:%016x A1:%016x A2:%016x A3:%016x \n",
+      _alert("A0:%016" PRIx64 " A1:%01" PRIx64 "6 A2:%016" PRIx64
+             " A3:%016" PRIx64 " \n",
              CURRENT_REGS[REG_A0], CURRENT_REGS[REG_A1],
              CURRENT_REGS[REG_A2], CURRENT_REGS[REG_A3]);
 
-      _alert("A4:%016x A5:%016x A6:%016x A7:%016x \n",
+      _alert("A4:%016" PRIx64 " A5:%016" PRIx64 "A6:%016" PRIx64
+             " A7:%016" PRIx64 " \n",
              CURRENT_REGS[REG_A4], CURRENT_REGS[REG_A5],
              CURRENT_REGS[REG_A6], CURRENT_REGS[REG_A7]);
 
-      _alert("T0:%016x T1:%016x T2:%016x T3:%016x \n",
+      _alert("T0:%016" PRIx64 " T1:%016" PRIx64 " T2:%016" PRIx64
+             " T3:%016" PRIx64 " \n",
              CURRENT_REGS[REG_T0], CURRENT_REGS[REG_T1],
              CURRENT_REGS[REG_T2], CURRENT_REGS[REG_T3]);
 
-      _alert("T4:%016x T5:%016x T6:%016x \n",
+      _alert("T4:%016" PRIx64 " T5:%016" PRIx64 " T6:%016" PRIx64 " \n",
              CURRENT_REGS[REG_T4], CURRENT_REGS[REG_T5],
              CURRENT_REGS[REG_T6]);
 
-      _alert("S0:%016x S1:%016x S2:%016x S3:%016x \n",
+      _alert("S0:%016" PRIx64 " S1:%016" PRIx64 " S2:%016" PRIx64
+             " S3:%016" PRIx64 " \n",
              CURRENT_REGS[REG_S0], CURRENT_REGS[REG_S1],
              CURRENT_REGS[REG_S2], CURRENT_REGS[REG_S3]);
 
-      _alert("S4:%016x S5:%016x S6:%016x S7:%016x \n",
+      _alert("S4:%016" PRIx64 " S5:%016" PRIx64 " S6:%016" PRIx64
+             " S7:%016" PRIx64 " \n",
              CURRENT_REGS[REG_S4], CURRENT_REGS[REG_S5],
              CURRENT_REGS[REG_S6], CURRENT_REGS[REG_S7]);
 
-      _alert("S8:%016x S9:%016x S10:%016x S11:%016x \n",
+      _alert("S8:%016" PRIx64 " S9:%016" PRIx64 " S10:%016" PRIx64
+             " S11:%016" PRIx64 " \n",
              CURRENT_REGS[REG_S8], CURRENT_REGS[REG_S9],
              CURRENT_REGS[REG_S10], CURRENT_REGS[REG_S11]);
 
 #ifdef RISCV_SAVE_GP
-      _alert("GP:%016x SP:%016x FP:%016x TP:%016x RA:%016x \n",
+      _alert("GP:%016" PRIx64 " SP:%016" PRIx64 " FP:%016" PRIx64
+             " TP:%016" PRIx64 " RA:%016" PRIx64 " \n",
              CURRENT_REGS[REG_GP], CURRENT_REGS[REG_SP],
              CURRENT_REGS[REG_FP], CURRENT_REGS[REG_TP],
              CURRENT_REGS[REG_RA]);
 #else
-      _alert("SP:%016x FP:%016x TP:%016x RA:%016x \n",
+      _alert("SP:%016" PRIx64 " FP:%016" PRIx64 " TP:%016" PRIx64
+             " RA:%016" PRIx64 " \n",
              CURRENT_REGS[REG_SP], CURRENT_REGS[REG_FP],
              CURRENT_REGS[REG_TP], CURRENT_REGS[REG_RA]);
 #endif
@@ -196,10 +191,10 @@ static inline void up_registerdump(void)
 static void up_dumpstate(void)
 {
   struct tcb_s *rtcb = running_task();
-  uint64_t sp = riscv_getsp();
+  uint64_t sp = up_getsp();
   uintptr_t ustackbase;
   uintptr_t ustacksize;
-#if CONFIG_ARCH_INTERRUPTSTACK > 7
+#if CONFIG_ARCH_INTERRUPTSTACK > 15
   uintptr_t istackbase;
   uintptr_t istacksize;
 #endif
@@ -210,66 +205,66 @@ static void up_dumpstate(void)
 
   /* Get the limits on the user stack memory */
 
-  ustackbase = (uintptr_t)rtcb->adj_stack_ptr;
+  ustackbase = (uintptr_t)rtcb->stack_base_ptr;
   ustacksize = (uintptr_t)rtcb->adj_stack_size;
 
   /* Get the limits on the interrupt stack memory */
 
-#if CONFIG_ARCH_INTERRUPTSTACK > 7
-  istackbase = (uintptr_t)&g_intstackbase;
-  istacksize = (CONFIG_ARCH_INTERRUPTSTACK & ~7) - 8;
+#if CONFIG_ARCH_INTERRUPTSTACK > 15
+  istackbase = (uintptr_t)&g_intstackalloc;
+  istacksize = (CONFIG_ARCH_INTERRUPTSTACK & ~15);
 
   /* Show interrupt stack info */
 
-  _alert("sp:     %016x\n", sp);
+  _alert("sp:     %016" PRIx64 "\n", sp);
   _alert("IRQ stack:\n");
-  _alert("  base: %016x\n", istackbase);
-  _alert("  size: %016x\n", istacksize);
+  _alert("  base: %016" PRIxPTR "\n", istackbase);
+  _alert("  size: %016" PRIxPTR "\n", istacksize);
 
   /* Does the current stack pointer lie within the interrupt
    * stack?
    */
 
-  if (sp <= istackbase && sp > istackbase - istacksize)
+  if (sp >= istackbase && sp < istackbase + istacksize)
     {
       /* Yes.. dump the interrupt stack */
 
-      up_stackdump(sp, istackbase);
+      up_stackdump(sp, istackbase + istacksize);
 
       /* Extract the user stack pointer */
 
       sp = CURRENT_REGS[REG_SP];
-      _alert("sp:     %016x\n", sp);
+      _alert("sp:     %016" PRIx64 "\n", sp);
     }
   else if (CURRENT_REGS)
     {
       _alert("ERROR: Stack pointer is not within the interrupt stack\n");
-      up_stackdump(istackbase - istacksize, istackbase);
+      up_stackdump(istackbase, istackbase + istacksize);
     }
 
   /* Show user stack info */
 
   _alert("User stack:\n");
-  _alert("  base: %016x\n", ustackbase);
-  _alert("  size: %016x\n", ustacksize);
+  _alert("  base: %016" PRIxPTR "\n", ustackbase);
+  _alert("  size: %016" PRIxPTR "\n", ustacksize);
 #else
-  _alert("sp:         %016x\n", sp);
-  _alert("stack base: %016x\n", ustackbase);
-  _alert("stack size: %016x\n", ustacksize);
+  _alert("sp:         %016" PRIx64 "\n", sp);
+  _alert("stack base: %016" PRIxPTR "\n", ustackbase);
+  _alert("stack size: %016" PRIxPTR "\n", ustacksize);
 #endif
 
   /* Dump the user stack if the stack pointer lies within the allocated user
    * stack memory.
    */
 
-  if (sp > ustackbase || sp <= ustackbase - ustacksize)
+  if (sp >= ustackbase && sp < ustackbase + ustacksize)
     {
       _alert("ERROR: Stack pointer is not within allocated stack\n");
-      up_stackdump(ustackbase - ustacksize, ustackbase);
+      up_stackdump(ustackbase, ustackbase + ustacksize);
     }
   else
     {
-      up_stackdump(sp, ustackbase);
+      up_stackdump(sp, ustackbase + ustacksize);
     }
 }
 
@@ -351,7 +346,7 @@ static int assert_tracecallback(FAR struct usbtrace_s *trace, FAR void *arg)
 
 void up_assert(const char *filename, int lineno)
 {
-#if CONFIG_TASK_NAME_SIZE > 0 && defined(CONFIG_DEBUG_ALERT)
+#if CONFIG_TASK_NAME_SIZE > 0
   struct tcb_s *rtcb = running_task();
 #endif
 
@@ -402,7 +397,7 @@ void up_assert(const char *filename, int lineno)
   syslog_flush();
 
 #ifdef CONFIG_BOARD_CRASHDUMP
-  board_crashdump(riscv_getsp(), running_task(), filename, lineno);
+  board_crashdump(up_getsp(), running_task(), filename, lineno);
 #endif
 
   _up_assert();

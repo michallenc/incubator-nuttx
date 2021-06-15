@@ -1,5 +1,5 @@
 /****************************************************************************
- * sched/wqueue/work_lpthread.c
+ * sched/wqueue/kwork_lpthread.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <queue.h>
 #include <debug.h>

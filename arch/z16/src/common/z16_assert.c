@@ -1,5 +1,5 @@
 /****************************************************************************
- * common/z16_assert.c
+ * arch/z16/src/common/z16_assert.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -161,7 +161,7 @@ void up_assert(const char *filename, int lineno)
   syslog_flush();
 
 #ifdef CONFIG_BOARD_CRASHDUMP
-  board_crashdump(z16_getsp(), running_task(), filename, lineno);
+  board_crashdump(up_getsp(), running_task(), filename, lineno);
 #endif
 
   _up_assert();

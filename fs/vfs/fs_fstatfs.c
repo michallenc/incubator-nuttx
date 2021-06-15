@@ -28,6 +28,7 @@
 #include <string.h>
 #include <limits.h>
 #include <sched.h>
+#include <assert.h>
 #include <errno.h>
 
 #include "inode/inode.h"
@@ -61,19 +62,8 @@ int fstatfs(int fd, FAR struct statfs *buf)
 
   DEBUGASSERT(buf != NULL);
 
-  /* Did we get a valid file descriptor? */
-
-  if ((unsigned int)fd >= CONFIG_NFILE_DESCRIPTORS)
-    {
-      /* It is a bad, out-of-range descriptor */
-
-      ret = -EBADF;
-      goto errout;
-    }
-
-  /* The descriptor is in a valid range to file descriptor... do the
-   * read.  First, get the file structure.  Note that on failure,
-   * fs_getfilep() will set the errno variable.
+  /* First, get the file structure.  Note that on failure,
+   * fs_getfilep() will return the errno.
    */
 
   ret = fs_getfilep(fd, &filep);

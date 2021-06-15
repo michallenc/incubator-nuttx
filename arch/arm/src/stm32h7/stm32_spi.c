@@ -48,10 +48,12 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -789,6 +791,46 @@ static inline void spi_putreg8(FAR struct stm32_spidev_s *priv,
 }
 
 /****************************************************************************
+ * Name: spi_getreg16
+ *
+ * Description:
+ *   Get the contents of the SPI register at offset
+ *
+ * Input Parameters:
+ *   priv   - private SPI device structure
+ *   offset - offset to the register of interest
+ *
+ * Returned Value:
+ *   The contents of the 16-bit register
+ *
+ ****************************************************************************/
+
+static inline uint16_t spi_getreg16(FAR struct stm32_spidev_s *priv,
+                                  uint32_t offset)
+{
+  return getreg16(priv->spibase + offset);
+}
+
+/****************************************************************************
+ * Name: spi_putreg16
+ *
+ * Description:
+ *   Write a 16-bit value to the SPI register at offset
+ *
+ * Input Parameters:
+ *   priv   - private SPI device structure
+ *   offset - offset to the register of interest
+ *   value  - the 16-bit value to be written
+ *
+ ****************************************************************************/
+
+static inline void spi_putreg16(FAR struct stm32_spidev_s *priv,
+                               uint32_t offset, uint16_t value)
+{
+  putreg16(value, priv->spibase + offset);
+}
+
+/****************************************************************************
  * Name: spi_getreg
  *
  * Description:
@@ -874,9 +916,9 @@ static inline uint32_t spi_readword(FAR struct stm32_spidev_s *priv)
 
   while ((spi_getreg(priv, STM32_SPI_SR_OFFSET) & SPI_SR_RXP) == 0);
 
-  /* Then return the received byte */
+  /* Then return the received 16 bit word */
 
-  return spi_getreg(priv, STM32_SPI_RXDR_OFFSET);
+  return spi_getreg16(priv, STM32_SPI_RXDR_OFFSET);
 }
 
 /****************************************************************************
@@ -908,9 +950,9 @@ static inline void spi_writeword(FAR struct stm32_spidev_s *priv,
 
   while ((spi_getreg(priv, STM32_SPI_SR_OFFSET) & SPI_SR_TXP) == 0);
 
-  /* Then send the byte */
+  /* Then send the 16 bit word */
 
-  spi_putreg(priv, STM32_SPI_TXDR_OFFSET, word);
+  spi_putreg16(priv, STM32_SPI_TXDR_OFFSET, word);
 }
 
 /****************************************************************************
@@ -986,11 +1028,13 @@ static inline void spi_writebyte(FAR struct stm32_spidev_s *priv,
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void spi_dumpregs(FAR struct stm32_spidev_s *priv)
 {
-  spiinfo("CR1: 0x%08x CFG1: 0x%08x CFG2: 0x%08x\n",
+  spiinfo("CR1: 0x%08" PRIx32 " CFG1: 0x%08" PRIx32
+          " CFG2: 0x%08" PRIx32 "\n",
           spi_getreg(priv, STM32_SPI_CR1_OFFSET),
           spi_getreg(priv, STM32_SPI_CFG1_OFFSET),
           spi_getreg(priv, STM32_SPI_CFG2_OFFSET));
-  spiinfo("IER: 0x%08x SR: 0x%08x I2SCFGR: 0x%08x\n",
+  spiinfo("IER: 0x%08" PRIx32 " SR: 0x%08" PRIx32
+          " I2SCFGR: 0x%08" PRIx32 "\n",
           spi_getreg(priv, STM32_SPI_IER_OFFSET),
           spi_getreg(priv, STM32_SPI_SR_OFFSET),
           spi_getreg(priv, STM32_SPI_I2SCFGR_OFFSET));
@@ -1487,7 +1531,7 @@ static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
        * will be faster.
        */
 
-      spiinfo("Frequency %d->%d\n", frequency, actual);
+      spiinfo("Frequency %" PRId32 "->%" PRId32 "\n", frequency, actual);
 
       priv->frequency = frequency;
       priv->actual    = actual;
@@ -1517,7 +1561,7 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
   uint32_t setbits = 0;
   uint32_t clrbits = 0;
 
-  spiinfo("mode=%d\n", mode);
+  spiinfo("mode=%" PRIx32 "\n", (uint32_t) mode);
 
   /* Has the mode changed? */
 
@@ -1613,20 +1657,9 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
       clrbits = SPI_CFG1_DSIZE_MASK;
       setbits = SPI_CFG1_DSIZE_VAL(nbits);
 
-      /* REVISIT: FIFO threshold level */
+      /* RX FIFO Threshold 1 Frame either 8 or 16 bits */
 
-      /* If nbits is <=8, then we are in byte mode and FRXTH shall be set
-       * (else, transaction will not complete).
-       */
-
-      if (nbits < 9)
-        {
-          setbits |= SPI_CFG1_FTHLV_1DATA; /* RX FIFO Threshold = 1 byte */
-        }
-      else
-        {
-          setbits |= SPI_CFG1_FTHLV_2DATA; /* RX FIFO Threshold = 2 byte */
-        }
+      setbits |= SPI_CFG1_FTHLV_1DATA;
 
       spi_enable(priv, false);
       spi_modifyreg(priv, STM32_SPI_CFG1_OFFSET, clrbits, setbits);
@@ -1668,7 +1701,7 @@ static int spi_hwfeatures(FAR struct spi_dev_s *dev,
   uint32_t setbits = 0;
   uint32_t clrbits = 0;
 
-  spiinfo("features=%08x\n", features);
+  spiinfo("features=%08" PRIx8 "\n", features);
 
   /* Transfer data LSB first? */
 
@@ -1773,11 +1806,13 @@ static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
 
   if (priv->nbits > 8)
     {
-      spiinfo("Sent: %04x Return: %04x Status: %02x\n", wd, ret, regval);
+      spiinfo("Sent: %04" PRIx32 " Return: %04" PRIx32 " Status: %02" PRIx32
+              "\n", wd, ret, regval);
     }
   else
     {
-      spiinfo("Sent: %02x Return: %02x Status: %02x\n", wd, ret, regval);
+      spiinfo("Sent: %02" PRIx32 " Return: %02" PRIx32 " Status: %02" PRIx32
+              "\n", wd, ret, regval);
     }
 
   UNUSED(regval);
@@ -1820,6 +1855,11 @@ static void spi_exchange_nodma(FAR struct spi_dev_s *dev,
   DEBUGASSERT(priv && priv->spibase);
 
   spiinfo("txbuffer=%p rxbuffer=%p nwords=%d\n", txbuffer, rxbuffer, nwords);
+
+  /* Disable the DMA Requests */
+
+  spi_modifyreg(priv, STM32_SPI_CFG1_OFFSET, SPI_CFG1_RXDMAEN |
+                                             SPI_CFG1_TXDMAEN, 0);
 
   /* 8- or 16-bit mode? */
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * vfs/fs_eventfd.c
+ * fs/vfs/fs_eventfd.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 #include <stdio.h>
 #include <poll.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 

@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <stdint.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/irq.h>
@@ -34,7 +35,7 @@
 #include "stm32_gpio.h"
 #include "olimex-stm32-p407.h"
 
-#ifdef CONFIG_DJOYSTICK
+#ifdef CONFIG_INPUT_DJOYSTICK
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -293,4 +294,4 @@ int stm32_djoy_initialize(void)
   return djoy_register("/dev/djoy0", &g_djoylower);
 }
 
-#endif /* CONFIG_DJOYSTICK */
+#endif /* CONFIG_INPUT_DJOYSTICK */

@@ -49,6 +49,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -58,7 +59,7 @@
 #include <nuttx/clock.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/power/pm.h>
-#include <nuttx/drivers/1wire.h>
+#include <nuttx/1wire/1wire.h>
 
 #include <arch/board/board.h>
 

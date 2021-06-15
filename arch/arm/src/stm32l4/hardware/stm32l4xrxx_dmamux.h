@@ -1,59 +1,41 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4xrxx_dmamux.h
  *
- *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
- *   Author: Jussi Kivilinna <jussi.kivilinna@haltian.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Based on STM32H7 DMAMUX:
- *   Author: Mateusz Szafoni <raiden00@railab.me>
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4XRXX_DMAMUX_H
 #define __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4XRXX_DMAMUX_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include "chip.h"
 #include "stm32l4xrxx_dma.h"
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
 #define DMAMUX1 0
 
-/* Register Offsets *****************************************************************/
+/* Register Offsets *********************************************************/
 
 #define STM32L4_DMAMUX_CXCR_OFFSET(x)  (0x0000+0x0004*(x)) /* DMAMUX1 request line multiplexer channel x configuration register */
 #define STM32L4_DMAMUX_C0CR_OFFSET     STM32L4_DMAMUX_CXCR_OFFSET(0)
@@ -74,6 +56,7 @@
 #define STM32L4_DMAMUX_CSR_OFFSET      0x0080 /* DMAMUX1 request line multiplexer interrupt channel status register */
 #define STM32L4_DMAMUX_CFR_OFFSET      0x0084 /* DMAMUX1 request line multiplexer interrupt clear flag register */
                                               /* 0x088-0x0FC: Reserved */
+
 #define STM32L4_DMAMUX_RGXCR_OFFSET(x) (0x0100+0x004*(x)) /* DMAMUX1 request generator channel x configuration register */
 #define STM32L4_DMAMUX_RG0CR_OFFSET    STM32L4_DMAMUX_RGXCR_OFFSET(0)
 #define STM32L4_DMAMUX_RG1CR_OFFSET    STM32L4_DMAMUX_RGXCR_OFFSET(1)
@@ -83,7 +66,7 @@
 #define STM32L4_DMAMUX_RGCFR_OFFSET    0x0144 /* DMAMUX1 request generator interrupt clear flag register */
                                               /* 0x148-0x3FC: Reserved */
 
-/* Register Addresses ***************************************************************/
+/* Register Addresses *******************************************************/
 
 #define STM32L4_DMAMUX1_CXCR(x)  (STM32L4_DMAMUX1_BASE+STM32L4_DMAMUX_CXCR_OFFSET(x))
 #define STM32L4_DMAMUX1_C0CR     (STM32L4_DMAMUX1_BASE+STM32L4_DMAMUX_C0CR_OFFSET)
@@ -113,7 +96,7 @@
 #define STM32L4_DMAMUX1_RGSR     (STM32L4_DMAMUX1_BASE+STM32L4_DMAMUX_RGSR_OFFSET)
 #define STM32L4_DMAMUX1_RGCFR    (STM32L4_DMAMUX1_BASE+STM32L4_DMAMUX_RGCFR_OFFSET)
 
-/* Register Bitfield Definitions ****************************************************/
+/* Register Bitfield Definitions ********************************************/
 
 /* DMAMUX1 request line multiplexer channel x configuration register */
 
@@ -167,7 +150,7 @@
 #define DMAMAP_CONTROLLER(m)      (((m) >> 7) & 0x01)
 #define DMAMAP_REQUEST(m)         (((m) >> 0) & 0x7f)
 
-/* DMAMUX1 mapping ******************************************************************/
+/* DMAMUX1 mapping **********************************************************/
 
 /* NOTE: DMAMUX1 channels 0 to 6 are connected to DMA1 channels 1 to 7.
  *       DMAMUX1 channels 7 to 13 are connected to DMA2 channels 1 to 7.
@@ -268,7 +251,7 @@
 #define DMAMUX1_HASH_IN        (93)
 /* DMAMUX1 94-127: Reserved */
 
-/* DMAMAP for DMA1 and DMA2 (DMAMUX1) ***********************************************/
+/* DMAMAP for DMA1 and DMA2 (DMAMUX1) ***************************************/
 
 #define DMAMAP_REQ_GEN0_0      DMAMAP_MAP(DMA1, DMAMUX1_REQ_GEN0)
 #define DMAMAP_REQ_GEN0_1      DMAMAP_MAP(DMA2, DMAMUX1_REQ_GEN0)

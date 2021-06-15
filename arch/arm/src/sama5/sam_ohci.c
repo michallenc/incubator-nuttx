@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -2897,9 +2898,7 @@ errout:
 
 static int sam_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 {
-#ifdef CONFIG_DEBUG_ASSERTIONS
   struct sam_rhport_s *rhport = (struct sam_rhport_s *)drvr;
-#endif
   struct sam_eplist_s *eplist = (struct sam_eplist_s *)ep;
   struct sam_ed_s *ed;
   int ret;

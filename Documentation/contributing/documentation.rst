@@ -24,7 +24,7 @@ go into ``Documentation`` directory. Then,
 
       $ pip3 install pipenv
       $ pipenv install
-      $ # activate the virtual environent
+      $ # activate the virtual environment
       $ pipenv shell
 
   2. Build documentation:
@@ -38,6 +38,25 @@ go into ``Documentation`` directory. Then,
     .. code-block:: console
 
       $ xdg-open _build/html/index.html
+
+Live Rebuild
+------------
+
+For more comfortable editing and previewing of changes (as ``make html`` will perform a slower full rebuild),
+you can install ``sphinx-autobuild`` which will monitor file changes and rebuild only affected files. To
+install it (within the virtual environment):
+
+.. code-block:: console
+
+  $ pip3 install sphinx-autobuild
+
+To run:
+
+.. code-block:: console
+
+  $ make autobuild
+
+Which will perform an initial clean build and monitor changes from then on.
 
 Contributing
 ============
@@ -63,7 +82,7 @@ sometimes Sphinx's approach is used over standard RST since it is more powerful 
 Documentation Conventions
 =========================
 
-While RST/Sphinx provide many ways to do things, it is best to follow a given convention to mantain consistency and avoid
+While RST/Sphinx provide many ways to do things, it is best to follow a given convention to maintain consistency and avoid
 pitfalls. For this reason, documentation changes should follow the following set of conventions.
 
 Indentation
@@ -122,18 +141,9 @@ Linking
 
 To generate internal links, Sphinx's `roles <https://www.sphinx-doc.org/en/master/usage/restructuredtext/roles.html#ref-role>`_ should
 be used. So, use ``:ref:`` instead of standard RST syntax like ```link <target>`_`` for internal links.
-
-Moreover, sphinx is configured to use `autosectionlabel <https://www.sphinx-doc.org/en/master/usage/extensions/autosectionlabel.html#confval-autosectionlabel_prefix_document>`_ extension. This means that sections will automatically get a label that can be linked with the
-`:ref:`. For example:
-
-.. code-block:: RST
-
-  This is a Section
-  =================
-
-  :ref:`This is a Section` is a link to this very same section.
-
 If the target is in a different file, you can refer it with: ``:ref:`link text </pathtorst:Section Name>```.
+
+Linking to a specific document can be done with ``:doc:`/path/to/document``` (without ``.rst`` extension).
 
 Notes and TODOS
 ---------------
@@ -170,7 +180,7 @@ Tips
 Spacing
 -------
 
-If you are getting formatting errors, be sure to provide the appropiate spacing between a directive and its content.
+If you are getting formatting errors, be sure to provide the appropriate spacing between a directive and its content.
 Generally, you should follow this format:
 
 .. code-block:: RST

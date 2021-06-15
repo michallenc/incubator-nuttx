@@ -1,5 +1,5 @@
 ############################################################################
-# boards/arm/nrf52/nrf52832-sparkfun.h/src/Makefile
+# boards/arm/nrf52/nrf52832-sparkfun/scripts/Make.defs
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -33,7 +33,7 @@ endif
 CC = $(CROSSDEV)gcc
 CXX = $(CROSSDEV)g++
 CPP = $(CROSSDEV)gcc -E
-LD = $(CROSSDEV)ld
+LD = $(CROSSDEV)gcc
 STRIP = $(CROSSDEV)strip --strip-unneeded
 AR = $(CROSSDEV)ar rcs
 NM = $(CROSSDEV)nm
@@ -64,8 +64,8 @@ CXXPICFLAGS = $(ARCHPICFLAGS) $(CXXFLAGS)
 CPPFLAGS := $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
 AFLAGS := $(CFLAGS) -D__ASSEMBLY__
 
-NXFLATLDFLAGS1 = -r -d -warn-common
-NXFLATLDFLAGS2 = $(NXFLATLDFLAGS1) -T$(TOPDIR)/binfmt/libnxflat/gnu-nxflat-pcrel.ld -no-check-sections
+NXFLATLDFLAGS1 = -r -Wl,-d -Wl,-warn-common
+NXFLATLDFLAGS2 = $(NXFLATLDFLAGS1) -T$(TOPDIR)/binfmt/libnxflat/gnu-nxflat-pcrel.ld -Wl,-no-check-sections
 LDNXFLATFLAGS = -e main -s 2048
 
 ifneq ($(CROSSDEV),arm-nuttx-elf-)

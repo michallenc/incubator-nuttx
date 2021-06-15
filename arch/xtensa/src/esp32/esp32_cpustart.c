@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -49,14 +50,14 @@
  ****************************************************************************/
 
 static volatile bool g_appcpu_started;
-static volatile spinlock_t g_appcpu_interlock SP_SECTION;
+static volatile spinlock_t g_appcpu_interlock;
 
 /****************************************************************************
  * ROM function prototypes
  ****************************************************************************/
 
-extern void Cache_Flush(int cpu);
-extern void Cache_Read_Enable(int cpu);
+extern void cache_flush(int cpu);
+extern void cache_read_enable(int cpu);
 extern void ets_set_appcpu_boot_addr(uint32_t start);
 
 /****************************************************************************
@@ -158,7 +159,7 @@ void xtensa_appcpu_start(void)
    * is to switch to a well-known IDLE thread stack.
    */
 
-  sp = (uint32_t)tcb->adj_stack_ptr;
+  sp = (uint32_t)tcb->stack_base_ptr + tcb->adj_stack_size;
   __asm__ __volatile__("mov sp, %0\n" : : "r"(sp));
 
   sinfo("CPU%d Started\n", up_cpu_index());
@@ -277,8 +278,8 @@ int up_cpu_start(int cpu)
 
       /* Flush and enable I-cache for APP CPU */
 
-      Cache_Flush(cpu);
-      Cache_Read_Enable(cpu);
+      cache_flush(cpu);
+      cache_read_enable(cpu);
 
       /* Unstall the APP CPU */
 

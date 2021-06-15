@@ -40,7 +40,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-#  define showprogress(c) up_lowputc(c)
+#  define showprogress(c) riscv_lowputc(c)
 #else
 #  define showprogress(c)
 #endif
@@ -51,7 +51,7 @@
 
 /* Address of the IDLE thread */
 
-uint8_t g_idlestack[ESP32C3_IDLESTACK_SIZE]
+uint8_t g_idlestack[CONFIG_IDLETHREAD_STACKSIZE]
   __attribute__((aligned(16), section(".noinit")));
 uint32_t g_idle_topstack = ESP32C3_IDLESTACK_TOP;
 
@@ -74,6 +74,12 @@ void __esp32c3_start(void)
   /* Configure the UART so we can get debug output */
 
   esp32c3_lowsetup();
+
+#ifdef USE_EARLYSERIALINIT
+  /* Perform early serial initialization */
+
+  riscv_earlyserialinit();
+#endif
 
   showprogress('A');
 

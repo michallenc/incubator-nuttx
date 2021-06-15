@@ -1,54 +1,38 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4_dac.h
  *
- *   Copyright (C) 2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Juha Niskanen <juha.niskanen@haltian.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_DAC_H
 #define __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_DAC_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include "chip.h"
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Register Offsets *****************************************************************/
+/* Register Offsets *********************************************************/
 
 #define STM32L4_DAC_CR_OFFSET       0x0000 /* DAC control register */
 #define STM32L4_DAC_SWTRIGR_OFFSET  0x0004 /* DAC software trigger register */
@@ -64,6 +48,7 @@
 #define STM32L4_DAC_DOR1_OFFSET     0x002c /* DAC channel 1 data output register */
 #define STM32L4_DAC_DOR2_OFFSET     0x0030 /* DAC channel 2 data output register */
 #define STM32L4_DAC_SR_OFFSET       0x0034 /* DAC status register */
+
                                     /* New registers not in STM32L1: */
 #define STM32L4_DAC_CCR_OFFSET      0x0038 /* DAC calibration control register */
 #define STM32L4_DAC_MCR_OFFSET      0x003c /* DAC mode control register */
@@ -72,7 +57,7 @@
 #define STM32L4_DAC_SHHR_OFFSET     0x0048 /* DAC Sample and Hold hold time register */
 #define STM32L4_DAC_SHRR_OFFSET     0x004c /* DAC Sample and Hold refresh time register */
 
-/* Register Addresses ***************************************************************/
+/* Register Addresses *******************************************************/
 
 #define STM32L4_DAC_CR              (STM32L4_DAC_BASE+STM32L4_DAC_CR_OFFSET)
 #define STM32L4_DAC_SWTRIGR         (STM32L4_DAC_BASE+STM32L4_DAC_SWTRIGR_OFFSET)
@@ -95,9 +80,10 @@
 #define STM32L4_DAC_SHHR            (STM32L4_DAC_BASE+STM32L4_DAC_SHHR_OFFSET)
 #define STM32L4_DAC_SHRR            (STM32L4_DAC_BASE+STM32L4_DAC_SHRR_OFFSET)
 
-/* Register Bitfield Definitions ****************************************************/
+/* Register Bitfield Definitions ********************************************/
 
 /* DAC control register */
+
 /* These definitions may be used for 16-bit values of either channel */
 
 #define DAC_CR_EN                 (1 << 0)  /* Bit 0:  DAC channel enable */
@@ -113,11 +99,13 @@
 #  define DAC_CR_TSEL_TIM4        (5 << DAC_CR_TSEL_SHIFT) /* Timer 4 TRGO event */
 #  define DAC_CR_TSEL_EXT9        (6 << DAC_CR_TSEL_SHIFT) /* External line9 */
 #  define DAC_CR_TSEL_SW          (7 << DAC_CR_TSEL_SHIFT) /* Software trigger */
+
 #define DAC_CR_WAVE_SHIFT         (6)       /* Bits 6-7: DAC channel noise/triangle wave generation  */
 #define DAC_CR_WAVE_MASK          (3 << DAC_CR_WAVE_SHIFT)
 #  define DAC_CR_WAVE_DISABLED    (0 << DAC_CR_WAVE_SHIFT) /* Wave generation disabled */
 #  define DAC_CR_WAVE_NOISE       (1 << DAC_CR_WAVE_SHIFT) /* Noise wave generation enabled */
 #  define DAC_CR_WAVE_TRIANGLE    (2 << DAC_CR_WAVE_SHIFT) /* Triangle wave generation enabled */
+
 #define DAC_CR_MAMP_SHIFT         (8)       /* Bits 8-11: DAC channel mask/amplitude selector */
 #define DAC_CR_MAMP_MASK          (15 << DAC_CR_MAMP_SHIFT)
 #  define DAC_CR_MAMP_AMP1        (0 << DAC_CR_MAMP_SHIFT)  /* Unmask bit0 of LFSR/triangle amplitude=1 */
@@ -132,6 +120,7 @@
 #  define DAC_CR_MAMP_AMP1023     (9 << DAC_CR_MAMP_SHIFT)  /* Unmask bits[9:0] of LFSR/triangle amplitude=1023 */
 #  define DAC_CR_MAMP_AMP2047     (10 << DAC_CR_MAMP_SHIFT) /* Unmask bits[10:0] of LFSR/triangle amplitude=2047 */
 #  define DAC_CR_MAMP_AMP4095     (11 << DAC_CR_MAMP_SHIFT) /* Unmask bits[11:0] of LFSR/triangle amplitude=4095 */
+
 #define DAC_CR_DMAEN              (1 << 12) /* Bit 12: DAC channel DMA enable */
 #define DAC_CR_DMAUDRIE           (1 << 13) /* Bit 13: DAC channel DMA Underrun Interrupt enable */
 #define DAC_CR_CEN                (1 << 14) /* Bit 14: DAC channel calibration enable */
@@ -151,11 +140,13 @@
 #  define DAC_CR_TSEL1_TIM4       (5 << DAC_CR_TSEL1_SHIFT) /* Timer 4 TRGO event */
 #  define DAC_CR_TSEL1_EXT9       (6 << DAC_CR_TSEL1_SHIFT) /* External line9 */
 #  define DAC_CR_TSEL1_SW         (7 << DAC_CR_TSEL1_SHIFT) /* Software trigger */
+
 #define DAC_CR_WAVE1_SHIFT        (6)       /* Bits 6-7: DAC channel 1 noise/triangle wave generation  */
 #define DAC_CR_WAVE1_MASK         (3 << DAC_CR_WAVE1_SHIFT)
 #  define DAC_CR_WAVE1_DISABLED   (0 << DAC_CR_WAVE1_SHIFT) /* Wave generation disabled */
 #  define DAC_CR_WAVE1_NOISE      (1 << DAC_CR_WAVE1_SHIFT) /* Noise wave generation enabled */
 #  define DAC_CR_WAVE1_TRIANGLE   (2 << DAC_CR_WAVE1_SHIFT) /* Triangle wave generation enabled */
+
 #define DAC_CR_MAMP1_SHIFT        (8)       /* Bits 8-11: DAC channel 1 mask/amplitude selector */
 #define DAC_CR_MAMP1_MASK         (15 << DAC_CR_MAMP1_SHIFT)
 #  define DAC_CR_MAMP1_AMP1       (0 << DAC_CR_MAMP1_SHIFT)  /* Unmask bit0 of LFSR/triangle amplitude=1 */
@@ -170,6 +161,7 @@
 #  define DAC_CR_MAMP1_AMP1023    (9 << DAC_CR_MAMP1_SHIFT)  /* Unmask bits[9:0] of LFSR/triangle amplitude=1023 */
 #  define DAC_CR_MAMP1_AMP2047    (10 << DAC_CR_MAMP1_SHIFT) /* Unmask bits[10:0] of LFSR/triangle amplitude=2047 */
 #  define DAC_CR_MAMP1_AMP4095    (11 << DAC_CR_MAMP1_SHIFT) /* Unmask bits[11:0] of LFSR/triangle amplitude=4095 */
+
 #define DAC_CR_DMAEN1             (1 << 12) /* Bit 12: DAC channel 1 DMA enable */
 #define DAC_CR_DMAUDRIE1          (1 << 13) /* Bit 13: DAC channel 1 DMA Underrun Interrupt enable */
 #define DAC_CR_CEN1               (1 << 14) /* Bit 14: DAC channel 1 calibration enable */
@@ -187,11 +179,13 @@
 #  define DAC_CR_TSEL2_TIM4       (5 << DAC_CR_TSEL2_SHIFT) /* Timer 4 TRGO event */
 #  define DAC_CR_TSEL2_EXT9       (6 << DAC_CR_TSEL2_SHIFT) /* External line9 */
 #  define DAC_CR_TSEL2_SW         (7 << DAC_CR_TSEL2_SHIFT) /* Software trigger */
+
 #define DAC_CR_WAVE2_SHIFT        (22)       /* Bit 22-23: DAC channel 2 noise/triangle wave generation enable */
 #define DAC_CR_WAVE2_MASK         (3 << DAC_CR_WAVE2_SHIFT)
 #  define DAC_CR_WAVE2_DISABLED   (0 << DAC_CR_WAVE2_SHIFT) /* Wave generation disabled */
 #  define DAC_CR_WAVE2_NOISE      (1 << DAC_CR_WAVE2_SHIFT) /* Noise wave generation enabled */
 #  define DAC_CR_WAVE2_TRIANGLE   (2 << DAC_CR_WAVE2_SHIFT) /* Triangle wave generation enabled */
+
 #define DAC_CR_MAMP2_SHIFT        (24)      /* Bit 24-27: DAC channel 2 mask/amplitude selector */
 #define DAC_CR_MAMP2_MASK         (15 << DAC_CR_MAMP2_SHIFT)
 #  define DAC_CR_MAMP2_AMP1       (0 << DAC_CR_MAMP2_SHIFT)  /* Unmask bit0 of LFSR/triangle amplitude=1 */
@@ -206,6 +200,7 @@
 #  define DAC_CR_MAMP2_AMP1023    (9 << DAC_CR_MAMP2_SHIFT)  /* Unmask bits[9:0] of LFSR/triangle amplitude=1023 */
 #  define DAC_CR_MAMP2_AMP2047    (10 << DAC_CR_MAMP2_SHIFT) /* Unmask bits[10:0] of LFSR/triangle amplitude=2047 */
 #  define DAC_CR_MAMP2_AMP4095    (11 << DAC_CR_MAMP2_SHIFT) /* Unmask bits[11:0] of LFSR/triangle amplitude=4095 */
+
 #define DAC_CR_DMAEN2             (1 << 28) /* Bit 28: DAC channel 2 DMA enable */
 #define DAC_CR_DMAUDRIE2          (1 << 29) /* Bit 29: DAC channel 2 DMA underrun interrupt enable */
 #define DAC_CR_CEN2               (1 << 30) /* Bit 30: DAC channel 2 calibration enable */
@@ -291,12 +286,13 @@
 
 #define DAC_MCR_MODE_SHIFT(n)     (((n)-1) << 4)
 #define DAC_MCR_MODE_MASK(n)      (0x7 << DAC_MCR_MODE_SHIFT(n))
-                                        /* DAC channel in normal mode: */
+                                /* DAC channel in normal mode: */
 #  define DAC_MCR_MODE_EXTBUF     (0)      /* DAC channel connected to external pin, Buffer enabled */
 #  define DAC_MCR_MODE_EXTINBUF   (1)      /* DAC channel connected to external pin, on-chip peripherals, Buffer enabled */
 #  define DAC_MCR_MODE_EXT        (2)      /* DAC channel connected to external pin, Buffer disabled */
 #  define DAC_MCR_MODE_IN         (3)      /* DAC channel connected to on-chip peripherals, Buffer disabled */
-                                        /* DAC channel in Sample and Hold mode: */
+
+                                /* DAC channel in Sample and Hold mode: */
 #  define DAC_MCR_MODE_SHEXTBUF   (4)      /* DAC channel connected to external pin, Buffer enabled */
 #  define DAC_MCR_MODE_SHEXTINBUF (5)      /* DAC channel connected to external pin, on-chip peripherals, Buffer enabled */
 #  define DAC_MCR_MODE_SHEXTIN    (6)      /* DAC channel connected to external pin, on-chip peripherals, Buffer disabled */

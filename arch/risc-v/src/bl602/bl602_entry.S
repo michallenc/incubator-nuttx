@@ -22,6 +22,7 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/config.h>
 #include <arch/csr.h>
 
     .section .init
@@ -43,7 +44,12 @@ bl602_start:
 
     la gp, __global_pointer$
 .option pop
-    la sp, _sp_main
+    la sp, g_idle_stack
+    add s11, sp, zero
+
+    li t0, CONFIG_IDLETHREAD_STACKSIZE
+    add sp, sp, t0
+    andi sp, sp, ~0xF
 
 #ifndef RUN_IN_RAM
 

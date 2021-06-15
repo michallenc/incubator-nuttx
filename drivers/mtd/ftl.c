@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <assert.h>
 #include <debug.h>
 #include <errno.h>
 
@@ -497,7 +498,7 @@ static int ftl_geometry(FAR struct inode *inode,
 
 static int ftl_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
 {
-  struct ftl_struct_s *dev ;
+  FAR struct ftl_struct_s *dev;
   int ret;
 
   finfo("Entry\n");
@@ -542,7 +543,7 @@ static int ftl_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
    */
 
   ret = MTD_IOCTL(dev->mtd, cmd, arg);
-  if (ret < 0)
+  if (ret < 0 && ret != -ENOTTY)
     {
       ferr("ERROR: MTD ioctl(%04x) failed: %d\n", cmd, ret);
     }

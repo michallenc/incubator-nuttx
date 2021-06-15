@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/x86_64/src/intel64/intel64_handlers.c
+ * arch/x86_64/src/intel64/intel64_handlers.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -29,6 +29,7 @@
 #include <nuttx/board.h>
 #include <nuttx/signal.h>
 #include <arch/io.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <syscall.h>
 #include <arch/board/board.h>

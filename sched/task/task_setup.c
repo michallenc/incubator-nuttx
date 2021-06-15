@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <sched.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -211,19 +212,12 @@ static inline void nxtask_save_parent(FAR struct tcb_s *tcb, uint8_t ttype)
 
       DEBUGASSERT(rtcb != NULL && rtcb->group != NULL);
 
-#ifdef HAVE_GROUP_MEMBERS
-      /* Save the ID of the parent tasks' task group in the child's task
+      /* Save the PID of the parent tasks' task group in the child's task
        * group.  Copy the ID from the parent's task group structure to
        * child's task group.
        */
 
-      tcb->group->tg_pgrpid = rtcb->group->tg_grpid;
-
-#else
-      /* Save the parent task's ID in the child task's group. */
-
-      tcb->group->tg_ppid = rtcb->pid;
-#endif
+      tcb->group->tg_ppid = rtcb->group->tg_pid;
 
 #ifdef CONFIG_SCHED_CHILD_STATUS
       /* Tasks can also suppress retention of their child status by applying
@@ -458,13 +452,6 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
 static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
                               FAR const char *name)
 {
-  /* Give a name to the unnamed tasks */
-
-  if (!name)
-    {
-      name = (FAR char *)g_noname;
-    }
-
   /* Copy the name into the TCB */
 
   strncpy(tcb->cmn.name, name, CONFIG_TASK_NAME_SIZE);
@@ -485,21 +472,23 @@ static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
  *   accessible no matter what privilege mode the task runs in.
  *
  * Input Parameters:
- *   tcb  - Address of the new task's TCB
- *   argv - A pointer to an array of input parameters. The arrau should be
- *          terminated with a NULL argv[] value. If no parameters are
- *          required, argv may be NULL.
+ *   tcb         - Address of the new task's TCB
+ *   insert_name - Insert name to the first entry
+ *   name        - Name of the new task
+ *   argv        - A pointer to an array of input parameters. The array
+ *                 should be terminated with a NULL argv[] value. If no
+ *                 parameters are required, argv may be NULL.
  *
  * Returned Value:
  *  Zero (OK) on success; a negated errno on failure.
  *
  ****************************************************************************/
 
-static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
-                                         FAR char * const argv[])
+static inline int
+nxtask_setup_stackargs(FAR struct task_tcb_s *tcb, bool insert_name,
+                       FAR const char *name, FAR char * const argv[])
 {
   FAR char **stackargv;
-  FAR const char *name;
   FAR char *str;
   size_t strtablen;
   size_t argvlen;
@@ -507,17 +496,9 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
   int argc;
   int i;
 
-  /* Get the name string that we will use as the first argument */
-
-#if CONFIG_TASK_NAME_SIZE > 0
-  name = tcb->cmn.name;
-#else
-  name = (FAR const char *)g_noname;
-#endif /* CONFIG_TASK_NAME_SIZE */
-
   /* Get the size of the task name (including the NUL terminator) */
 
-  strtablen = (strlen(name) + 1);
+  strtablen = insert_name ? (strlen(name) + 1) : 0;
 
   /* Count the number of arguments and get the accumulated size of the
    * argument strings (including the null terminators).  The argument count
@@ -560,7 +541,7 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
    * task name plus a NULL argv[] entry to terminate the list.
    */
 
-  argvlen   = (argc + 2) * sizeof(FAR char *);
+  argvlen   = (insert_name + argc + 1) * sizeof(FAR char *);
   stackargv = (FAR char **)up_stack_frame(&tcb->cmn, argvlen + strtablen);
 
   DEBUGASSERT(stackargv != NULL);
@@ -568,6 +549,8 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
     {
       return -ENOMEM;
     }
+
+  tcb->argv = stackargv;
 
   /* Get the address of the string table that will lie immediately after
    * the argv[] array and mark it as a null string.
@@ -579,10 +562,13 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
    * NUL terminator in the string buffer.
    */
 
-  stackargv[0] = str;
-  nbytes       = strlen(name) + 1;
-  strcpy(str, name);
-  str         += nbytes;
+  if (insert_name)
+    {
+      *stackargv++ = str;
+      nbytes       = strlen(name) + 1;
+      strcpy(str, name);
+      str         += nbytes;
+    }
 
   /* Copy each argument */
 
@@ -593,10 +579,10 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
        * argument and its NUL terminator in the string buffer.
        */
 
-      stackargv[i + 1] = str;
-      nbytes           = strlen(argv[i]) + 1;
+      *stackargv++ = str;
+      nbytes       = strlen(argv[i]) + 1;
       strcpy(str, argv[i]);
-      str             += nbytes;
+      str         += nbytes;
     }
 
   /* Put a terminator entry at the end of the argv[] array.  Then save the
@@ -604,8 +590,7 @@ static inline int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
    * nxtask_start().
    */
 
-  stackargv[argc + 1] = NULL;
-  tcb->argv = stackargv;
+  *stackargv++ = NULL;
 
   return OK;
 }
@@ -702,20 +687,35 @@ int pthread_setup_scheduler(FAR struct pthread_tcb_s *tcb, int priority,
  *   task runs in.
  *
  * Input Parameters:
- *   tcb  - Address of the new task's TCB
- *   name - Name of the new task (not used)
- *   argv - A pointer to an array of input parameters.  The array should be
- *          terminated with a NULL argv[] value.  If no parameters are
- *          required, argv may be NULL.
+ *   tcb         - Address of the new task's TCB
+ *   insert_name - Insert name to the first argv
+ *   name        - Name of the new task
+ *   argv        - A pointer to an array of input parameters.  The array
+ *                 should be terminated with a NULL argv[] value.  If no
+ *                 parameters are required, argv may be NULL.
  *
  * Returned Value:
  *  OK
  *
  ****************************************************************************/
 
-int nxtask_setup_arguments(FAR struct task_tcb_s *tcb, FAR const char *name,
-                           FAR char * const argv[])
+int nxtask_setup_arguments(FAR struct task_tcb_s *tcb, bool insert_name,
+                           FAR const char *name, FAR char * const argv[])
 {
+  /* Give a name to the unnamed tasks */
+
+  if (!name)
+    {
+      name = (FAR char *)g_noname;
+    }
+
+  /* Always insert name if argv equals NULL */
+
+  if (!argv)
+    {
+      insert_name = true;
+    }
+
   /* Setup the task name */
 
   nxtask_setup_name(tcb, name);
@@ -725,5 +725,5 @@ int nxtask_setup_arguments(FAR struct task_tcb_s *tcb, FAR const char *name,
    * privilege mode the task runs in.
    */
 
-  return nxtask_setup_stackargs(tcb, argv);
+  return nxtask_setup_stackargs(tcb, insert_name, name, argv);
 }

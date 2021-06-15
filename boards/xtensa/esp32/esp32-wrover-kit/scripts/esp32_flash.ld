@@ -61,10 +61,14 @@ SECTIONS
     *libarch.a:esp32_spiflash.*(.literal .text .literal.* .text.*)
     *(.wifirxiram .wifirxiram.*)
     *(.wifirxiram .wifi0iram.*)
+    *(.wifislpiram .wifislpiram.*)
+    *(.wifislprxiram .wifislprxiram.*)
+    *(.phyiram .phyiram.*)
     _iram_text_end = ABSOLUTE(.);
 
     /* Module text area starts at the end of iram0_0_seg */
 
+    . = ALIGN (4);
     _smodtext = ABSOLUTE(.);
   } > iram0_0_seg
 
@@ -93,8 +97,13 @@ SECTIONS
     *libarch.a:esp32_spiflash.*(.bss  .bss.*  COMMON)
     . = ALIGN(8);
     _ebss = ABSOLUTE(.);
+  } >dram0_0_seg
 
-    /* Uninitialized .bss */
+  .noinit (NOLOAD):
+  {
+    /* This section contains data that is not initialized during load,
+     * or during the application's initialization sequence.
+     */
 
     *(.noinit)
   } >dram0_0_seg
@@ -124,6 +133,16 @@ SECTIONS
 
     _sheap = ABSOLUTE(.);
   } >dram0_0_seg
+
+  /* External memory bss, from any global variable with EXT_RAM_ATTR attribute */
+
+  .extmem.bss (NOLOAD) :
+  {
+    _sbss_extmem = ABSOLUTE(.);
+    *(.extmem.bss .extmem.bss.*)
+    . = ALIGN(4);
+    _ebss_extmem = ABSOLUTE(.);
+  } > extmem_seg
 
   .flash.rodata :
   {

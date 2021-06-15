@@ -27,6 +27,8 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/sched.h>
+#include <nuttx/lib/getopt.h>
 #include <sys/types.h>
 
 /****************************************************************************
@@ -71,6 +73,26 @@
  *
  * The stack memory is fully accessible to user mode threads.  TLS is not
  * available from interrupt handlers (nor from the IDLE thread).
+ *
+ * The following diagram represent the typic stack layout:
+ *
+ *      Push Down             Push Up
+ *   +-------------+      +-------------+ <- Stack memory allocation
+ *   |  TLS Data   |      |  TLS Data   |
+ *   +-------------+      +-------------+
+ *   | Task Data*  |      | Task Data*  |
+ *   +-------------+      +-------------+
+ *   |  Arguments  |      |  Arguments  |
+ *   +-------------+      +-------------+ |
+ *   |             |      |             | v
+ *   | Available   |      | Available   |
+ *   |   Stack     |      |   Stack     |
+ *   |             |      |             |
+ *   |             |      |             |
+ *   |             | ^    |             |
+ *   +-------------+ |    +-------------+
+ *
+ *  Task data is allocated in the main's thread's stack only
  */
 
 struct tls_info_s
@@ -78,7 +100,25 @@ struct tls_info_s
 #if CONFIG_TLS_NELEM > 0
   uintptr_t tl_elem[CONFIG_TLS_NELEM]; /* TLS elements */
 #endif
+
+#ifdef CONFIG_PTHREAD_CLEANUP
+  /* tos   - The index to the next available entry at the top of the stack.
+   * stack - The pre-allocated clean-up stack memory.
+   */
+
+  uint8_t tos;
+  struct pthread_cleanup_s stack[CONFIG_PTHREAD_CLEANUP_STACKSIZE];
+#endif
+
   int tl_errno;                        /* Per-thread error number */
+};
+
+struct task_info_s
+{
+  struct tls_info_s ta_tls;    /* Must be first field */
+#ifndef CONFIG_BUILD_KERNEL
+  struct getopt_s   ta_getopt; /* Globals used by getopt() */
+#endif
 };
 
 /****************************************************************************
@@ -187,5 +227,97 @@ int tls_set_value(int tlsindex, uintptr_t tlsvalue);
 #ifndef CONFIG_TLS_ALIGNED
 FAR struct tls_info_s *tls_get_info(void);
 #endif
+
+/****************************************************************************
+ * Name: tls_set_dtor
+ *
+ * Description:
+ *   Set the TLS element destructor associated with the 'tlsindex' to 'destr'
+ *
+ * Input Parameters:
+ *   tlsindex - Index of TLS data destructor to set
+ *   destr    - The destr of TLS data element
+ *
+ * Returned Value:
+ *   Zero is returned on success, a negated errno value is return on
+ *   failure:
+ *
+ *     EINVAL - tlsindex is not in range.
+ *
+ ****************************************************************************/
+
+#if CONFIG_TLS_NELEM > 0
+int tls_set_dtor(int tlsindex, tls_dtor_t destr);
+#endif
+
+/****************************************************************************
+ * Name: tls_get_dtor
+ *
+ * Description:
+ *   Get the TLS element destructor associated with the 'tlsindex' to 'destr'
+ *
+ * Input Parameters:
+ *   tlsindex - Index of TLS data destructor to get
+ *
+ * Returned Value:
+ *   A non-null destruct function pointer.
+ *
+ ****************************************************************************/
+
+#if CONFIG_TLS_NELEM > 0
+tls_dtor_t tls_get_dtor(int tlsindex);
+#endif
+
+/****************************************************************************
+ * Name: tls_get_set
+ *
+ * Description:
+ *   Get the TLS element index set map
+ *
+ * Input Parameters:
+ *
+ * Returned Value:
+ *   A set of allocated TLS index
+ *
+ ****************************************************************************/
+
+#if CONFIG_TLS_NELEM > 0
+tls_ndxset_t tls_get_set(void);
+#endif
+
+/****************************************************************************
+ * Name: tls_destruct
+ *
+ * Description:
+ *   Destruct all TLS data element associated with allocated key
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   A set of allocated TLS index
+ *
+ ****************************************************************************/
+
+#if CONFIG_TLS_NELEM > 0
+void tls_destruct(void);
+#endif
+
+/****************************************************************************
+ * Name: task_get_info
+ *
+ * Description:
+ *   Return a reference to the task_info_s structure.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   A reference to the task-specific task_info_s structure is return on
+ *   success.  NULL would be returned in the event of any failure.
+ *
+ ****************************************************************************/
+
+FAR struct task_info_s *task_get_info(void);
 
 #endif /* __INCLUDE_NUTTX_TLS_H */

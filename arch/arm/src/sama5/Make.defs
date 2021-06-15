@@ -1,8 +1,5 @@
 ############################################################################
-# arch/arm/sama5/Make.defs
-#
-#   Copyright (C) 2016, 2018 Gregory Nutt. All rights reserved.
-#   Author: Gregory Nutt <gnutt@nuttx.org>
+# arch/arm/src/sama5/Make.defs
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -79,6 +76,7 @@ endif
 
 ifeq ($(CONFIG_BUILD_KERNEL),y)
 CMN_CSRCS += arm_task_start.c arm_pthread_start.c arm_signal_dispatch.c
+CMN_CSRCS += arm_pthread_exit.c
 endif
 
 ifeq ($(CONFIG_ARCH_ADDRENV),y)

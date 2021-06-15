@@ -2247,7 +2247,7 @@ CAN Usage
 
   Only messages that have IDs that match the CONFIG_SAMA5_CANn_ADDRn when both
   the received and the configured address are masked by CONFIG_SAMA5_CANn_MASKn
-  will be accepted.  For example, if the mask is all ones, then only messasges
+  will be accepted.  For example, if the mask is all ones, then only messages
   with exact address matches will be accepted; if the mask is all zeroes than
   any address will be accepted.
 
@@ -2851,7 +2851,7 @@ Shields
       CONFIG_ANALOG=y                  : Should be automatically selected
       CONFIG_ADC=y                     : Should be automatically selected
       CONFIG_INPUT=y                   : Select input device support
-      CONFIG_AJOYSTICK=y               : Select analog joystick support
+      CONFIG_INPUT_AJOYSTICK=y         : Select analog joystick support
 
     System Type -> ADC Configuration
       CONFIG_SAMA5_ADC_CHAN0=y         : These settings enable the sequencer to collect
@@ -3123,8 +3123,8 @@ Configurations
      re-configured:
 
        Board Selection -> CPU Frequency
-         CONFIG_SAMA5D3xEK_396MHZ=n     # Disable 396MHz operation
-         CONFIG_SAMA5D3xEK_528MHZ=y     # Enable 528MHz operation
+         CONFIG_SAMA5D3XEK_396MHZ=n     # Disable 396MHz operation
+         CONFIG_SAMA5D3XEK_528MHZ=y     # Enable 528MHz operation
 
      If you switch to 528MHz, you should also check the loop calibration
      value in your .config file.  Of course, it would be best to re-calibrate

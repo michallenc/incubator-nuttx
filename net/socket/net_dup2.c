@@ -27,10 +27,12 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <sched.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
 #include <nuttx/net/net.h>
+#include <nuttx/net/tcp.h>
 
 #include "inet/inet.h"
 #include "tcp/tcp.h"
@@ -44,7 +46,7 @@
  * Name: psock_dup2
  *
  * Description:
- *   Performs the low level, common portion of net_dup() and net_dup2()
+ *   Performs the low level, common portion of dup
  *
  * Input Parameters:
  *   psock1 - The existing socket that is being cloned.
@@ -59,6 +61,9 @@
 
 int psock_dup2(FAR struct socket *psock1, FAR struct socket *psock2)
 {
+#ifdef NET_TCP_HAVE_STACK
+  FAR struct tcp_conn_s *conn;
+#endif
   int ret = OK;
 
   /* Parts of this operation need to be atomic */
@@ -83,10 +88,6 @@ int psock_dup2(FAR struct socket *psock1, FAR struct socket *psock2)
 #endif
   psock2->s_conn     = psock1->s_conn;      /* UDP or TCP connection structure */
 
-  /* Increment the reference count on the socket */
-
-  psock2->s_crefs    = 1;                   /* One reference on the new socket itself */
-
   /* Increment the reference count on the underlying connection structure
    * for this address family type.
    */
@@ -101,7 +102,11 @@ int psock_dup2(FAR struct socket *psock1, FAR struct socket *psock2)
    * the network connection is lost.
    */
 
-  if (psock2->s_type == SOCK_STREAM)
+  conn = (FAR struct tcp_conn_s *)psock2->s_conn;
+
+  if (psock2->s_type == SOCK_STREAM && conn &&
+      (conn->tcpstateflags == TCP_ESTABLISHED ||
+       conn->tcpstateflags == TCP_SYN_RCVD))
     {
       ret = tcp_start_monitor(psock2);
 
@@ -125,70 +130,13 @@ int psock_dup2(FAR struct socket *psock1, FAR struct socket *psock2)
 
           inet_close(psock2);
 
-          /* Then release our reference on the socket structure containing
-           * the connection.
-           */
+          /* The socket will not persist... reset it */
 
-          psock_release(psock2);
+          memset(psock2, 0, sizeof(*psock2));
         }
     }
 #endif
 
   net_unlock();
-  return ret;
-}
-
-/****************************************************************************
- * Name: net_dup2
- *
- * Description:
- *   Clone a socket descriptor to an arbitrary descriptor number.
- *
- * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
- *
- ****************************************************************************/
-
-int net_dup2(int sockfd1, int sockfd2)
-{
-  FAR struct socket *psock1;
-  FAR struct socket *psock2;
-  int ret;
-
-  /* Lock the scheduler throughout the following */
-
-  sched_lock();
-
-  /* Get the socket structures underly both descriptors */
-
-  psock1 = sockfd_socket(sockfd1);
-  psock2 = sockfd_socket(sockfd2);
-
-  /* Verify that the sockfd1 and sockfd2 both refer to valid socket
-   * descriptors and that sockfd2 corresponds to an allocated socket
-   */
-
-  if (psock1 == NULL || psock2 == NULL || psock1->s_crefs <= 0)
-    {
-      ret = -EBADF;
-      goto errout;
-    }
-
-  /* If sockfd2 also valid, allocated socket, then we will have to
-   * close it!
-   */
-
-  if (psock2->s_crefs > 0)
-    {
-      net_close(sockfd2);
-    }
-
-  /* Duplicate the socket state */
-
-  ret = psock_dup2(psock1, psock2);
-
-errout:
-  sched_unlock();
   return ret;
 }

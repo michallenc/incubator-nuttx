@@ -1,35 +1,20 @@
 /****************************************************************************
  * drivers/syslog/syslog_filechannel.c
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -40,10 +25,18 @@
 #include <nuttx/config.h>
 
 #include <sys/stat.h>
+#include <unistd.h>
 #include <sched.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include <nuttx/syslog/syslog.h>
+#include <nuttx/kmalloc.h>
+#include <nuttx/fs/fs.h>
 
 #include "syslog.h"
 
@@ -57,45 +50,89 @@
 #define OPEN_MODE  (S_IROTH | S_IRGRP | S_IRUSR | S_IWUSR)
 
 /****************************************************************************
- * Private Function Prototypes
- ****************************************************************************/
-
-/* SYSLOG channel methods */
-
-static int syslog_file_force(int ch);
-
-/****************************************************************************
  * Private Data
  ****************************************************************************/
 
-/* This structure describes the SYSLOG channel */
+/* Handle to the SYSLOG channel */
 
-static const struct syslog_channel_s g_syslog_file_channel =
-{
-  syslog_dev_putc,
-  syslog_file_force,
-  syslog_dev_flush,
-#ifdef CONFIG_SYSLOG_WRITE
-  syslog_dev_write,
-#endif
-};
+FAR static struct syslog_channel_s *g_syslog_file_channel;
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: syslog_file_force
- *
- * Description:
- *   A dummy FORCE method
- *
- ****************************************************************************/
-
-static int syslog_file_force(int ch)
+#ifdef CONFIG_SYSLOG_FILE_SEPARATE
+static void log_separate(FAR const char *log_file)
 {
-  return ch;
+  struct file fp;
+
+  if (file_open(&fp, log_file, O_WRONLY) < 0)
+    {
+      return;
+    }
+
+  file_write(&fp, "\n\n", 2);
+
+  file_close(&fp);
 }
+#endif
+
+#if CONFIG_SYSLOG_FILE_ROTATIONS > 0
+static void log_rotate(FAR const char *log_file)
+{
+  int i;
+  off_t size;
+  struct stat f_stat;
+  size_t name_size;
+  FAR char *rotate_to;
+  FAR char *rotate_from;
+
+  /* Get the size of the current log file. */
+
+  if (stat(log_file, &f_stat) < 0)
+    {
+      return;
+    }
+
+  size = f_stat.st_size;
+
+  /* If it does not exceed the limit we are OK. */
+
+  if (size < CONFIG_SYSLOG_FILE_SIZE_LIMIT)
+    {
+      return;
+    }
+
+  /* Rotated file names. */
+
+  name_size = strlen(log_file) + 8;
+  rotate_to = kmm_malloc(name_size);
+  rotate_from = kmm_malloc(name_size);
+  if ((rotate_to == NULL) || (rotate_from == NULL))
+    {
+      goto end;
+    }
+
+  /* Rotate the logs. */
+
+  for (i = (CONFIG_SYSLOG_FILE_ROTATIONS - 1); i > 0; i--)
+    {
+      snprintf(rotate_to, name_size, "%s.%d", log_file, i);
+      snprintf(rotate_from, name_size, "%s.%d", log_file, i - 1);
+
+      rename(rotate_from, rotate_to);
+    }
+
+  snprintf(rotate_to, name_size, "%s.0", log_file);
+
+  rename(log_file, rotate_to);
+
+end:
+
+  kmm_free(rotate_to);
+  kmm_free(rotate_from);
+}
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -132,15 +169,12 @@ static int syslog_file_force(int ch)
  *     file.
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   A pointer to the new SYSLOG channel; NULL is returned on any failure.
  *
  ****************************************************************************/
 
-int syslog_file_channel(FAR const char *devpath)
+FAR struct syslog_channel_s *syslog_file_channel(FAR const char *devpath)
 {
-  int ret;
-
   /* Reset the default SYSLOG channel so that we can safely modify the
    * SYSLOG device.  This is an atomic operation and we should be safe
    * after the default channel has been selected.
@@ -153,12 +187,28 @@ int syslog_file_channel(FAR const char *devpath)
 
   /* Uninitialize any driver interface that may have been in place */
 
-  syslog_dev_uninitialize();
+  if (g_syslog_file_channel != NULL)
+    {
+      syslog_dev_uninitialize(g_syslog_file_channel);
+    }
+
+  /* Rotate the log file, if needed. */
+
+#if CONFIG_SYSLOG_FILE_ROTATIONS > 0
+  log_rotate(devpath);
+#endif
+
+  /* Separate the old log entries. */
+
+#ifdef CONFIG_SYSLOG_FILE_SEPARATE
+  log_separate(devpath);
+#endif
 
   /* Then initialize the file interface */
 
-  ret = syslog_dev_initialize(devpath, OPEN_FLAGS, OPEN_MODE);
-  if (ret < 0)
+  g_syslog_file_channel = syslog_dev_initialize(devpath, OPEN_FLAGS,
+                                                OPEN_MODE);
+  if (g_syslog_file_channel == NULL)
     {
       goto errout_with_lock;
     }
@@ -167,11 +217,15 @@ int syslog_file_channel(FAR const char *devpath)
    * screwed.
    */
 
-  ret = syslog_channel(&g_syslog_file_channel);
+  if (syslog_channel(g_syslog_file_channel) != OK)
+    {
+      syslog_dev_uninitialize(g_syslog_file_channel);
+      g_syslog_file_channel = NULL;
+    }
 
 errout_with_lock:
   sched_unlock();
-  return ret;
+  return g_syslog_file_channel;
 }
 
 #endif /* CONFIG_SYSLOG_FILE */

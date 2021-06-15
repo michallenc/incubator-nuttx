@@ -27,11 +27,15 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
+#include <fcntl.h>
 
 #include <nuttx/cancelpt.h>
+#include <nuttx/fs/fs.h>
+#include <nuttx/kmalloc.h>
 #include <arch/irq.h>
 
 #include "socket/socket.h"
@@ -226,8 +230,9 @@ int accept(int sockfd, FAR struct sockaddr *addr, FAR socklen_t *addrlen)
 {
   FAR struct socket *psock = sockfd_socket(sockfd);
   FAR struct socket *newsock;
-  int newfd;
+  FAR struct file *filep;
   int errcode;
+  int newfd;
   int ret;
 
   /* accept() is a cancellation point */
@@ -236,14 +241,14 @@ int accept(int sockfd, FAR struct sockaddr *addr, FAR socklen_t *addrlen)
 
   /* Verify that the sockfd corresponds to valid, allocated socket */
 
-  if (psock == NULL || psock->s_crefs <= 0)
+  if (psock == NULL || psock->s_conn == NULL)
     {
       /* It is not a valid socket description.  Distinguish between the cases
        * where sockfd is a just valid and when it is a valid file descriptor
        * used in the wrong context.
        */
 
-      if ((unsigned int)sockfd < CONFIG_NFILE_DESCRIPTORS)
+      if (fs_getfilep(sockfd, &filep) == 0)
         {
           errcode = ENOTSOCK;
         }
@@ -255,36 +260,39 @@ int accept(int sockfd, FAR struct sockaddr *addr, FAR socklen_t *addrlen)
       goto errout;
     }
 
-  /* Allocate a socket descriptor for the new connection now (so that it
-   * cannot fail later)
-   */
-
-  newfd = sockfd_allocate(0);
-  if (newfd < 0)
-    {
-      errcode = ENFILE;
-      goto errout;
-    }
-
-  newsock = sockfd_socket(newfd);
+  newsock = kmm_zalloc(sizeof(*newsock));
   if (newsock == NULL)
     {
-      errcode = ENFILE;
-      goto errout_with_socket;
+      errcode = ENOMEM;
+      goto errout;
     }
 
   ret = psock_accept(psock, addr, addrlen, newsock);
   if (ret < 0)
     {
       errcode = -ret;
-      goto errout_with_socket;
+      goto errout_with_alloc;
+    }
+
+  /* Allocate a socket descriptor for the new connection now (so that it
+   * cannot fail later)
+   */
+
+  newfd = sockfd_allocate(newsock, O_RDWR);
+  if (newfd < 0)
+    {
+      errcode = ENFILE;
+      goto errout_with_psock;
     }
 
   leave_cancellation_point();
   return newfd;
 
-errout_with_socket:
-  sockfd_release(newfd);
+errout_with_psock:
+  psock_close(newsock);
+
+errout_with_alloc:
+  kmm_free(newsock);
 
 errout:
   leave_cancellation_point();

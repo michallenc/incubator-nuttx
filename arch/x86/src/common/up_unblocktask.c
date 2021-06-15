@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/x86/src/common/up_unblocktask.c
+ * arch/x86/src/common/up_unblocktask.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sched.h>
+#include <assert.h>
 #include <debug.h>
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>

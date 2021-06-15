@@ -1,37 +1,20 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_ehci.c
  *
- *   Copyright (C) 2013-2017, 2020 Gregory Nutt. All rights reserved.
- *   Authors: Gregory Nutt <gnutt@nuttx.org>
- *            Dave Marples <dave@marples.net>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -210,7 +193,9 @@ struct imxrt_qh_s
   uint8_t pad[8];                /* Padding to assure 32-byte alignment */
 };
 
-/* Internal representation of the EHCI Queue Element Transfer Descriptor (qTD) */
+/* Internal representation of the EHCI Queue Element Transfer Descriptor
+ * (qTD)
+ */
 
 struct imxrt_qtd_s
 {
@@ -2368,7 +2353,9 @@ static int imxrt_async_setup(struct imxrt_rhport_s *rhport,
           tokenbits |= QTD_TOKEN_PID_IN;
         }
 
-      /* Allocate a new Queue Element Transfer Descriptor (qTD) for the status */
+      /* Allocate a new Queue Element Transfer Descriptor (qTD)
+       * for the status
+       */
 
       qtd = imxrt_qtd_statusphase(tokenbits);
       if (qtd == NULL)
@@ -4163,7 +4150,9 @@ static int imxrt_free(FAR struct usbhost_driver_s *drvr, FAR uint8_t *buffer)
 {
   DEBUGASSERT(drvr && buffer);
 
-  /* No special action is require to free the transfer/descriptor buffer memory */
+  /* No special action is require to free the transfer/descriptor buffer
+   * memory
+   */
 
   kmm_free(buffer);
   return OK;
@@ -4309,7 +4298,9 @@ static int imxrt_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
         req->index[1], req->index[0], len);
 #endif
 
-  /* We must have exclusive access to the EHCI hardware and data structures. */
+  /* We must have exclusive access to the EHCI hardware and data
+   * structures.
+   */
 
   ret = imxrt_takesem(&g_ehci.exclsem);
   if (ret < 0)
@@ -4409,7 +4400,9 @@ static ssize_t imxrt_transfer(FAR struct usbhost_driver_s *drvr,
 
   DEBUGASSERT(rhport && epinfo && buffer && buflen > 0);
 
-  /* We must have exclusive access to the EHCI hardware and data structures. */
+  /* We must have exclusive access to the EHCI hardware and data
+   * structures.
+   */
 
   ret = imxrt_takesem(&g_ehci.exclsem);
   if (ret < 0)
@@ -4417,7 +4410,9 @@ static ssize_t imxrt_transfer(FAR struct usbhost_driver_s *drvr,
       return (ssize_t)ret;
     }
 
-  /* Set the request for the IOC event well BEFORE initiating the transfer. */
+  /* Set the request for the IOC event well BEFORE initiating the
+   * transfer.
+   */
 
   ret = imxrt_ioc_setup(rhport, epinfo);
   if (ret != OK)
@@ -4519,7 +4514,9 @@ static int imxrt_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
 
   DEBUGASSERT(rhport && epinfo && buffer && buflen > 0);
 
-  /* We must have exclusive access to the EHCI hardware and data structures. */
+  /* We must have exclusive access to the EHCI hardware and data
+   * structures.
+   */
 
   ret = imxrt_takesem(&g_ehci.exclsem);
   if (ret < 0)
@@ -4956,7 +4953,9 @@ static int imxrt_reset(void)
       return -ETIMEDOUT;
     }
 
-  /* Now we can set the HCReset bit in the USBCMD register to initiate the reset */
+  /* Now we can set the HCReset bit in the USBCMD register to initiate the
+   * reset
+   */
 
   regval  = imxrt_getreg(&HCOR->usbcmd);
   regval |= EHCI_USBCMD_HCRESET;
@@ -5339,7 +5338,9 @@ FAR struct usbhost_connection_s *imxrt_ehci_initialize(int controller)
 
   imxrt_putreg(regval, &HCOR->usbcmd);
 
-  /* Start the host controller by setting the RUN bit in the USBCMD register. */
+  /* Start the host controller by setting the RUN bit in the USBCMD
+   * register.
+   */
 
   regval = imxrt_getreg(&HCOR->usbcmd);
   regval |= EHCI_USBCMD_RUN;

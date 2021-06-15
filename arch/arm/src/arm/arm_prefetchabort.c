@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/arm/src/arm/arm_prefetchabort.c
+ * arch/arm/src/arm/arm_prefetchabort.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -26,6 +26,7 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/irq.h>

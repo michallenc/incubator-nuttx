@@ -29,6 +29,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sched.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -93,6 +94,11 @@ static int nxsig_queue_action(FAR struct tcb_s *stcb, siginfo_t *info)
 
           sigq->action.sighandler = sigact->act.sa_u._sa_sigaction;
           sigq->mask = sigact->act.sa_mask;
+          if ((sigact->act.sa_flags & SA_NODEFER) == 0)
+            {
+              sigq->mask |= SIGNO2SET(info->si_signo);
+            }
+
           memcpy(&sigq->info, info, sizeof(siginfo_t));
 
           /* Put it at the end of the pending signals list */

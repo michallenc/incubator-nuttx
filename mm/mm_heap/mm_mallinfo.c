@@ -30,6 +30,8 @@
 
 #include <nuttx/mm/mm.h>
 
+#include "mm_heap/mm.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -44,12 +46,12 @@
 
 int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
 {
+  FAR struct mm_heap_impl_s *heap_impl;
   FAR struct mm_allocnode_s *node;
-#ifdef CONFIG_DEBUG_ASSERTIONS
   FAR struct mm_allocnode_s *prev;
-#endif
   size_t mxordblk = 0;
   int    ordblks  = 0;  /* Number of non-inuse chunks */
+  int    aordblks = 0;  /* Number of inuse chunks */
   size_t uordblks = 0;  /* Total allocated space */
   size_t fordblks = 0;  /* Total non-inuse space */
 #if CONFIG_MM_REGIONS > 1
@@ -59,24 +61,25 @@ int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
 #endif
 
   DEBUGASSERT(info);
+  DEBUGASSERT(MM_IS_VALID(heap));
+  heap_impl = heap->mm_impl;
 
   /* Visit each region */
 
 #if CONFIG_MM_REGIONS > 1
-  for (region = 0; region < heap->mm_nregions; region++)
+  for (region = 0; region < heap_impl->mm_nregions; region++)
 #endif
     {
-#ifdef CONFIG_DEBUG_ASSERTIONS
       prev = NULL;
-#endif
+
       /* Visit each node in the region
        * Retake the semaphore for each region to reduce latencies
        */
 
       mm_takesemaphore(heap);
 
-      for (node = heap->mm_heapstart[region];
-           node < heap->mm_heapend[region];
+      for (node = heap_impl->mm_heapstart[region];
+           node < heap_impl->mm_heapend[region];
            node = (FAR struct mm_allocnode_s *)
                   ((FAR char *)node + node->size))
         {
@@ -90,13 +93,13 @@ int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
           if ((node->preceding & MM_ALLOC_BIT) != 0)
             {
               DEBUGASSERT(node->size >= SIZEOF_MM_ALLOCNODE);
+              aordblks++;
               uordblks += node->size;
             }
           else
             {
-#ifdef CONFIG_DEBUG_ASSERTIONS
               FAR struct mm_freenode_s *fnode = (FAR void *)node;
-#endif
+
               DEBUGASSERT(node->size >= SIZEOF_MM_FREENODE);
               DEBUGASSERT(fnode->blink->flink == fnode);
               DEBUGASSERT(fnode->blink->size <= fnode->size);
@@ -115,14 +118,12 @@ int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
 
           DEBUGASSERT(prev == NULL ||
                       prev->size == (node->preceding & ~MM_ALLOC_BIT));
-#ifdef CONFIG_DEBUG_ASSERTIONS
           prev = node;
-#endif
         }
 
       minfo("region=%d node=%p heapend=%p\n",
-            region, node, heap->mm_heapend[region]);
-      DEBUGASSERT(node == heap->mm_heapend[region]);
+            region, node, heap_impl->mm_heapend[region]);
+      DEBUGASSERT(node == heap_impl->mm_heapend[region]);
 
       mm_givesemaphore(heap);
 
@@ -130,10 +131,11 @@ int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
     }
 #undef region
 
-  DEBUGASSERT(uordblks + fordblks == heap->mm_heapsize);
+  DEBUGASSERT(uordblks + fordblks == heap_impl->mm_heapsize);
 
-  info->arena    = heap->mm_heapsize;
+  info->arena    = heap_impl->mm_heapsize;
   info->ordblks  = ordblks;
+  info->aordblks = aordblks;
   info->mxordblk = mxordblk;
   info->uordblks = uordblks;
   info->fordblks = fordblks;

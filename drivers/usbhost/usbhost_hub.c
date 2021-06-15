@@ -1,42 +1,26 @@
-/************************************************************************************
+/****************************************************************************
  * drivers/usbhost/usbhost_hub.c
  *
- *   Copyright (C) 2015-2017 Gregory Nutt. All rights reserved.
- *   Author: Kaushal Parikh <kaushal@dspworks.in>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -62,11 +46,11 @@
 
 #ifdef CONFIG_USBHOST_HUB
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Configuration ********************************************************************/
+/* Configuration ************************************************************/
 
 /* It is necessary to perform work on the low-priority work queue (vs. the
  * high priority work queue) because:
@@ -110,9 +94,9 @@
 
 #define INTIN_BUFSIZE       ((USBHUB_MAX_PORTS + 8) >> 3)
 
-/************************************************************************************
+/****************************************************************************
  * Private Types
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This structure contains the internal, private state of the USB host
  * hub class.
@@ -151,9 +135,9 @@ struct usbhost_hubclass_s
   struct usbhost_hubpriv_s hubpriv;       /* Private class data */
 };
 
-/************************************************************************************
+/****************************************************************************
  * Private Function Prototypes
- ************************************************************************************/
+ ****************************************************************************/
 
 /* Helpers for usbhost_connect() */
 
@@ -184,9 +168,9 @@ static int usbhost_connect(FAR struct usbhost_class_s *hubclass,
              FAR const uint8_t *configdesc, int desclen);
 static int usbhost_disconnected(FAR struct usbhost_class_s *hubclass);
 
-/************************************************************************************
+/****************************************************************************
  * Private Data
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This structure provides the registry entry ID information that will  be
  * used to associate the USB host hub class to a connected USB hub.
@@ -220,11 +204,11 @@ static struct usbhost_registry_s g_hub =
   g_id                    /* id[]     */
 };
 
-/************************************************************************************
+/****************************************************************************
  * Private Functions
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hport_deactivate
  *
  * Description:
@@ -236,7 +220,7 @@ static struct usbhost_registry_s g_hub =
  * Returned Value:
  *   None
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static void usbhost_hport_deactivate(FAR struct usbhost_hubport_s *hport)
 {
@@ -265,7 +249,7 @@ static void usbhost_hport_deactivate(FAR struct usbhost_hubport_s *hport)
   DEBUGASSERT(ROOTHUB(hport) || hport->devclass == NULL);
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hport_activate
  *
  * Description:
@@ -279,7 +263,7 @@ static void usbhost_hport_deactivate(FAR struct usbhost_hubport_s *hport)
  *   Zero (OK) is returned on success; a negated errno value is returned
  *   on any failure.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static int usbhost_hport_activate(FAR struct usbhost_hubport_s *hport)
 {
@@ -304,7 +288,7 @@ static int usbhost_hport_activate(FAR struct usbhost_hubport_s *hport)
   return ret;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_cfgdesc
  *
  * Description:
@@ -326,7 +310,7 @@ static int usbhost_hport_activate(FAR struct usbhost_hubport_s *hport)
  * Assumptions:
  *   This function will *not* be called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static inline int usbhost_cfgdesc(FAR struct usbhost_class_s *hubclass,
                                   FAR const uint8_t *configdesc, int desclen)
@@ -439,12 +423,16 @@ static inline int usbhost_cfgdesc(FAR struct usbhost_class_s *hubclass,
 
                     /* Save the interrupt IN endpoint information */
 
-                    intindesc.addr         = epdesc->addr & USB_EP_ADDR_NUMBER_MASK;
+                    intindesc.addr         = epdesc->addr &
+                                             USB_EP_ADDR_NUMBER_MASK;
                     intindesc.interval     = epdesc->interval;
-                    intindesc.mxpacketsize = usbhost_getle16(epdesc->mxpacketsize);
+                    intindesc.mxpacketsize = usbhost_getle16(
+                                             epdesc->mxpacketsize);
 
-                    uinfo("Interrupt IN EP: addr=%d interval=%d mxpacketsize=%d\n",
-                        intindesc.addr, intindesc.interval, intindesc.mxpacketsize);
+                    uinfo("Interrupt IN EP:");
+                    uinfo(" addr=%d interval=%d mxpacketsize=%d\n",
+                        intindesc.addr, intindesc.interval,
+                         intindesc.mxpacketsize);
                   }
               }
           }
@@ -495,7 +483,7 @@ static inline int usbhost_cfgdesc(FAR struct usbhost_class_s *hubclass,
   return OK;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hubdesc
  *
  * Description:
@@ -514,7 +502,7 @@ static inline int usbhost_cfgdesc(FAR struct usbhost_class_s *hubclass,
  * Assumptions:
  *   This function will *not* be called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
 {
@@ -544,7 +532,8 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
   usbhost_putle16(ctrlreq->index, 0);
   usbhost_putle16(ctrlreq->len, USB_SIZEOF_HUBDESC);
 
-  ret = DRVR_CTRLIN(hport->drvr, hport->ep0, ctrlreq, (FAR uint8_t *)&hubdesc);
+  ret = DRVR_CTRLIN(hport->drvr, hport->ep0,
+                    ctrlreq, (FAR uint8_t *)&hubdesc);
   if (ret < 0)
     {
       uerr("ERROR: Failed to read hub descriptor: %d\n", ret);
@@ -554,9 +543,11 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
   priv->nports      = hubdesc.nports;
 
   hubchar           = usbhost_getle16(hubdesc.characteristics);
-  priv->lpsm        = (hubchar & USBHUB_CHAR_LPSM_MASK) >> USBHUB_CHAR_LPSM_SHIFT;
+  priv->lpsm        = (hubchar & USBHUB_CHAR_LPSM_MASK) >>
+                       USBHUB_CHAR_LPSM_SHIFT;
   priv->compounddev = (hubchar & USBHUB_CHAR_COMPOUND) ? true : false;
-  priv->ocmode      = (hubchar & USBHUB_CHAR_OCPM_MASK) >> USBHUB_CHAR_OCPM_SHIFT;
+  priv->ocmode      = (hubchar & USBHUB_CHAR_OCPM_MASK) >>
+                       USBHUB_CHAR_OCPM_SHIFT;
   priv->indicator   = (hubchar & USBHUB_CHAR_PORTIND) ? true : false;
 
   priv->pwrondelay  = (2 * hubdesc.pwrondelay);
@@ -566,7 +557,8 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
   uinfo("  bDescLength:         %d\n", hubdesc.len);
   uinfo("  bDescriptorType:     0x%02x\n", hubdesc.type);
   uinfo("  bNbrPorts:           %d\n", hubdesc.nports);
-  uinfo("  wHubCharacteristics: 0x%04x\n", usbhost_getle16(hubdesc.characteristics));
+  uinfo("  wHubCharacteristics: 0x%04x\n",
+        usbhost_getle16(hubdesc.characteristics));
   uinfo("    lpsm:              %d\n", priv->lpsm);
   uinfo("    compounddev:       %s\n", priv->compounddev ? "TRUE" : "FALSE");
   uinfo("    ocmode:            %d\n", priv->ocmode);
@@ -580,7 +572,7 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
   return OK;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hubpwr
  *
  * Description:
@@ -591,7 +583,8 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
  *   have an arbitrary number of gangs of one or more ports.
  *
  *   A hub indicates whether or not it supports power switching by the
- *   setting of the Logical Power Switching Mode field in wHubCharacteristics.
+ *   setting of the Logical Power Switching Mode field in
+ *   wHubCharacteristics.
  *   If a hub supports per-port power switching, then the power to a port is
  *   turned on when a SetPortFeature(PORT_POWER) request is received for the
  *   port. Port power is turned off when the port is in the Powered-off or
@@ -610,13 +603,13 @@ static inline int usbhost_hubdesc(FAR struct usbhost_class_s *hubclass)
  *   on - True: enable power; false: Disable power
  *
  * Returned Value:
- *   On success, zero (OK) is returned. On a failure, a negated errno value is
- *   returned indicating the nature of the failure
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
  *
  * Assumptions:
  *   This function will *not* be called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static int usbhost_hubpwr(FAR struct usbhost_hubpriv_s *priv,
                           FAR struct usbhost_hubport_s *hport,
@@ -663,7 +656,7 @@ static int usbhost_hubpwr(FAR struct usbhost_hubpriv_s *priv,
   return OK;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hub_event
  *
  * Description:
@@ -679,7 +672,7 @@ static int usbhost_hubpwr(FAR struct usbhost_hubpriv_s *priv,
  * Assumptions:
  *   This function will *not* be called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static void usbhost_hub_event(FAR void *arg)
 {
@@ -774,7 +767,8 @@ static void usbhost_hub_event(FAR void *arg)
               ret = DRVR_CTRLOUT(hport->drvr, hport->ep0, ctrlreq, NULL);
               if (ret < 0)
                 {
-                  uerr("ERROR: Failed to clear port %d change mask %04x: %d\n",
+                  uerr("ERROR:");
+                  uerr(" Failed to clear port %d change mask %04x: %d\n",
                        port, mask, ret);
                 }
 
@@ -811,7 +805,8 @@ static void usbhost_hub_event(FAR void *arg)
                                 (FAR uint8_t *)&portstatus);
               if (ret < 0)
                 {
-                  uerr("ERROR: Failed to get port %d status: %d\n", port, ret);
+                  uerr("ERROR: Failed to get port %d status: %d\n",
+                        port, ret);
                   break;
                 }
 
@@ -824,7 +819,8 @@ static void usbhost_hub_event(FAR void *arg)
                   debouncestable += 25;
                   if (debouncestable >= 100)
                     {
-                      uinfo("Port %d debouncestable=%d\n", port, debouncestable);
+                      uinfo("Port %d debouncestable=%d\n",
+                             port, debouncestable);
                       break;
                     }
                 }
@@ -838,7 +834,8 @@ static void usbhost_hub_event(FAR void *arg)
                 {
                   ctrlreq->type = USBHUB_REQ_TYPE_PORT;
                   ctrlreq->req  = USBHUB_REQ_CLEARFEATURE;
-                  usbhost_putle16(ctrlreq->value, USBHUB_PORT_FEAT_CCONNECTION);
+                  usbhost_putle16(ctrlreq->value,
+                                  USBHUB_PORT_FEAT_CCONNECTION);
                   usbhost_putle16(ctrlreq->index, port);
                   usbhost_putle16(ctrlreq->len, 0);
 
@@ -886,7 +883,8 @@ static void usbhost_hub_event(FAR void *arg)
                                 (FAR uint8_t *)&portstatus);
               if (ret < 0)
                 {
-                  uerr("ERROR: Failed to get port %d status: %d\n", port, ret);
+                  uerr("ERROR: Failed to get port %d status: %d\n",
+                       port, ret);
                   continue;
                 }
 
@@ -903,7 +901,8 @@ static void usbhost_hub_event(FAR void *arg)
                     {
                       ctrlreq->type = USBHUB_REQ_TYPE_PORT;
                       ctrlreq->req  = USBHUB_REQ_CLEARFEATURE;
-                      usbhost_putle16(ctrlreq->value, USBHUB_PORT_FEAT_CRESET);
+                      usbhost_putle16(ctrlreq->value,
+                                      USBHUB_PORT_FEAT_CRESET);
                       usbhost_putle16(ctrlreq->index, port);
                       usbhost_putle16(ctrlreq->len, 0);
 
@@ -924,16 +923,21 @@ static void usbhost_hub_event(FAR void *arg)
                       connport->speed = USB_SPEED_FULL;
                     }
 
-                  /* Activate the hub port by assigning it a control endpoint. */
+                  /* Activate the hub port by assigning it a control
+                   * endpoint.
+                   */
 
                   ret = usbhost_hport_activate(connport);
                   if (ret < 0)
                     {
-                      uerr("ERROR: usbhost_hport_activate failed: %d\n", ret);
+                      uerr("ERROR: usbhost_hport_activate failed: %d\n",
+                            ret);
                     }
                   else
                     {
-                      /* Inform waiters that a new device has been connected */
+                      /* Inform waiters that a new device has been
+                       * connected
+                       */
 
                       ret = DRVR_CONNECT(connport->drvr, connport, true);
                       if (ret < 0)
@@ -973,7 +977,8 @@ static void usbhost_hub_event(FAR void *arg)
         }
       else if (change)
         {
-          uwarn("WARNING: status %04x change %04x not handled\n", status, change);
+          uwarn("WARNING: status %04x change %04x not handled\n",
+                 status, change);
         }
     }
 
@@ -998,7 +1003,8 @@ static void usbhost_hub_event(FAR void *arg)
     {
       /* Wait for the next hub event */
 
-      ret = DRVR_ASYNCH(hport->drvr, priv->intin, (FAR uint8_t *)priv->buffer,
+      ret = DRVR_ASYNCH(hport->drvr, priv->intin,
+                       (FAR uint8_t *)priv->buffer,
                         INTIN_BUFSIZE, usbhost_callback, hubclass);
       if (ret < 0)
         {
@@ -1009,7 +1015,7 @@ static void usbhost_hub_event(FAR void *arg)
   leave_critical_section(flags);
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_disconnect_event
  *
  * Description:
@@ -1028,7 +1034,7 @@ static void usbhost_hub_event(FAR void *arg)
  * Assumptions:
  *   Probably called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static void usbhost_disconnect_event(FAR void *arg)
 {
@@ -1114,7 +1120,7 @@ static void usbhost_disconnect_event(FAR void *arg)
   leave_critical_section(flags);
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_getle16
  *
  * Description:
@@ -1126,14 +1132,14 @@ static void usbhost_disconnect_event(FAR void *arg)
  * Returned Value:
  *   A uint16_t representing the whole 16-bit integer value
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static inline uint16_t usbhost_getle16(const uint8_t *val)
 {
   return (uint16_t)val[1] << 8 | (uint16_t)val[0];
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_putle16
  *
  * Description:
@@ -1146,7 +1152,7 @@ static inline uint16_t usbhost_getle16(const uint8_t *val)
  * Returned Value:
  *   None
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static void usbhost_putle16(uint8_t *dest, uint16_t val)
 {
@@ -1154,7 +1160,7 @@ static void usbhost_putle16(uint8_t *dest, uint16_t val)
   dest[1] = val >> 8;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_callback
  *
  * Description:
@@ -1171,7 +1177,7 @@ static void usbhost_putle16(uint8_t *dest, uint16_t val)
  * Assumptions:
  *   Probably called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static void usbhost_callback(FAR void *arg, ssize_t nbytes)
 {
@@ -1235,15 +1241,16 @@ static void usbhost_callback(FAR void *arg, ssize_t nbytes)
     }
 }
 
-/************************************************************************************
+/****************************************************************************
  * struct usbhost_registry_s methods
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_create
  *
  * Description:
- *   This function implements the create() method of struct usbhost_registry_s.
+ *   This function implements the create() method of struct
+ *   usbhost_registry_s.
  *   The create() method is a callback into the class implementation.  It is
  *   used to (1) create a new instance of the USB host class state and to (2)
  *   bind a USB host driver "session" to the class instance.  Use of this
@@ -1262,7 +1269,7 @@ static void usbhost_callback(FAR void *arg, ssize_t nbytes)
  *   will fail only if the hport input parameter is NULL or if there are
  *   insufficient resources to create another USB host class instance.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static FAR struct usbhost_class_s *
   usbhost_create(FAR struct usbhost_hubport_s *hport,
@@ -1343,11 +1350,11 @@ errout_with_hub:
   return NULL;
 }
 
-/************************************************************************************
+/****************************************************************************
  * struct usbhost_class_s methods
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_connect
  *
  * Description:
@@ -1364,11 +1371,11 @@ errout_with_hub:
  *   desclen - The length in bytes of the configuration descriptor.
  *
  * Returned Value:
- *   On success, zero (OK) is returned. On a failure, a negated errno value is
- *   returned indicating the nature of the failure
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
  *
- *   NOTE that the class instance remains valid upon return with a failure.  It is
- *   the responsibility of the higher level enumeration logic to call
+ *   NOTE that the class instance remains valid upon return with a failure.
+ *    It is the responsibility of the higher level enumeration logic to call
  *   CLASS_DISCONNECTED to free up the class driver resources.
  *
  * Assumptions:
@@ -1376,7 +1383,7 @@ errout_with_hub:
  *   - If this function returns an error, the USB host controller driver
  *     must call to DISCONNECTED method to recover from the error
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static int usbhost_connect(FAR struct usbhost_class_s *hubclass,
                            FAR const uint8_t *configdesc, int desclen)
@@ -1438,7 +1445,7 @@ static int usbhost_connect(FAR struct usbhost_class_s *hubclass,
   return ret;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_disconnected
  *
  * Description:
@@ -1458,7 +1465,7 @@ static int usbhost_connect(FAR struct usbhost_class_s *hubclass,
  * Assumptions:
  *   Probably called from an interrupt handler.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 static int usbhost_disconnected(struct usbhost_class_s *hubclass)
 {
@@ -1494,11 +1501,11 @@ static int usbhost_disconnected(struct usbhost_class_s *hubclass)
   return ret;
 }
 
-/************************************************************************************
+/****************************************************************************
  * Public Functions
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Name: usbhost_hub_initialize
  *
  * Description:
@@ -1513,7 +1520,7 @@ static int usbhost_disconnected(struct usbhost_class_s *hubclass)
  *   On success this function will return zero (OK);  A negated errno value
  *   will be returned on failure.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 int usbhost_hub_initialize(void)
 {

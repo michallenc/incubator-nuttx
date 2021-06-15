@@ -72,6 +72,7 @@ SECTIONS
 
     /* Module text area starts at the end of iram0_0_seg */
 
+    . = ALIGN (4);
     _smodtext = ABSOLUTE(.);
   } > iram0_0_seg
 
@@ -99,8 +100,13 @@ SECTIONS
     *(COMMON)
     . = ALIGN(8);
     _ebss = ABSOLUTE(.);
+  } >dram0_0_seg
 
-    /* Uninitialized .bss */
+  .noinit (NOLOAD):
+  {
+    /* This section contains data that is not initialized during load,
+     * or during the application's initialization sequence.
+     */
 
     *(.noinit)
   } >dram0_0_seg

@@ -1,35 +1,20 @@
 /****************************************************************************
- * arch/misoc/src/lm32/lm32_blocktask.c
+ * arch/misoc/src/common/misoc_serial.c
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Ramtin Amin <keytwo@gmail.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -44,6 +29,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -118,8 +104,8 @@
 
 /* Common initialization logic will not not know that the all of the UARTs
  * have been disabled.  So, as a result, we may still have to provide
- * stub implementations of misoc_earlyserialinit(), misoc_serial_initialize(), and
- * misoc_putc().
+ * stub implementations of misoc_earlyserialinit(),
+ * misoc_serial_initialize(), and misoc_putc().
  */
 
 #ifdef HAVE_UART_DEVICE
@@ -228,7 +214,7 @@ static uart_dev_t g_uart1port =
   {
     .size    = CONFIG_UART1_TXBUFSIZE,
     .buffer  = g_uart1txbuffer,
-   },
+  },
   .ops       = &g_uart_ops,
   .priv      = &g_uart1priv,
 };
@@ -258,9 +244,9 @@ static void misoc_restoreuartint(struct uart_dev_s *dev, uint8_t im)
 static void misoc_disableuartint(struct uart_dev_s *dev, uint8_t *im)
 {
   if (im)
-   {
-     *im = uart_ev_enable_read();
-   }
+    {
+      *im = uart_ev_enable_read();
+    }
 
   misoc_restoreuartint(dev, 0);
 }
@@ -297,14 +283,15 @@ static void misoc_shutdown(struct uart_dev_s *dev)
  * Name: misoc_attach
  *
  * Description:
- *   Configure the UART to operation in interrupt driven mode.  This method is
- *   called when the serial port is opened.  Normally, this is just after the
+ *   Configure the UART to operation in interrupt driven mode.  This method
+ *   is called when the serial port is opened.  Normally, this is just after
  *   the setup() method is called, however, the serial console may operate in
  *   a non-interrupt driven mode during the boot phase.
  *
  *   RX and TX interrupts are not enabled by the attach method (unless the
  *   hardware supports multiple levels of interrupt enabling).  The RX and TX
- *   interrupts are not enabled until the txint() and rxint() methods are called.
+ *   interrupts are not enabled until the txint() and rxint() methods are
+ *   called.
  *
  ****************************************************************************/
 
@@ -323,8 +310,8 @@ static int misoc_attach(struct uart_dev_s *dev)
  *
  * Description:
  *   Detach UART interrupts.  This method is called when the serial port is
- *   closed normally just before the shutdown method is called.  The exception
- *   is the serial console which is never shutdown.
+ *   closed normally just before the shutdown method is called.
+ *   The exception is the serial console which is never shutdown.
  *
  ****************************************************************************/
 
@@ -560,7 +547,7 @@ int up_putc(int ch)
   struct uart_dev_s *dev = (struct uart_dev_s *)&CONSOLE_DEV;
   uint8_t imr;
 
-   misoc_disableuartint(dev, &imr);
+  misoc_disableuartint(dev, &imr);
 
   /* Check for LF */
 
@@ -659,6 +646,7 @@ void misoc_serial_initialize(void)
 #endif
 
   /* Register all UARTs */
+
   uart_register("/dev/ttyS0", &TTYS0_DEV);
 #endif
 }

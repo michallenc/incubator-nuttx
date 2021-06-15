@@ -76,7 +76,7 @@ if [ -z ${VERSION} ] ; then
   # If the VERSION does not match X.Y.Z, retrieve version from the tag
 
   if [[ ! ${VERSION} =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]] ; then
-    VERSION=`git -C ${WD} tag --sort=v:refname | grep -E "nuttx-[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | cut -d'-' -f2`
+    VERSION=`git -C ${WD} tag --sort=v:refname | grep -E "nuttx-[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | cut -d'-' -f2-`
   fi
 
 fi
@@ -84,10 +84,8 @@ fi
 # Make sure we know what is going on
 
 if [ -z ${VERSION} ] ; then
-  echo "Missing versioning information"
-  echo $USAGE
-  echo $ADVICE
-  exit 1
+  echo "Missing versioning information. Using the dummy value. (0.0.0)"
+  VERSION="0.0.0"
 fi
 
 if [ -z ${OUTFILE} ] ; then
@@ -114,7 +112,7 @@ if [ "X${MAJOR}.${MINOR}" = "X${VERSION}" ]; then
   echo $ADVICE
   exit 4
 fi
-PATCH=`echo ${VERSION} | cut -d'.' -f3`
+PATCH=`echo ${VERSION} | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+" | cut -d'.' -f3`
 
 # Get GIT information (if not provided on the command line)
 

@@ -1,42 +1,20 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_tim.c
  *
- *   Copyright (C) 2011 Uros Platise. All rights reserved.
- *   Author: Uros Platise <uros.platise@isotel.eu>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * With modifications and updates by:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Authors: Gregory Nutt <gnutt@nuttx.org>
- *            David Sidrane <david_s5@nscdg.com>
- *            Jukka Laitinen <jukka.laitinen@iki.fi>
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -51,6 +29,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -488,24 +467,24 @@ static inline void stm32_putreg32(FAR struct stm32_tim_dev_s *dev,
 
 static void stm32_tim_reload_counter(FAR struct stm32_tim_dev_s *dev)
 {
-  uint16_t val = stm32_getreg16(dev, STM32_BTIM_EGR_OFFSET);
-  val |= ATIM_EGR_UG;
-  stm32_putreg16(dev, STM32_BTIM_EGR_OFFSET, val);
+  uint16_t val = stm32_getreg16(dev, STM32_GTIM_EGR_OFFSET);
+  val |= GTIM_EGR_UG;
+  stm32_putreg16(dev, STM32_GTIM_EGR_OFFSET, val);
 }
 
 static void stm32_tim_enable(FAR struct stm32_tim_dev_s *dev)
 {
-  uint16_t val = stm32_getreg16(dev, STM32_BTIM_CR1_OFFSET);
-  val |= ATIM_CR1_CEN;
+  uint16_t val = stm32_getreg16(dev, STM32_GTIM_CR1_OFFSET);
+  val |= GTIM_CR1_CEN;
   stm32_tim_reload_counter(dev);
-  stm32_putreg16(dev, STM32_BTIM_CR1_OFFSET, val);
+  stm32_putreg16(dev, STM32_GTIM_CR1_OFFSET, val);
 }
 
 static void stm32_tim_disable(FAR struct stm32_tim_dev_s *dev)
 {
-  uint16_t val = stm32_getreg16(dev, STM32_BTIM_CR1_OFFSET);
-  val &= ~ATIM_CR1_CEN;
-  stm32_putreg16(dev, STM32_BTIM_CR1_OFFSET, val);
+  uint16_t val = stm32_getreg16(dev, STM32_GTIM_CR1_OFFSET);
+  val &= ~GTIM_CR1_CEN;
+  stm32_putreg16(dev, STM32_GTIM_CR1_OFFSET, val);
 }
 
 /* Reset timer into system default state, but do not affect output/input
@@ -663,7 +642,7 @@ static int stm32_tim_setclock(FAR struct stm32_tim_dev_s *dev, uint32_t freq)
       prescaler = 0xffff;
     }
 
-  stm32_putreg16(dev, STM32_BTIM_PSC_OFFSET, prescaler);
+  stm32_putreg16(dev, STM32_GTIM_PSC_OFFSET, prescaler);
   stm32_tim_enable(dev);
 
   return prescaler;
@@ -673,7 +652,7 @@ static void stm32_tim_setperiod(FAR struct stm32_tim_dev_s *dev,
                                 uint32_t period)
 {
   DEBUGASSERT(dev != NULL);
-  stm32_putreg32(dev, STM32_BTIM_ARR_OFFSET, period);
+  stm32_putreg32(dev, STM32_GTIM_ARR_OFFSET, period);
 }
 
 static int stm32_tim_setisr(FAR struct stm32_tim_dev_s *dev,
@@ -787,18 +766,18 @@ static int stm32_tim_setisr(FAR struct stm32_tim_dev_s *dev,
 static void stm32_tim_enableint(FAR struct stm32_tim_dev_s *dev, int source)
 {
   DEBUGASSERT(dev != NULL);
-  stm32_modifyreg16(dev, STM32_BTIM_DIER_OFFSET, 0, source);
+  stm32_modifyreg16(dev, STM32_GTIM_DIER_OFFSET, 0, source);
 }
 
 static void stm32_tim_disableint(FAR struct stm32_tim_dev_s *dev, int source)
 {
   DEBUGASSERT(dev != NULL);
-  stm32_modifyreg16(dev, STM32_BTIM_DIER_OFFSET, source, 0);
+  stm32_modifyreg16(dev, STM32_GTIM_DIER_OFFSET, source, 0);
 }
 
 static void stm32_tim_ackint(FAR struct stm32_tim_dev_s *dev, int source)
 {
-  stm32_putreg16(dev, STM32_BTIM_SR_OFFSET, ~source);
+  stm32_putreg16(dev, STM32_GTIM_SR_OFFSET, ~source);
 }
 
 /****************************************************************************
@@ -808,7 +787,7 @@ static void stm32_tim_ackint(FAR struct stm32_tim_dev_s *dev, int source)
 static int stm32_tim_setmode(FAR struct stm32_tim_dev_s *dev,
                              stm32_tim_mode_t mode)
 {
-  uint16_t val = ATIM_CR1_CEN | ATIM_CR1_ARPE;
+  uint16_t val = GTIM_CR1_CEN | GTIM_CR1_ARPE;
 
   DEBUGASSERT(dev != NULL);
 
@@ -831,13 +810,13 @@ static int stm32_tim_setmode(FAR struct stm32_tim_dev_s *dev,
         break;
 
       case STM32_TIM_MODE_DOWN:
-        val |= ATIM_CR1_DIR;
+        val |= GTIM_CR1_DIR;
 
       case STM32_TIM_MODE_UP:
         break;
 
       case STM32_TIM_MODE_UPDOWN:
-        val |= ATIM_CR1_CENTER1;
+        val |= GTIM_CR1_CENTER1;
 
         /* Our default: Interrupts are generated on compare, when counting
          * down
@@ -846,7 +825,7 @@ static int stm32_tim_setmode(FAR struct stm32_tim_dev_s *dev,
         break;
 
       case STM32_TIM_MODE_PULSE:
-        val |= ATIM_CR1_OPM;
+        val |= GTIM_CR1_OPM;
         break;
 
       default:
@@ -854,7 +833,7 @@ static int stm32_tim_setmode(FAR struct stm32_tim_dev_s *dev,
     }
 
   stm32_tim_reload_counter(dev);
-  stm32_putreg16(dev, STM32_BTIM_CR1_OFFSET, val);
+  stm32_putreg16(dev, STM32_GTIM_CR1_OFFSET, val);
 
   /* Advanced registers require Main Output Enable */
 
@@ -907,14 +886,14 @@ static int stm32_tim_setchannel(FAR struct stm32_tim_dev_s *dev,
         break;
 
       case STM32_TIM_CH_OUTTOGGLE:
-        ccmr_val  = (ATIM_CCMR_MODE_OCREFTOG << ATIM_CCMR1_OC1M_SHIFT);
-        ccer_val |= ATIM_CCER_CC1E << (channel << 2);
+        ccmr_val  = (GTIM_CCMR_MODE_OCREFTOG << GTIM_CCMR1_OC1M_SHIFT);
+        ccer_val |= GTIM_CCER_CC1E << (channel << 2);
         break;
 
       case STM32_TIM_CH_OUTPWM:
-        ccmr_val  = (ATIM_CCMR_MODE_PWM1 << ATIM_CCMR1_OC1M_SHIFT) +
-                    ATIM_CCMR1_OC1PE;
-        ccer_val |= ATIM_CCER_CC1E << (channel << 2);
+        ccmr_val  = (GTIM_CCMR_MODE_PWM1 << GTIM_CCMR1_OC1M_SHIFT) +
+                    GTIM_CCMR1_OC1PE;
+        ccer_val |= GTIM_CCER_CC1E << (channel << 2);
         break;
 
       default:
@@ -925,7 +904,7 @@ static int stm32_tim_setchannel(FAR struct stm32_tim_dev_s *dev,
 
   if (mode & STM32_TIM_CH_POLARITY_NEG)
     {
-      ccer_val |= ATIM_CCER_CC1P << (channel << 2);
+      ccer_val |= GTIM_CCER_CC1P << (channel << 2);
     }
 
   /* Define its position (shift) and get register offset */

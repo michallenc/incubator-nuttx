@@ -1,5 +1,5 @@
 /****************************************************************************
- *  sched/mqueue/mq_rcvinternal.c
+ * sched/mqueue/mq_rcvinternal.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -59,7 +59,7 @@
  *   msglen - Size of the buffer in bytes
  *
  * Returned Value:
- *   One success, zero (OK) is returned.  A negated errno value is returned
+ *   On success, zero (OK) is returned.  A negated errno value is returned
  *   on any failure:
  *
  *   EPERM    Message queue opened not opened for reading.
@@ -108,7 +108,7 @@ int nxmq_verify_receive(FAR struct mqueue_inode_s *msgq,
  *            received message.
  *
  * Returned Value:
- *   One success, zero (OK) is returned.  A negated errno value is returned
+ *   On success, zero (OK) is returned.  A negated errno value is returned
  *   on any failure.
  *
  * Assumptions:
@@ -203,7 +203,10 @@ int nxmq_wait_receive(FAR struct mqueue_inode_s *msgq,
 
   if (newmsg)
     {
-      msgq->nmsgs--;
+      if (msgq->nmsgs-- == msgq->maxmsgs)
+        {
+          nxmq_pollnotify(msgq, POLLOUT);
+        }
     }
 
   *rcvmsg = newmsg;

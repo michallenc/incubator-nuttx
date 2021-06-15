@@ -1,35 +1,20 @@
 /****************************************************************************
  * boards/arm/samv7/samv71-xult/src/sam_spi.c
  *
- *   Copyright (C) 2015 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -41,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <debug.h>
 #include <errno.h>
 
@@ -70,7 +56,9 @@
 void sam_spidev_initialize(void)
 {
 #ifdef CONFIG_SAMV7_SPI0_MASTER
-  /* Make sure that the EDBG DIGI_SPI CS is high so that it does not interfere */
+  /* Make sure that the EDBG DIGI_SPI CS is high so that it does not
+   * interfere
+   */
 
   sam_configgpio(CLICK_EDBG_CS);
 
@@ -86,6 +74,14 @@ void sam_spidev_initialize(void)
   sam_configgpio(CLICK_MB2_CS);
 
 #endif
+
+#ifdef CONFIG_LCD_ST7789
+  /* Enable CS and CMD/DATA for LCD */
+
+  sam_configgpio(SPI0_NPCS1);
+  sam_configgpio(GPIO_LCD_CD);
+#endif
+
 #endif /* CONFIG_SAMV7_SPI0_MASTER */
 
 #ifdef CONFIG_SAMV7_SPI0_SLAVE
@@ -180,6 +176,12 @@ void sam_spi0select(uint32_t devid, bool selected)
         break;
 #endif
 
+#ifdef CONFIG_LCD_ST7789
+      case SPIDEV_DISPLAY(0):
+        sam_gpiowrite(SPI0_NPCS1, !selected);
+        break;
+#endif
+
       default:
         break;
     }
@@ -221,5 +223,46 @@ uint8_t sam_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
   return 0;
 }
 #endif
+
+/****************************************************************************
+ * Name: sam_spi[n]cmddata
+ *
+ * Description:
+ *   Some SPI devices require an additional control to determine if the SPI
+ *   data being sent is a command or is data.  If CONFIG_SPI_CMDDATA then
+ *   this function will be called to different be command and data transfers.
+ *
+ *   This is often needed, for example, by LCD drivers.  Some LCD hardware
+ *   may be configured to use 9-bit data transfers with the 9th bit
+ *   indicating command or data.  That same hardware may be configurable,
+ *   instead, to use 8-bit data but to require an additional, board-
+ *   specific GPIO control to distinguish command and data.  This function
+ *   would be needed in that latter case.
+ *
+ * Input Parameters:
+ *   dev - SPI device info
+ *   devid - Identifies the (logical) device
+ *
+ * Returned Value:
+ *   Zero on success; a negated errno on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPI_CMDDATA
+#ifdef CONFIG_SAMV7_SPI0_MASTER
+int sam_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+{
+  if (devid == SPIDEV_DISPLAY(0))
+    {
+      sam_gpiowrite(GPIO_LCD_CD, !cmd);
+      return OK;
+    }
+  else
+    {
+      return -ENODEV;
+    }
+}
+#endif /* CONFIG_SAMV7_SPI0_MASTER */
+#endif /* CONFIG_SPI_CMDDATA */
 
 #endif /* CONFIG_SAMV7_SPI */

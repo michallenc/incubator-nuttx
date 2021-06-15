@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/cxd56/cxd56_i2c_bitbang.c
+ * arch/arm/src/cxd56xx/cxd56_i2c_bitbang.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,6 +23,9 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <assert.h>
+
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/i2c/i2c_bitbang.h>
 #include <nuttx/kmalloc.h>

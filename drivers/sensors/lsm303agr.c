@@ -48,6 +48,7 @@
 
 #include <nuttx/config.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 #include <stdlib.h>
@@ -394,7 +395,9 @@ static int lsm303agr_sensor_start(FAR struct lsm303agr_dev_s *priv)
 
   sninfo("Starting....");
 
-  /* Accelerometer config registers Turn on the accelerometer: 833Hz, +- 16g */
+  /* Accelerometer config registers:
+   * Turn on the accelerometer: 833Hz, +- 16g
+   */
 
   lsm303agr_writereg8(priv, LSM303AGR_CTRL_REG1_A, 0x77);
   lsm303agr_writereg8(priv, LSM303AGR_CTRL_REG4_A, 0xb0);
@@ -940,7 +943,7 @@ static int lsm303agr_sensor_read(FAR struct lsm303agr_dev_s *priv,
 
 static int lsm303agr_open(FAR struct file *filep)
 {
-  sninfo("Device LSM303AGR opened!!\r\n");
+  sninfo("Device LSM303AGR opened!!\n");
   return OK;
 }
 

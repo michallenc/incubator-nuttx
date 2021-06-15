@@ -1,5 +1,5 @@
 /****************************************************************************
- *  sched/group/group_killchildren.c
+ * sched/group/group_killchildren.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <sched.h>
 #include <pthread.h>
+#include <debug.h>
 
 #include <nuttx/sched.h>
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32/stm32f411e-disco/src/stm32f411e-disco.h
+ * boards/arm/stm32/nucleo-f412zg/src/nucleo-f412zg.h
  *
  *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
  *   Authors: Frank Bennett
@@ -84,13 +84,10 @@
 
 /* USB OTG FS
  *
- * PA9  OTG_FS_VBUS VBUS sensing (also connected to the green LED)
  * PC0  OTG_FS_PowerSwitchOn
  * PD5  OTG_FS_Overcurrent
  */
 
-#define GPIO_OTGFS_VBUS   (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|\
-                           GPIO_OPENDRAIN|GPIO_PORTA|GPIO_PIN9)
 #define GPIO_OTGFS_PWRON  (GPIO_OUTPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|\
                            GPIO_PUSHPULL|GPIO_PORTC|GPIO_PIN0)
 

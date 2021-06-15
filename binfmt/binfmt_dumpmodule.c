@@ -39,25 +39,24 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: dump_module
+ * Name: binfmt_dumpmodule
  *
  * Description:
- *   Load a module into memory and prep it for execution.
+ *   Dump the contents of struct binary_s.
+ *
+ * Input Parameters:
+ *   bin      - Load structure
  *
  * Returned Value:
- *   This is a NuttX internal function so it follows the convention that
- *   0 (OK) is returned on success and a negated errno is returned on
- *   failure.
+ *   Zero (OK) on success; a negated errno value on failure
  *
  ****************************************************************************/
 
-int dump_module(FAR const struct binary_s *bin)
+int binfmt_dumpmodule(FAR const struct binary_s *bin)
 {
   if (bin)
     {
       binfo("Module:\n");
-      binfo("  filename:  %s\n", bin->filename);
-      binfo("  argv:      %p\n", bin->argv);
       binfo("  entrypt:   %p\n", bin->entrypt);
       binfo("  mapped:    %p size=%zd\n", bin->mapped, bin->mapsize);
       binfo("  alloc:     %p %p %p\n", bin->alloc[0],

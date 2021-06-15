@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <assert.h>
 #include <errno.h>
 
 #include <nuttx/irq.h>
@@ -65,9 +66,8 @@ int task_reparent(pid_t ppid, pid_t chpid)
   FAR struct task_group_s *ogrp;
   FAR struct task_group_s *pgrp;
   FAR struct tcb_s *tcb;
-  grpid_t ogrpid;
-  grpid_t pgrpid;
   irqstate_t flags;
+  pid_t opid;
   int ret;
 
   /* Disable interrupts so that nothing can change in the relationship of
@@ -88,13 +88,13 @@ int task_reparent(pid_t ppid, pid_t chpid)
   DEBUGASSERT(tcb->group);
   chgrp = tcb->group;
 
-  /* Get the GID of the old parent task's task group (ogrpid) */
+  /* Get the PID of the old parent task's task group (opid) */
 
-  ogrpid = chgrp->tg_pgrpid;
+  opid = chgrp->tg_ppid;
 
   /* Get the old parent task's task group (ogrp) */
 
-  ogrp = group_findby_grpid(ogrpid);
+  ogrp = group_findbypid(opid);
   if (!ogrp)
     {
       ret = -ESRCH;
@@ -110,8 +110,8 @@ int task_reparent(pid_t ppid, pid_t chpid)
     {
       /* Get the grandparent task's task group (pgrp) */
 
-      pgrpid = ogrp->tg_pgrpid;
-      pgrp = group_findby_grpid(pgrpid);
+      ppid = ogrp->tg_ppid;
+      pgrp = group_findbypid(ppid);
     }
   else
     {
@@ -125,7 +125,7 @@ int task_reparent(pid_t ppid, pid_t chpid)
         }
 
       pgrp = tcb->group;
-      pgrpid = pgrp->tg_grpid;
+      ppid = pgrp->tg_pid;
     }
 
   if (!pgrp)
@@ -139,7 +139,7 @@ int task_reparent(pid_t ppid, pid_t chpid)
    * all members of the child's task group.
    */
 
-  chgrp->tg_pgrpid = pgrpid;
+  chgrp->tg_ppid = ppid;
 
 #ifdef CONFIG_SCHED_CHILD_STATUS
   /* Remove the child status entry from old parent task group */

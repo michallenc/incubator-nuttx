@@ -1,36 +1,20 @@
 /****************************************************************************
  * net/tcp/tcp_send_buffered.c
  *
- *   Copyright (C) 2007-2014, 2016-2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Jason Jiang  <jasonj@live.cn>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -58,8 +42,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
-#include <debug.h>
 #include <debug.h>
 
 #include <arch/irq.h>
@@ -423,7 +407,7 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
            * the write buffer has been ACKed.
            */
 
-          if (ackno > TCP_WBSEQNO(wrb))
+          if (TCP_SEQ_GT(ackno, TCP_WBSEQNO(wrb)))
             {
               /* Get the sequence number at the end of the data */
 
@@ -435,7 +419,7 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 
               /* Has the entire buffer been ACKed? */
 
-              if (ackno >= lastseq)
+              if (TCP_SEQ_GTE(ackno, lastseq))
                 {
                   ninfo("ACK: wrb=%p Freeing write buffer\n", wrb);
 
@@ -465,7 +449,7 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
                    * buffers in the chain.
                    */
 
-                  trimlen = ackno - TCP_WBSEQNO(wrb);
+                  trimlen = TCP_SEQ_SUB(ackno, TCP_WBSEQNO(wrb));
                   if (trimlen > TCP_WBSENT(wrb))
                     {
                       /* More data has been ACKed then we have sent? */
@@ -487,6 +471,13 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
             }
           else if (ackno == TCP_WBSEQNO(wrb))
             {
+              /* Reset the duplicate ack counter */
+
+              if ((flags & TCP_NEWDATA) != 0)
+                {
+                  TCP_WBNACK(wrb) = 0;
+                }
+
               /* Duplicate ACK? Retransmit data if need */
 
               if (++TCP_WBNACK(wrb) ==
@@ -513,13 +504,13 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
        */
 
       wrb = (FAR struct tcp_wrbuffer_s *)sq_peek(&conn->write_q);
-      if (wrb && TCP_WBSENT(wrb) > 0 && ackno > TCP_WBSEQNO(wrb))
+      if (wrb && TCP_WBSENT(wrb) > 0 && TCP_SEQ_GT(ackno, TCP_WBSEQNO(wrb)))
         {
           uint32_t nacked;
 
           /* Number of bytes that were ACKed */
 
-          nacked = ackno - TCP_WBSEQNO(wrb);
+          nacked = TCP_SEQ_SUB(ackno, TCP_WBSEQNO(wrb));
           if (nacked > TCP_WBSENT(wrb))
             {
               /* More data has been ACKed then we have sent? ASSERT? */
@@ -820,8 +811,7 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 
       predicted_seqno = tcp_getsequence(conn->sndseq) + sndlen;
 
-      if ((predicted_seqno > conn->sndseq_max) ||
-          (tcp_getsequence(conn->sndseq) > predicted_seqno)) /* overflow */
+      if (TCP_SEQ_GT(predicted_seqno, conn->sndseq_max))
         {
            conn->sndseq_max = predicted_seqno;
         }
@@ -871,50 +861,41 @@ static uint16_t psock_send_eventhandler(FAR struct net_driver_s *dev,
 }
 
 /****************************************************************************
- * Name: send_txnotify
+ * Name: tcp_max_wrb_size
  *
  * Description:
- *   Notify the appropriate device driver that we are have data ready to
- *   be send (TCP)
- *
- * Input Parameters:
- *   psock - Socket state structure
- *   conn  - The TCP connection structure
- *
- * Returned Value:
- *   None
+ *   Calculate the desired amount of data for a single
+ *   struct tcp_wrbuffer_s.
  *
  ****************************************************************************/
 
-static inline void send_txnotify(FAR struct socket *psock,
-                                 FAR struct tcp_conn_s *conn)
+static uint32_t tcp_max_wrb_size(FAR struct tcp_conn_s *conn)
 {
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-  /* If both IPv4 and IPv6 support are enabled, then we will need to select
-   * the device driver using the appropriate IP domain.
-   */
+  const uint32_t mss = conn->mss;
+  uint32_t size;
 
-  if (psock->s_domain == PF_INET)
-#endif
+  /* a few segments should be fine */
+
+  size = 4 * mss;
+
+  /* but it should not hog too many IOB buffers */
+
+  if (size > CONFIG_IOB_NBUFFERS * CONFIG_IOB_BUFSIZE / 2)
     {
-      /* Notify the device driver that send data is available */
-
-      netdev_ipv4_txnotify(conn->u.ipv4.laddr, conn->u.ipv4.raddr);
+      size = CONFIG_IOB_NBUFFERS * CONFIG_IOB_BUFSIZE / 2;
     }
-#endif /* CONFIG_NET_IPv4 */
 
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-  else /* if (psock->s_domain == PF_INET6) */
-#endif /* CONFIG_NET_IPv4 */
+  /* also, we prefer a multiple of mss */
+
+  if (size > mss)
     {
-      /* Notify the device driver that send data is available */
-
-      DEBUGASSERT(psock->s_domain == PF_INET6);
-      netdev_ipv6_txnotify(conn->u.ipv6.laddr, conn->u.ipv6.raddr);
+      const uint32_t odd = size % mss;
+      size -= odd;
     }
-#endif /* CONFIG_NET_IPv6 */
+
+  DEBUGASSERT(size > 0);
+  ninfo("tcp_max_wrb_size = %" PRIu32 " for conn %p\n", size, conn);
+  return size;
 }
 
 /****************************************************************************
@@ -982,11 +963,12 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 {
   FAR struct tcp_conn_s *conn;
   FAR struct tcp_wrbuffer_s *wrb;
+  FAR const uint8_t *cp;
   ssize_t    result = 0;
   bool       nonblock;
   int        ret = OK;
 
-  if (psock == NULL || psock->s_crefs <= 0)
+  if (psock == NULL || psock->s_conn == NULL)
     {
       nerr("ERROR: Invalid socket\n");
       ret = -EBADF;
@@ -1003,7 +985,6 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
   /* Make sure that we have the IP address mapping */
 
   conn = (FAR struct tcp_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn);
 
 #if defined(CONFIG_NET_ARP_SEND) || defined(CONFIG_NET_ICMPv6_NEIGHBOR)
 #ifdef CONFIG_NET_ARP_SEND
@@ -1044,30 +1025,15 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 
   BUF_DUMP("psock_tcp_send", buf, len);
 
-  if (len > 0)
+  cp = buf;
+  while (len > 0)
     {
-      /* Allocate a write buffer.  Careful, the network will be momentarily
-       * unlocked here.
-       */
+      uint32_t max_wrb_size;
+      unsigned int off;
+      size_t chunk_len = len;
+      ssize_t chunk_result;
 
       net_lock();
-      if (nonblock)
-        {
-          wrb = tcp_wrbuffer_tryalloc();
-        }
-      else
-        {
-          wrb = tcp_wrbuffer_alloc();
-        }
-
-      if (wrb == NULL)
-        {
-          /* A buffer allocation error occurred */
-
-          nerr("ERROR: Failed to allocate write buffer\n");
-          ret = nonblock ? -EAGAIN : -ENOMEM;
-          goto errout_with_lock;
-        }
 
       /* Allocate resources to receive a callback */
 
@@ -1084,7 +1050,7 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 
           nerr("ERROR: Failed to allocate callback\n");
           ret = nonblock ? -EAGAIN : -ENOMEM;
-          goto errout_with_wrb;
+          goto errout_with_lock;
         }
 
       /* Set up the callback in the connection */
@@ -1094,10 +1060,62 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
       psock->s_sndcb->priv  = (FAR void *)psock;
       psock->s_sndcb->event = psock_send_eventhandler;
 
+      /* Allocate a write buffer.  Careful, the network will be momentarily
+       * unlocked here.
+       */
+
+      /* Try to coalesce into the last wrb.
+       *
+       * But only when it might yield larger segments.
+       * (REVISIT: It might make sense to lift this condition.
+       * IOB boundaries and segment boundaries usually do not match.
+       * It makes sense to save the number of IOBs.)
+       *
+       * Also, for simplicity, do it only when we haven't sent anything
+       * from the the wrb yet.
+       */
+
+      max_wrb_size = tcp_max_wrb_size(conn);
+      wrb = (FAR struct tcp_wrbuffer_s *)sq_tail(&conn->write_q);
+      if (wrb != NULL && TCP_WBSENT(wrb) == 0 && TCP_WBNRTX(wrb) == 0 &&
+          TCP_WBPKTLEN(wrb) < max_wrb_size &&
+          (TCP_WBPKTLEN(wrb) % conn->mss) != 0)
+        {
+          wrb = (FAR struct tcp_wrbuffer_s *)sq_remlast(&conn->write_q);
+          ninfo("coalesce %zu bytes to wrb %p (%" PRIu16 ")\n", len, wrb,
+                TCP_WBPKTLEN(wrb));
+          DEBUGASSERT(TCP_WBPKTLEN(wrb) > 0);
+        }
+      else if (nonblock)
+        {
+          wrb = tcp_wrbuffer_tryalloc();
+          ninfo("new wrb %p (non blocking)\n", wrb);
+        }
+      else
+        {
+          wrb = tcp_wrbuffer_alloc();
+          ninfo("new wrb %p\n", wrb);
+        }
+
+      if (wrb == NULL)
+        {
+          /* A buffer allocation error occurred */
+
+          nerr("ERROR: Failed to allocate write buffer\n");
+          ret = nonblock ? -EAGAIN : -ENOMEM;
+          goto errout_with_lock;
+        }
+
       /* Initialize the write buffer */
 
       TCP_WBSEQNO(wrb) = (unsigned)-1;
       TCP_WBNRTX(wrb)  = 0;
+
+      off = TCP_WBPKTLEN(wrb);
+      if (off + chunk_len > max_wrb_size)
+        {
+          chunk_len = max_wrb_size - off;
+        }
 
       /* Copy the user data into the write buffer.  We cannot wait for
        * buffer space if the socket was opened non-blocking.
@@ -1113,13 +1131,23 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
            * remaining data.
            */
 
-          result = TCP_WBTRYCOPYIN(wrb, (FAR uint8_t *)buf, len);
-          if (result == -ENOMEM)
+          chunk_result = TCP_WBTRYCOPYIN(wrb, cp, chunk_len, off);
+          if (chunk_result == -ENOMEM)
             {
               if (TCP_WBPKTLEN(wrb) > 0)
                 {
-                  ninfo("INFO: Allocated part of the requested data\n");
-                  result = TCP_WBPKTLEN(wrb);
+                  DEBUGASSERT(TCP_WBPKTLEN(wrb) >= off);
+                  chunk_result = TCP_WBPKTLEN(wrb) - off;
+                  ninfo("INFO: Allocated part of the requested data "
+                        "%zd/%zu\n",
+                        chunk_result, chunk_len);
+
+                  /* Note: chunk_result here can be 0 if we are trying
+                   * to coalesce into the existing buffer and we failed
+                   * to add anything.
+                   */
+
+                  DEBUGASSERT(chunk_result >= 0);
                 }
               else
                 {
@@ -1130,7 +1158,7 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
             }
           else
             {
-              result = len;
+              DEBUGASSERT(chunk_result == chunk_len);
             }
         }
       else
@@ -1144,12 +1172,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
            */
 
           blresult = net_breaklock(&count);
-
-          /* NOTE: At least IOB needs to hold the packet */
-
-          DEBUGASSERT((CONFIG_IOB_NBUFFERS * CONFIG_IOB_BUFSIZE) > len);
-
-          result = TCP_WBCOPYIN(wrb, (FAR uint8_t *)buf, len);
+          ninfo("starting copyin to wrb %p\n", wrb);
+          chunk_result = TCP_WBCOPYIN(wrb, cp, chunk_len, off);
+          ninfo("finished copyin to wrb %p\n", wrb);
           if (blresult >= 0)
             {
               net_restorelock(count);
@@ -1171,8 +1196,36 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
 
       /* Notify the device driver of the availability of TX data */
 
-      send_txnotify(psock, conn);
+      tcp_send_txnotify(psock, conn);
       net_unlock();
+
+      if (chunk_result == 0)
+        {
+          DEBUGASSERT(nonblock);
+          if (result == 0)
+            {
+              result = -EAGAIN;
+            }
+
+          break;
+        }
+
+      if (chunk_result < 0)
+        {
+          if (result == 0)
+            {
+              result = chunk_result;
+            }
+
+          break;
+        }
+
+      DEBUGASSERT(chunk_result <= len);
+      DEBUGASSERT(chunk_result <= chunk_len);
+      DEBUGASSERT(result >= 0);
+      cp += chunk_result;
+      len -= chunk_result;
+      result += chunk_result;
     }
 
   /* Check for errors.  Errors are signaled by negative errno values
@@ -1182,11 +1235,6 @@ ssize_t psock_tcp_send(FAR struct socket *psock, FAR const void *buf,
   if (result < 0)
     {
       ret = result;
-      goto errout;
-    }
-
-  if (ret < 0)
-    {
       goto errout;
     }
 
@@ -1201,6 +1249,11 @@ errout_with_lock:
   net_unlock();
 
 errout:
+  if (result > 0)
+    {
+      return result;
+    }
+
   return ret;
 }
 
@@ -1232,7 +1285,7 @@ int psock_tcp_cansend(FAR struct socket *psock)
 {
   /* Verify that we received a valid socket */
 
-  if (!psock || psock->s_crefs <= 0)
+  if (!psock || !psock->s_conn)
     {
       nerr("ERROR: Invalid socket\n");
       return -EBADF;

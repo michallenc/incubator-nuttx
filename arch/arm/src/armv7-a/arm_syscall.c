@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/arm/src/armv7-a/arm_syscall.c
+ * arch/arm/src/armv7-a/arm_syscall.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -27,7 +27,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
-#include <syscall.h>
 #include <assert.h>
 #include <debug.h>
 
@@ -98,7 +97,7 @@ static void dispatch_syscall(void)
     " add sp, sp, #16\n"           /* Destroy the stack frame */
     " mov r2, r0\n"                /* R2=Save return value in R2 */
     " mov r0, #0\n"                /* R0=SYS_syscall_return */
-    " svc #0x900001\n"             /* Return from the SYSCALL */
+    " svc %0\n"::"i"(SYS_syscall)  /* Return from the SYSCALL */
   );
 }
 #endif
@@ -219,19 +218,19 @@ uint32_t *arm_syscall(uint32_t *regs)
         }
         break;
 
-      /* R0=SYS_context_restore:  Restore task context
+      /* R0=SYS_restore_context:  Restore task context
        *
        * void arm_fullcontextrestore(uint32_t *restoreregs)
        *   noreturn_function;
        *
        * At this point, the following values are saved in context:
        *
-       *   R0 = SYS_context_restore
+       *   R0 = SYS_restore_context
        *   R1 = restoreregs
        */
 
 #ifdef CONFIG_BUILD_KERNEL
-      case SYS_context_restore:
+      case SYS_restore_context:
         {
           /* Replace 'regs' with the pointer to the register set in
            * regs[REG_R1].  On return from the system call, that register
@@ -279,31 +278,48 @@ uint32_t *arm_syscall(uint32_t *regs)
         break;
 #endif
 
+#if !defined(CONFIG_BUILD_FLAT) && !defined(CONFIG_DISABLE_PTHREAD)
+
       /* R0=SYS_pthread_start:  This a user pthread start
        *
-       *   void up_pthread_start(pthread_startroutine_t entrypt,
-       *                         pthread_addr_t arg) noreturn_function;
+       *   void up_pthread_start(pthread_trampoline_t startup,
+       *          pthread_startroutine_t entrypt, pthread_addr_t arg)
        *
        * At this point, the following values are saved in context:
        *
        *   R0 = SYS_pthread_start
-       *   R1 = entrypt
-       *   R2 = arg
+       *   R1 = startup
+       *   R2 = entrypt
+       *   R3 = arg
        */
 
-#if defined(CONFIG_BUILD_KERNEL) && !defined(CONFIG_DISABLE_PTHREAD)
       case SYS_pthread_start:
         {
-          /* Set up to return to the user-space pthread start-up function in
-           * unprivileged mode. We need:
-           *
-           *   R0   = arg
-           *   PC   = entrypt
-           *   CSPR = user mode
-           */
+          regs[REG_PC]   = regs[REG_R0];
+          regs[REG_R0]   = regs[REG_R1];
+          regs[REG_R1]   = regs[REG_R2];
 
-          regs[REG_PC]   = regs[REG_R1];
-          regs[REG_R0]   = regs[REG_R2];
+          cpsr           = regs[REG_CPSR] & ~PSR_MODE_MASK;
+          regs[REG_CPSR] = cpsr | PSR_MODE_USR;
+        }
+        break;
+
+      /* R0=SYS_pthread_exit:  This pthread_exit call in user-space
+       *
+       *   void up_pthread_exit(pthread_exitroutine_t exit,
+       *                        FAR void *exit_value)
+       *
+       * At this point, the following values are saved in context:
+       *
+       *   R0 = SYS_pthread_exit
+       *   R1 = pthread_exit trampoline routine
+       *   R2 = exit_value
+       */
+
+      case SYS_pthread_exit:
+        {
+          regs[REG_PC]   = regs[REG_R0];
+          regs[REG_R0]   = regs[REG_R1];
 
           cpsr           = regs[REG_CPSR] & ~PSR_MODE_MASK;
           regs[REG_CPSR] = cpsr | PSR_MODE_USR;

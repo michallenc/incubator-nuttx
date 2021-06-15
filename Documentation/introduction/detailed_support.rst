@@ -1808,6 +1808,11 @@ One board is supported in this family:
    `README <https://github.com/apache/incubator-nuttx/blob/master/boards/arm/stm32/nucleo-g431rb/README.txt>`__
    file for further information.
 
+-  **B-G431B-ESC1**. Initial board support for the
+   B-G431B-ESC1 was added in NuttX-10.0. Refer to the NuttX board
+   `README <https://github.com/apache/incubator-nuttx/blob/master/boards/arm/stm32/b-g431b-esc1/README.txt>`__
+   file for further information.
+
 STMicro STM32 L475
 ------------------
 
@@ -2459,7 +2464,7 @@ Also refer to the NuttX board
 file for further information about the current state of the port.
 
 NuttX-9.0 added basic support for Microchip SAME54 Xplained Pro board.
-An ethernet driver was also added to the SAME5x familly.
+An ethernet driver was also added to the SAME5x family.
 
 STMicro STM32 F72x/F73x
 -----------------------
@@ -3020,25 +3025,6 @@ RISC-V
 RISC-V Architectural Support. Basic support for the RISC-V architecture
 was contributed by Ken Pettit in NuttX-7.19.
 
-NEXT RISC-V NR5Mxx
-------------------
-
-This support is for a custom NEXT RISC-V NR5Mxx (RV32IM). The initial release
-is *thin* but a great starting point for anyone interested in RISC-V development with
-NuttX.
-
-GreenWaves GAP8
----------------
-
-(RV32IM architecture)
-
-Basic support GreenWaves GAP8 *gapuino* board
-was added by hhuysqt in NuttX-7.27. The GAP8 is a 1+8-core DSP-like
-RISC-V MCU. The GAP8 features a RI5CY core called Fabric Controller(FC),
-and a cluster of 8 RI5CY cores that runs at a bit slower speed. The GAP8
-is an implementation of the opensource PULP platform, a
-Parallel-Ultra-Low-Power design.
-
 `Sipeed Maix bit <#k210>`__
 
 Initial support for the Sipeed Maix bit board was added in NuttX-9.0.
@@ -3109,7 +3095,21 @@ All three boards are based on the eZ80F091 part and all use the Zilog
 ZDS-II Windows command line tools. The development environment is either
 Windows native or Cygwin or MSYS2 under Windows.
 
+It is also possible to compile using ``clang`` and the GNU ``binutils``
+toolchain. You must have a variant of ``clang`` that supports the eZ80,
+and an install of ``binutils`` built with Z80 support.
 
+``clang`` with eZ80 support is available as part of the Texas Instruments
+CE 85+ unofficial `toolchain <https://ce-programming.github.io/toolchain/>`
+and requires a further `patch <https://github.com/codebje/ez80-toolchain/tree/master/clang>`
+to support GNU assembler syntax.
+
+GNU ``binutils`` supports the Z80 family. It will require compilation with
+appropriate configuration to enable support.
+
+C intrinsics are also required. Some may be found in the Zilog ZDS-II
+distribution, requiring some modification to build with the GNU assembler.
+Additional intrinsics for 64-bit support must be supplied.
 
 Zilog Z8Encore!
 ===============

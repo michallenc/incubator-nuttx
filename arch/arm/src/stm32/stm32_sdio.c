@@ -153,7 +153,7 @@
 #  define SDIO_CLKCR_EDGE SDIO_CLKCR_RISINGEDGE
 #endif
 
-/* Mode dependent settings.  These depend on clock devisor settings that must
+/* Mode dependent settings.  These depend on clock divisor settings that must
  * be defined in the board-specific board.h header file: SDIO_INIT_CLKDIV,
  * SDIO_MMCXFR_CLKDIV, and SDIO_SDXFR_CLKDIV.
  */
@@ -172,9 +172,12 @@
 #define SDIO_CMDTIMEOUT          (100000)
 #define SDIO_LONGTIMEOUT         (0x7fffffff)
 
-/* Big DTIMER setting */
+/* DTIMER setting */
 
-#define SDIO_DTIMER_DATATIMEOUT  (0x000fffff)
+/* Assuming Max timeout in bypass 48 Mhz */
+
+#define IP_CLCK_FREQ               UINT32_C(48000000)
+#define SDIO_DTIMER_DATATIMEOUT_MS 250
 
 /* DMA channel/stream configuration register settings.  The following
  * must be selected.  The DMA driver will select the remaining fields.
@@ -473,9 +476,8 @@ static int  stm32_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
 /* EVENT handler */
 
 static void stm32_waitenable(FAR struct sdio_dev_s *dev,
-              sdio_eventset_t eventset);
-static sdio_eventset_t
-            stm32_eventwait(FAR struct sdio_dev_s *dev, uint32_t timeout);
+              sdio_eventset_t eventset, uint32_t timeout);
+static sdio_eventset_t stm32_eventwait(FAR struct sdio_dev_s *dev);
 static void stm32_callbackenable(FAR struct sdio_dev_s *dev,
               sdio_eventset_t eventset);
 static int  stm32_registercallback(FAR struct sdio_dev_s *dev,
@@ -1017,9 +1019,24 @@ static uint8_t stm32_log2(uint16_t value)
 
 static void stm32_dataconfig(uint32_t timeout, uint32_t dlen, uint32_t dctrl)
 {
-  uint32_t regval = 0;
+  uint32_t clkdiv;
+  uint32_t regval;
+  uint32_t sdio_clk = IP_CLCK_FREQ;
 
-  /* Enable data path */
+  /* Enable data path using a timeout scaled to the SD_CLOCK (the card
+   * clock).
+   */
+
+  regval = getreg32(STM32_SDIO_CLKCR);
+  clkdiv = (regval & SDIO_CLKCR_CLKDIV_MASK) >> SDIO_CLKCR_CLKDIV_SHIFT;
+  if ((regval & SDIO_CLKCR_BYPASS) == 0)
+    {
+      sdio_clk = sdio_clk / (2 + clkdiv);
+    }
+
+  /*  Convert Timeout in Ms to SD_CLK counts */
+
+  timeout  = timeout * (sdio_clk / 1000);
 
   putreg32(timeout, STM32_SDIO_DTIMER); /* Set DTIMER */
   putreg32(dlen,    STM32_SDIO_DLEN);   /* Set DLEN */
@@ -1050,10 +1067,15 @@ static void stm32_datadisable(void)
 {
   uint32_t regval;
 
-  /* Disable the data path */
+  /* Disable the data path  */
 
-  putreg32(SDIO_DTIMER_DATATIMEOUT, STM32_SDIO_DTIMER); /* Reset DTIMER */
-  putreg32(0,                       STM32_SDIO_DLEN);   /* Reset DLEN */
+  /* Reset DTIMER */
+
+  putreg32(UINT32_MAX, STM32_SDIO_DTIMER);
+
+  /* Reset DLEN */
+
+  putreg32(0, STM32_SDIO_DLEN);
 
   /* Reset DCTRL DTEN, DTDIR, DTMODE, DMAEN, and DBLOCKSIZE fields */
 
@@ -1993,7 +2015,7 @@ static int stm32_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
       dblocksize = stm32_log2(nbytes) << SDIO_DCTRL_DBLOCKSIZE_SHIFT;
     }
 
-  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT, nbytes,
+  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT_MS, nbytes,
                    dblocksize | SDIO_DCTRL_DTDIR);
 
   /* And enable interrupts */
@@ -2058,7 +2080,7 @@ static int stm32_sendsetup(FAR struct sdio_dev_s *dev,
       dblocksize = stm32_log2(nbytes) << SDIO_DCTRL_DBLOCKSIZE_SHIFT;
     }
 
-  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT, nbytes, dblocksize);
+  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT_MS, nbytes, dblocksize);
 
   /* Enable TX interrupts */
 
@@ -2429,7 +2451,7 @@ static int stm32_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
  ****************************************************************************/
 
 static void stm32_waitenable(FAR struct sdio_dev_s *dev,
-                             sdio_eventset_t eventset)
+                             sdio_eventset_t eventset, uint32_t timeout)
 {
   struct stm32_dev_s *priv = (struct stm32_dev_s *)dev;
   uint32_t waitmask;
@@ -2474,6 +2496,34 @@ static void stm32_waitenable(FAR struct sdio_dev_s *dev,
     }
 
   stm32_configwaitints(priv, waitmask, eventset, 0);
+
+  /* Check if the timeout event is specified in the event set */
+
+  if ((priv->waitevents & SDIOWAIT_TIMEOUT) != 0)
+    {
+      int delay;
+      int ret;
+
+      /* Yes.. Handle a cornercase: The user request a timeout event but
+       * with timeout == 0?
+       */
+
+      if (!timeout)
+        {
+          priv->wkupevent = SDIOWAIT_TIMEOUT;
+          return;
+        }
+
+      /* Start the watchdog timer */
+
+      delay = MSEC2TICK(timeout);
+      ret   = wd_start(&priv->waitwdog, delay,
+                       stm32_eventtimeout, (wdparm_t)priv);
+      if (ret < 0)
+        {
+          mcerr("ERROR: wd_start failed: %d\n", ret);
+        }
+    }
 }
 
 /****************************************************************************
@@ -2497,8 +2547,7 @@ static void stm32_waitenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static sdio_eventset_t stm32_eventwait(FAR struct sdio_dev_s *dev,
-                                       uint32_t timeout)
+static sdio_eventset_t stm32_eventwait(FAR struct sdio_dev_s *dev)
 {
   struct stm32_dev_s *priv = (struct stm32_dev_s *)dev;
   sdio_eventset_t wkupevent = 0;
@@ -2526,35 +2575,6 @@ static sdio_eventset_t stm32_eventwait(FAR struct sdio_dev_s *dev,
 #else
   DEBUGASSERT(priv->waitevents != 0 || priv->wkupevent != 0);
 #endif
-
-  /* Check if the timeout event is specified in the event set */
-
-  if ((priv->waitevents & SDIOWAIT_TIMEOUT) != 0)
-    {
-      int delay;
-
-      /* Yes.. Handle a cornercase: The user request a timeout event but
-       * with timeout == 0?
-       */
-
-      if (!timeout)
-        {
-          /* Then just tell the caller that we already timed out */
-
-          wkupevent = SDIOWAIT_TIMEOUT;
-          goto errout;
-        }
-
-      /* Start the watchdog timer */
-
-      delay = MSEC2TICK(timeout);
-      ret   = wd_start(&priv->waitwdog, delay,
-                       stm32_eventtimeout, (wdparm_t)priv);
-      if (ret < 0)
-        {
-          mcerr("ERROR: wd_start failed: %d\n", ret);
-        }
-    }
 
 #if defined(CONFIG_MMCSD_SDIOWAIT_WRCOMPLETE)
   if ((priv->waitevents & SDIOWAIT_WRCOMPLETE) != 0)
@@ -2620,7 +2640,6 @@ errout_with_waitints:
   priv->xfrflags   = 0;
 #endif
 
-errout:
   leave_critical_section(flags);
   stm32_dumpsamples(priv);
   return wkupevent;
@@ -2804,7 +2823,7 @@ static int stm32_dmarecvsetup(FAR struct sdio_dev_s *dev,
       dblocksize = stm32_log2(buflen) << SDIO_DCTRL_DBLOCKSIZE_SHIFT;
     }
 
-  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT, buflen,
+  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT_MS, buflen,
                    dblocksize | SDIO_DCTRL_DTDIR);
 
   /* Configure the RX DMA */
@@ -2884,7 +2903,7 @@ static int stm32_dmasendsetup(FAR struct sdio_dev_s *dev,
       dblocksize = stm32_log2(buflen) << SDIO_DCTRL_DBLOCKSIZE_SHIFT;
     }
 
-  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT, buflen, dblocksize);
+  stm32_dataconfig(SDIO_DTIMER_DATATIMEOUT_MS, buflen, dblocksize);
 
   /* Configure the TX DMA */
 

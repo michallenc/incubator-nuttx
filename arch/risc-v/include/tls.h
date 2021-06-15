@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/riscv/include/tls.h
+ * arch/risc-v/include/tls.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -66,7 +66,7 @@
 static inline FAR struct tls_info_s *up_tls_info(void)
 {
   DEBUGASSERT(!up_interrupt_context());
-  return TLS_INFO((uintptr_t)riscv_getsp());
+  return TLS_INFO((uintptr_t)up_getsp());
 }
 #else
 #  define up_tls_info() tls_get_info()

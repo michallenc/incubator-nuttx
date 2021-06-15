@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <assert.h>
 
 #include <nuttx/init.h>
 #include <nuttx/spinlock.h>
@@ -45,12 +46,12 @@
  * disabled.
  */
 
-volatile spinlock_t g_cpu_irqlock SP_SECTION = SP_UNLOCKED;
+volatile spinlock_t g_cpu_irqlock = SP_UNLOCKED;
 
 /* Used to keep track of which CPU(s) hold the IRQ lock. */
 
-volatile spinlock_t g_cpu_irqsetlock SP_SECTION;
-volatile cpu_set_t g_cpu_irqset SP_SECTION;
+volatile spinlock_t g_cpu_irqsetlock;
+volatile cpu_set_t g_cpu_irqset;
 
 /* Handles nested calls to enter_critical section from interrupt handlers */
 

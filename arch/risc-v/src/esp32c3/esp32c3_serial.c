@@ -26,22 +26,31 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/fs/ioctl.h>
 
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
-#include "hardware/esp32c3_uart.h"
+#ifdef CONFIG_SERIAL_TERMIOS
+#  include <termios.h>
+#endif
+
 #include "riscv_internal.h"
 #include "riscv_arch.h"
 #include "chip.h"
-#include "esp32c3_lowputc.h"
+
+#include "hardware/esp32c3_uart.h"
+#include "hardware/esp32c3_system.h"
+
 #include "esp32c3_config.h"
 #include "esp32c3_irq.h"
+#include "esp32c3_lowputc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -114,6 +123,10 @@ static bool esp32c3_txempty(struct uart_dev_s *dev);
 static void esp32c3_send(struct uart_dev_s *dev, int ch);
 static int  esp32c3_receive(struct uart_dev_s *dev, unsigned int *status);
 static int  esp32c3_ioctl(struct file *filep, int cmd, unsigned long arg);
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+static bool esp32c3_rxflowcontrol(struct uart_dev_s *dev,
+                                  unsigned int nbuffered, bool upper);
+#endif
 
 /****************************************************************************
  * Private Data
@@ -136,7 +149,7 @@ static struct uart_ops_s g_uart_ops =
     .receive     = esp32c3_receive,
     .ioctl       = esp32c3_ioctl,
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
-    .rxflowcontrol = NULL,
+    .rxflowcontrol  = esp32c3_rxflowcontrol,
 #endif
 };
 
@@ -146,19 +159,6 @@ static struct uart_ops_s g_uart_ops =
 
 static char g_uart0_rxbuffer[CONFIG_UART0_RXBUFSIZE];
 static char g_uart0_txbuffer[CONFIG_UART0_TXBUFSIZE];
-
-static struct esp32c3_uart_s g_uart0_config =
-{
-  .base = REG_UART_BASE(0),
-  .periph = ESP32C3_PERIPH_UART0,
-  .id = 0,
-  .irq = ESP32C3_IRQ_UART0,
-  .baud = CONFIG_UART0_BAUD,
-  .bits = CONFIG_UART0_BITS,
-  .parity = CONFIG_UART0_PARITY,
-  .stop_b2 =  CONFIG_UART0_2STOP,
-  .int_pri = 1
-};
 
 /* Fill only the requested fields */
 
@@ -192,19 +192,6 @@ static uart_dev_t g_uart0_dev =
 
 static char g_uart1_rxbuffer[CONFIG_UART1_RXBUFSIZE];
 static char g_uart1_txbuffer[CONFIG_UART1_TXBUFSIZE];
-
-static struct esp32c3_uart_s g_uart1_config =
-{
-  .base = REG_UART_BASE(1),
-  .periph = ESP32C3_PERIPH_UART1,
-  .id = 1,
-  .irq = ESP32C3_IRQ_UART1,
-  .baud = CONFIG_UART1_BAUD,
-  .bits = CONFIG_UART1_BITS,
-  .parity = CONFIG_UART1_PARITY,
-  .stop_b2 =  CONFIG_UART1_2STOP,
-  .int_pri = 1
-};
 
 /* Fill only the requested fields */
 
@@ -241,8 +228,8 @@ static uart_dev_t g_uart1_dev =
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
+ *   interrupt is received on the 'irq'  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
  *   interrupt handling logic must be able to map the 'irq' number into the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
@@ -262,16 +249,16 @@ static int uart_handler(int irq, FAR void *context, FAR void *arg)
 
   if (int_status & tx_mask)
     {
-        uart_xmitchars(dev);
-        modifyreg32(UART_INT_CLR_REG(priv->id), tx_mask, tx_mask);
+      uart_xmitchars(dev);
+      modifyreg32(UART_INT_CLR_REG(priv->id), tx_mask, tx_mask);
     }
 
   /* Rx fifo timeout interrupt or rx fifo full interrupt */
 
   if (int_status & rx_mask)
     {
-        uart_recvchars(dev);
-        modifyreg32(UART_INT_CLR_REG(priv->id), rx_mask, rx_mask);
+      uart_recvchars(dev);
+      modifyreg32(UART_INT_CLR_REG(priv->id), rx_mask, rx_mask);
     }
 
   return OK;
@@ -289,10 +276,118 @@ static int uart_handler(int irq, FAR void *context, FAR void *arg)
  *      That portion of the UART setup is performed when the attach() method
  *      is called.
  *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
+ * Returned Values:
+ *   Zero (OK) is returned.
+ *
  ****************************************************************************/
 
 static int esp32c3_setup(struct uart_dev_s *dev)
 {
+  struct esp32c3_uart_s *priv = dev->priv;
+
+  /* Initialize UART module */
+
+  /* Discard corrupt RX data and
+   * disable UART memory clock gate enable signal.
+   */
+
+  modifyreg32(UART_CONF0_REG(priv->id), UART_ERR_WR_MASK_M |
+              UART_MEM_CLK_EN_M, UART_ERR_WR_MASK_M);
+
+  /* Define 0 as the threshold that means TX FIFO buffer is empty. */
+
+  modifyreg32(UART_CONF1_REG(priv->id), UART_TXFIFO_EMPTY_THRHD_M, 0);
+
+  /* Define a threshold to trigger an RX FIFO FULL interrupt.
+   * Define just one byte to read data immediately.
+   */
+
+  modifyreg32(UART_CONF1_REG(priv->id), UART_RXFIFO_FULL_THRHD_M,
+              1 << UART_RXFIFO_FULL_THRHD_S);
+
+  /* Define the maximum FIFO size for RX and TX FIFO.
+   * That means, 1 block = 128 bytes.
+   * As a consequence, software serial FIFO can unload the bytes and
+   * not wait too much on polling activity.
+   */
+
+  modifyreg32(UART_MEM_CONF_REG(priv->id), UART_TX_SIZE_M | UART_RX_SIZE_M,
+              (1 << UART_TX_SIZE_S) | (1 << UART_RX_SIZE_S));
+
+  /* Configure the UART Baud Rate */
+
+  esp32c3_lowputc_baud(priv);
+
+  /* Set a mode */
+
+  esp32c3_lowputc_normal_mode(priv);
+
+  /* Parity */
+
+  esp32c3_lowputc_parity(priv);
+
+  /* Data Frame size */
+
+  esp32c3_lowputc_data_length(priv);
+
+  /* Stop bit */
+
+  esp32c3_lowputc_stop_length(priv);
+
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+  /* Configure the input flow control */
+
+  if (priv->iflow)
+    {
+      /* Enable input flow control and set the RX FIFO threshold
+       * to assert the RTS line to half the RX FIFO buffer.
+       * It will then save some space on the hardware fifo to
+       * remaining bytes that may arrive after RTS be asserted
+       * and before the transmitter stops sending data.
+       */
+
+      esp32c3_lowputc_set_iflow(priv, (uint8_t)(UART_RX_FIFO_SIZE / 2),
+                                true);
+    }
+  else
+    {
+      /* Just disable input flow control, threshold parameter
+       * will be discarded.
+       */
+
+      esp32c3_lowputc_set_iflow(priv, 0 , false);
+    }
+
+#endif
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+  /* Configure the ouput flow control */
+
+  if (priv->oflow)
+    {
+      esp32c3_lowputc_set_oflow(priv, true);
+    }
+  else
+    {
+      esp32c3_lowputc_set_oflow(priv, false);
+    }
+#endif
+
+  /* No Tx idle interval */
+
+  esp32c3_lowputc_set_tx_idle_time(priv, 0);
+
+  /* Enable cores */
+
+  esp32c3_lowputc_enable_sclk(priv);
+
+  /* Clear FIFOs */
+
+  esp32c3_lowputc_rst_txfifo(priv);
+  esp32c3_lowputc_rst_rxfifo(priv);
+
   return OK;
 }
 
@@ -304,10 +399,18 @@ static int esp32c3_setup(struct uart_dev_s *dev)
  * This method reverses the operation the setup method.  NOTE that the serial
  * console is never shutdown.
  *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
  ****************************************************************************/
 
 static void esp32c3_shutdown(struct uart_dev_s *dev)
 {
+  struct esp32c3_uart_s *priv = dev->priv;
+
+  /* Disable ints */
+
+  esp32c3_lowputc_disable_all_uart_int(priv, NULL);
 }
 
 /****************************************************************************
@@ -324,12 +427,21 @@ static void esp32c3_shutdown(struct uart_dev_s *dev)
  *   and TX interrupts are not enabled until the txint() and rxint() methods
  *   are called.
  *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
+ * Returned Values:
+ *   Zero (OK) is returned on success; A negated errno value is returned
+ *   to indicate the nature of any failure.
+ *
  ****************************************************************************/
 
 static int esp32c3_attach(struct uart_dev_s *dev)
 {
   struct esp32c3_uart_s *priv = dev->priv;
   int ret;
+
+  DEBUGASSERT(priv->cpuint == -ENOMEM);
 
   /* Try to attach the IRQ to a CPU int */
 
@@ -347,6 +459,10 @@ static int esp32c3_attach(struct uart_dev_s *dev)
     {
       up_enable_irq(priv->cpuint);
     }
+  else
+    {
+      up_disable_irq(priv->cpuint);
+    }
 
   return ret;
 }
@@ -359,32 +475,39 @@ static int esp32c3_attach(struct uart_dev_s *dev)
  *   closed normally just before the shutdown method is called.  The
  *   exception is the serial console which is never shutdown.
  *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
  ****************************************************************************/
 
 static void esp32c3_detach(struct uart_dev_s *dev)
 {
   struct esp32c3_uart_s *priv = dev->priv;
 
+  DEBUGASSERT(priv->cpuint != -ENOMEM);
+
   up_disable_irq(priv->cpuint);
   irq_detach(priv->irq);
   esp32c3_free_cpuint(priv->periph);
+  priv->cpuint = -ENOMEM;
 }
 
 /****************************************************************************
  * Name: esp32c3_txint
  *
  * Description:
- * Call to enable or disable TX interrupts
+ *    Enable or disable TX interrupts.
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *   enable     -  If true enables the TX interrupt, if false disables it.
  *
  ****************************************************************************/
 
 static void esp32c3_txint(struct uart_dev_s *dev, bool enable)
 {
   struct esp32c3_uart_s *priv = dev->priv;
-  irqstate_t flags;
   uint32_t ints_mask = UART_TXFIFO_EMPTY_INT_ENA_M | UART_TX_DONE_INT_ENA_M;
-
-  flags = enter_critical_section();
 
   if (enable)
     {
@@ -402,52 +525,59 @@ static void esp32c3_txint(struct uart_dev_s *dev, bool enable)
 
       modifyreg32(UART_INT_ENA_REG(priv->id), ints_mask, 0);
     }
-
-  leave_critical_section(flags);
 }
 
 /****************************************************************************
  * Name: esp32c3_rxint
  *
  * Description:
- *   Call to enable or disable RXRDY interrupts
+ *   Enable or disable RX interrupts.
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *   enable     -  If true enables the RX interrupt, if false disables it.
  *
  ****************************************************************************/
 
 static void esp32c3_rxint(struct uart_dev_s *dev, bool enable)
 {
   struct esp32c3_uart_s *priv = dev->priv;
-  irqstate_t flags;
   uint32_t ints_mask = UART_RXFIFO_TOUT_INT_ENA_M |
                        UART_RXFIFO_FULL_INT_ENA_M;
 
-  flags = enter_critical_section();
-
   if (enable)
     {
-      /* Receive an interrupt when their is anything in the Rx data register
-       * (or an Rx timeout occurs).
+      /* Receive an interrupt when there is anything in the RX data register
+       * (or an RX timeout occurs).
+       * NOTE: RX timeout feature needs to be enabled.
        */
-
 #ifndef CONFIG_SUPPRESS_SERIAL_INTS
+      modifyreg32(UART_CONF1_REG(priv->id), UART_RX_TOUT_EN_M,
+                  UART_RX_TOUT_EN_M);
       modifyreg32(UART_INT_ENA_REG(priv->id), ints_mask, ints_mask);
 #endif
     }
   else
     {
+      modifyreg32(UART_CONF1_REG(priv->id), UART_RX_TOUT_EN_M, 0);
+
       /* Disable the RX interrupts */
 
       modifyreg32(UART_INT_ENA_REG(priv->id), ints_mask, 0);
     }
-
-  leave_critical_section(flags);
 }
 
 /****************************************************************************
  * Name: esp32c3_rxavailable
  *
  * Description:
- *   Return true if the receive holding register is not empty
+ *   Check if there is any data available to be read.
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
+ * Returned Values:
+ *   Return true if the RX FIFO is not empty and false if RX FIFO is empty.
  *
  ****************************************************************************/
 
@@ -467,8 +597,15 @@ static bool esp32c3_rxavailable(struct uart_dev_s *dev)
  * Name: esp32c3_txready
  *
  * Description:
- * Return true if the tranmsit hardware is ready to send another byte.  This
- * is used to determine if send() method can be called.
+ *    Check if the transmit hardware is ready to send another byte.
+ *    This is used to determine if send() method can be called.
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
+ * Returned Values:
+ *   Return true if the transmit hardware is ready to send another byte,
+ *   false otherwise.
  *
  ****************************************************************************/
 
@@ -481,10 +618,16 @@ static bool esp32c3_txready(struct uart_dev_s *dev)
  * Name: esp32c3_txempty
  *
  * Description:
- * Return true if all characters have been sent.  If for example, the UART
- * hardware implements FIFOs, then this would mean the transmit FIFO is
- * empty.  This method is called when the driver needs to make sure that
- * all characters are "drained" from the TX hardware.
+ *    Verify if all characters have been sent. If for example, the UART
+ *    hardware implements FIFOs, then this would mean the transmit FIFO is
+ *    empty. This method is called when the driver needs to make sure that
+ *    all characters are "drained" from the TX hardware.
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *
+ * Returned Values:
+ *   Return true if the TX FIFO is empty, false if it is not.
  *
  ****************************************************************************/
 
@@ -500,19 +643,19 @@ static bool esp32c3_txempty(struct uart_dev_s *dev)
 }
 
 /****************************************************************************
- * Name: esp32c3_shutdown
+ * Name: esp32c3_send
  *
  * Description:
- * Disable the UART.  This method is called when the serial port is closed.
- * This method reverses the operation the setup method.  NOTE that the serial
- * console is never shutdown.
+ *    Send a unique character
+ *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *   ch         -  Byte to be sent.
  *
  ****************************************************************************/
 
 static void esp32c3_send(struct uart_dev_s *dev, int ch)
 {
-  /* Then send the character */
-
   esp32c3_lowputc_send_byte(dev->priv, ch);
 }
 
@@ -524,6 +667,13 @@ static void esp32c3_send(struct uart_dev_s *dev, int ch)
  *   character from the UART.  Error bits associated with the
  *   receipt are provided in the return 'status'.
  *
+ * Parameters:
+ *   dev        -  Pointer to the serial driver struct.
+ *   status     -  Pointer to a variable to store eventual error bits.
+ *
+ * Returned Values:
+ *   Return the byte read from the RX FIFO.
+ *
  ****************************************************************************/
 
 static int esp32c3_receive(struct uart_dev_s *dev, unsigned int *status)
@@ -534,13 +684,314 @@ static int esp32c3_receive(struct uart_dev_s *dev, unsigned int *status)
   rx_fifo = getreg32(UART_FIFO_REG(priv->id));
   rx_fifo = rx_fifo & UART_RXFIFO_RD_BYTE_M;
 
+  /* Since we don't have error bits associated with receipt, we set zero */
+
+  *status = 0;
+
   return (int)rx_fifo;
 }
 
+/****************************************************************************
+ * Name: esp32c3_ioctl
+ *
+ * Description:
+ *   All ioctl calls will be routed through this method.
+ *   Here it's employed to implement the TERMIOS ioctls and TIOCSERGSTRUCT.
+ *
+ * Parameters:
+ *   filep    Pointer to a file structure instance.
+ *   cmd      The ioctl command.
+ *   arg      The argument of the ioctl cmd.
+ *
+ * Returned Value:
+ *   Returns a non-negative number on success;  A negated errno value is
+ *   returned on any failure (see comments ioctl() for a list of appropriate
+ *   errno values).
+ *
+ ****************************************************************************/
+
 static int esp32c3_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
-  return OK;
+  /* Get access to the internal instance of the driver through the file
+   *  pointer.
+   */
+
+#if defined(CONFIG_SERIAL_TERMIOS) || defined(CONFIG_SERIAL_TIOCSERGSTRUCT)
+  struct inode      *inode = filep->f_inode;
+  struct uart_dev_s *dev   = inode->i_private;
+#endif
+  int ret = OK;
+
+  /* Run the requested ioctl command. */
+
+  switch (cmd)
+    {
+#ifdef CONFIG_SERIAL_TIOCSERGSTRUCT
+
+    /* Get the internal driver data structure for debug purposes. */
+
+    case TIOCSERGSTRUCT:
+      {
+         struct esp32c3_uart_s *user = (struct esp32c3_uart_s *)arg;
+         if (!user)
+           {
+             ret = -EINVAL;
+           }
+         else
+           {
+             memcpy(user, dev->priv, sizeof(struct esp32c3_uart_s));
+           }
+       }
+       break;
+#endif
+
+#ifdef CONFIG_SERIAL_TERMIOS
+
+    /* Fill a termios structure with the required information. */
+
+    case TCGETS:
+      {
+        struct termios  *termiosp    = (struct termios *)arg;
+        struct esp32c3_uart_s *priv  = (struct esp32c3_uart_s *)dev->priv;
+        if (!termiosp)
+          {
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Return parity (0 = no parity, 1 = odd parity, 2 = even parity). */
+
+        termiosp->c_cflag = ((priv->parity != 0) ? PARENB : 0) |
+                            ((priv->parity == 1) ? PARODD : 0);
+
+        /* Return stop bits */
+
+        termiosp->c_cflag |= (priv->stop_b2) ? CSTOPB : 0;
+
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+        termiosp->c_cflag |=  (priv->oflow) ? CCTS_OFLOW : 0;
+#endif
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+        termiosp->c_cflag |=  (priv->iflow) ? CRTS_IFLOW : 0;
+#endif
+
+        /* Set the baud rate in ther termiosp using the
+         * cfsetispeed interface.
+         */
+
+        cfsetispeed(termiosp, priv->baud);
+
+        /* Return number of bits. */
+
+        switch (priv->bits)
+          {
+          case 5:
+            termiosp->c_cflag |= CS5;
+            break;
+
+          case 6:
+            termiosp->c_cflag |= CS6;
+            break;
+
+          case 7:
+            termiosp->c_cflag |= CS7;
+            break;
+
+          default:
+          case 8:
+            termiosp->c_cflag |= CS8;
+            break;
+          }
+      }
+      break;
+
+    case TCSETS:
+      {
+        struct termios  *termiosp    = (struct termios *)arg;
+        struct esp32c3_uart_s *priv  = (struct esp32c3_uart_s *)dev->priv;
+        uint32_t baud;
+        uint32_t current_int_sts;
+        uint8_t  parity;
+        uint8_t  bits;
+        uint8_t  stop2;
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+        bool iflow;
+#endif
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+        bool oflow;
+#endif
+
+        if (!termiosp)
+          {
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Get the target baud rate to change. */
+
+        baud = cfgetispeed(termiosp);
+
+        /* Decode number of bits. */
+
+        switch (termiosp->c_cflag & CSIZE)
+          {
+          case CS5:
+            bits = 5;
+            break;
+
+          case CS6:
+            bits = 6;
+            break;
+
+          case CS7:
+            bits = 7;
+            break;
+
+          case CS8:
+            bits = 8;
+            break;
+
+          default:
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Decode parity. */
+
+        if ((termiosp->c_cflag & PARENB) != 0)
+          {
+            parity = (termiosp->c_cflag & PARODD) ? 1 : 2;
+          }
+        else
+          {
+            parity = 0;
+          }
+
+        /* Decode stop bits. */
+
+        stop2 = (termiosp->c_cflag & CSTOPB) ? 1 : 0;
+
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+        iflow = (termiosp->c_cflag & CRTS_IFLOW) != 0;
+#endif
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+        oflow = (termiosp->c_cflag & CCTS_OFLOW) != 0;
+#endif
+
+        /* Verify that all settings are valid before
+         * performing the changes.
+         */
+
+        if (ret == OK)
+          {
+            /* Fill the private struct fields. */
+
+            priv->baud      = baud;
+            priv->parity    = parity;
+            priv->bits      = bits;
+            priv->stop_b2   = stop2;
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+            priv->iflow     = iflow;
+#endif
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+            priv->oflow     = oflow;
+#endif
+
+            /* Effect the changes immediately - note that we do not
+             * implement TCSADRAIN or TCSAFLUSH, only TCSANOW option.
+             * See nuttx/libs/libc/termios/lib_tcsetattr.c
+             */
+
+            esp32c3_lowputc_disable_all_uart_int(priv, &current_int_sts);
+            ret = esp32c3_setup(dev);
+
+            /* Restore the interrupt state */
+
+            esp32c3_lowputc_restore_all_uart_int(priv, &current_int_sts);
+          }
+      }
+      break;
+#endif /* CONFIG_SERIAL_TERMIOS */
+
+    default:
+      ret = -ENOTTY;
+      break;
+    }
+
+  return ret;
 }
+
+/****************************************************************************
+ * Name: esp32c3_rxflowcontrol
+ *
+ * Description:
+ *   Called when upper half RX buffer is full (or exceeds configured
+ *   watermark levels if CONFIG_SERIAL_IFLOWCONTROL_WATERMARKS is defined).
+ *   Return true if UART activated RX flow control to block more incoming
+ *   data.
+ *   NOTE: ESP32-C3 has a hardware RX FIFO threshold mechanism to control
+ *   RTS line and to stop receiving data. This is very similar to the concept
+ *   behind upper watermark level. The hardware threshold is used here
+ *   to control the RTS line. When setting the threshold to zero, RTS will
+ *   immediately be asserted. If nbuffered = 0 or the lower watermark is
+ *   crossed and the serial driver decides to disable RX flow control, the
+ *   threshold will be changed to UART_RX_FLOW_THRHD_VALUE, which is almost
+ *   half the HW RX FIFO capacity. It keeps some space to keep the data
+ *   received between the RTS assertion and the stop by the sender.
+ *
+ * Input Parameters:
+ *   dev       - UART device instance
+ *   nbuffered - the number of characters currently buffered
+ *               (if CONFIG_SERIAL_IFLOWCONTROL_WATERMARKS is
+ *               not defined the value will be 0 for an empty buffer or the
+ *               defined buffer size for a full buffer)
+ *   upper     - true indicates the upper watermark was crossed where
+ *               false indicates the lower watermark has been crossed
+ *
+ * Returned Value:
+ *   true if RX flow control activated.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+static bool esp32c3_rxflowcontrol(struct uart_dev_s *dev,
+                                  unsigned int nbuffered, bool upper)
+{
+  bool ret = false;
+  struct esp32c3_uart_s *priv = dev->priv;
+  if (priv->iflow)
+    {
+      if (nbuffered == 0 || upper == false)
+        {
+          /* Empty buffer, RTS should be de-asserted and logic in above
+           * layers should re-enable RX interrupt.
+           */
+
+          esp32c3_lowputc_set_iflow(priv, (uint8_t)(UART_RX_FIFO_SIZE / 2),
+                                    true);
+          esp32c3_rxint(dev, true);
+          ret = false;
+        }
+      else
+        {
+          /* If the RX buffer is not zero and watermarks are not enabled,
+           * then this function is called to announce RX buffer is full.
+           * The first thing it should do is to immediately assert RTS.
+           * Software RX FIFO is full, so besides asserting RTS, it's
+           * necessary to disable RX interrupts to prevent remaining bytes
+           * (that arrive after asserting RTS) to be pushed to the
+           * SW RX FIFO.
+           */
+
+          esp32c3_lowputc_set_iflow(priv, 0 , true);
+          esp32c3_rxint(dev, false);
+          ret = true;
+        }
+    }
+
+  return ret;
+}
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -549,42 +1000,52 @@ static int esp32c3_ioctl(struct file *filep, int cmd, unsigned long arg)
 #ifdef USE_EARLYSERIALINIT
 
 /****************************************************************************
- * Name: up_earlyserialinit
+ * Name: riscv_earlyserialinit
  *
  * Description:
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.  NOTE:  This function depends on GPIO pin
+ *   before riscv_serialinit.  NOTE:  This function depends on GPIO pin
  *   configuration performed in up_consoleinit() and main clock
  *   initialization performed in up_clkinitialize().
  *
  ****************************************************************************/
 
-/* TODO */
-
-void up_earlyserialinit(void)
+void riscv_earlyserialinit(void)
 {
-  /* I've been looking at others chips/arches and I noticed
-   * that <chips>_lowsetup performs almost the same of this func and it's
-   * called earlier than this one in <chip>_start
-   * So, I am not sure what to do here
+  /* NOTE:  All GPIO configuration for the UARTs was performed in
+   * esp32c3_lowsetup
    */
+
+  /* Disable all UARTS interrupts */
+
+  esp32c3_lowputc_disable_all_uart_int(TTYS0_DEV.priv, NULL);
+#ifdef TTYS1_DEV
+  esp32c3_lowputc_disable_all_uart_int(TTYS1_DEV.priv, NULL);
+#endif
+
+  /* Configure console in early step.
+   * Setup for other serials will be perfomed when the serial driver is
+   * open.
+   */
+
+#ifdef HAVE_SERIAL_CONSOLE
+  esp32c3_setup(&CONSOLE_DEV);
+#endif
 }
 
 #endif /* USE_EARLYSERIALINIT */
 
 /****************************************************************************
- * Name: up_serialinit
+ * Name: riscv_serialinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that riscv_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
-/* TODO */
-
-void up_serialinit(void)
+void riscv_serialinit(void)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uart_register("/dev/console", &CONSOLE_DEV);
@@ -607,13 +1068,12 @@ void up_serialinit(void)
  *
  ****************************************************************************/
 
-/* TODO - To finish later with interrupt */
-
 int up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
+  uint32_t int_status;
 
-  /* TODO disable uart ints */
+  esp32c3_lowputc_disable_all_uart_int(CONSOLE_DEV.priv, &int_status);
 
   /* Check for LF */
 
@@ -621,12 +1081,11 @@ int up_putc(int ch)
     {
       /* Add CR */
 
-      up_lowputc('\r');
+      riscv_lowputc('\r');
     }
 
-  up_lowputc(ch);
-
-  /* TODO restore ints */
+  riscv_lowputc(ch);
+  esp32c3_lowputc_restore_all_uart_int(CONSOLE_DEV.priv, &int_status);
 #endif
   return ch;
 }
@@ -634,21 +1093,21 @@ int up_putc(int ch)
 #else /* HAVE_UART_DEVICE */
 
 /****************************************************************************
- * Name: up_earlyserialinit, up_serialinit, and up_putc
+ * Name: riscv_earlyserialinit, riscv_serialinit, and up_putc
  *
  * Description:
- *   stubs that may be needed.  These stubs will be used if all UARTs are
+ *   Stubs that may be needed.  These stubs will be used if all UARTs are
  *   disabled.  In that case, the logic in common/up_initialize() is not
  *   smart enough to know that there are not UARTs and will still expect
  *   these interfaces to be provided.
  *
  ****************************************************************************/
 
-void up_earlyserialinit(void)
+void riscv_earlyserialinit(void)
 {
 }
 
-void up_serialinit(void)
+void riscv_serialinit(void)
 {
 }
 
@@ -660,12 +1119,6 @@ int up_putc(int ch)
 #endif /* HAVE_UART_DEVICE */
 #else /* USE_SERIALDRIVER */
 
-/* Common initialization logic will not not know that the all of the UARTs
- * have been disabled.  So, as a result, we may still have to provide
- * stub implementations of up_earlyserialinit(), up_serialinit(), and
- * up_putc().
- */
-
 /****************************************************************************
  * Name: up_putc
  *
@@ -674,21 +1127,24 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-/* TODO - Finish it disabling interrupt and restoring it later */
-
 int up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
+  uint32_t int_status;
+
+  esp32c3_lowputc_disable_all_uart_int(CONSOLE_DEV.priv, &int_status);
+
   /* Check for LF */
 
   if (ch == '\n')
     {
       /* Add CR */
 
-      up_lowputc('\r');
+      riscv_lowputc('\r');
     }
 
-  up_lowputc(ch);
+  riscv_lowputc(ch);
+  esp32c3_lowputc_restore_all_uart_int(CONSOLE_DEV.priv, &int_status);
 #endif
   return ch;
 }

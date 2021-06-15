@@ -1,5 +1,5 @@
 /****************************************************************************
- *  sched/group/group_setupidlefiles.c
+ * sched/group/group_setupidlefiles.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -67,12 +68,6 @@ int group_setupidlefiles(FAR struct task_tcb_s *tcb)
   /* Initialize file descriptors for the TCB */
 
   files_initlist(&group->tg_filelist);
-
-#ifdef CONFIG_NET
-  /* Allocate socket descriptors for the TCB */
-
-  net_initlist(&group->tg_socketlist);
-#endif
 
   /* Open stdin, dup to get stdout and stderr. This should always
    * be the first file opened and, hence, should always get file

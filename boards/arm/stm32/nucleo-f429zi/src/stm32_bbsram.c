@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32f4/nucleo-f429zi/src/stm32_bbsram.c
+ * boards/arm/stm32/nucleo-f429zi/src/stm32_bbsram.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 #include <syslog.h>
@@ -449,14 +450,15 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
       pdump->info.stacks.user.sp = currentsp;
     }
 
-  pdump->info.stacks.user.top = (uint32_t) rtcb->adj_stack_ptr;
-  pdump->info.stacks.user.size = (uint32_t) rtcb->adj_stack_size;
+  pdump->info.stacks.user.top = (uint32_t)rtcb->stack_base_ptr +
+                                          rtcb->adj_stack_size;
+  pdump->info.stacks.user.size = (uint32_t)rtcb->adj_stack_size;
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
   /* Get the limits on the interrupt stack memory */
 
-  pdump->info.stacks.interrupt.top = (uint32_t)&g_intstackbase;
-  pdump->info.stacks.interrupt.size  = (CONFIG_ARCH_INTERRUPTSTACK & ~3);
+  pdump->info.stacks.interrupt.top = (uint32_t)&g_intstacktop;
+  pdump->info.stacks.interrupt.size = (CONFIG_ARCH_INTERRUPTSTACK & ~3);
 
   /* If In interrupt Context save the interrupt stack data centered
    * about the interrupt stack pointer

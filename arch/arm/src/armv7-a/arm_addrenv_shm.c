@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/armv7/arm_addrenv_shm.c
+ * arch/arm/src/armv7-a/arm_addrenv_shm.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 
 #include <nuttx/irq.h>

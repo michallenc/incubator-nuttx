@@ -42,6 +42,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/board.h>
@@ -54,8 +55,8 @@
 #ifdef CONFIG_ARCH_LEDS
 
 /* If CONFIG_ARCH_LEDs is defined, then NuttX will control the LED on
- * board the SAM4S Xplained Pro.  The following definitions describe how NuttX
- * controls the LEDs:
+ * board the SAM4S Xplained Pro.
+ * The following definitions describe how NuttX controls the LEDs:
  *
  *   SYMBOL                Meaning                     LED state
  *                                                   D9     D10

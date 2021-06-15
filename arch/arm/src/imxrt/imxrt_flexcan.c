@@ -54,9 +54,7 @@
 
 #include <arch/board/board.h>
 
-#ifdef CONFIG_NET_CMSG
 #include <sys/time.h>
-#endif
 
 #ifdef CONFIG_IMXRT_FLEXCAN
 
@@ -93,11 +91,7 @@
 
 #define POOL_SIZE                   1
 
-#ifdef CONFIG_NET_CMSG
 #define MSG_DATA                    sizeof(struct timeval)
-#else
-#define MSG_DATA                    0
-#endif
 
 /* CAN bit timing values  */
 #define CLK_FREQ                    80000000
@@ -614,7 +608,7 @@ static int imxrt_transmit(FAR struct imxrt_driver_s *priv)
 
   if (mbi == TOTALMBCOUNT)
     {
-      nwarn("No TX MB available mbi %" PRIi32 "\r\n", mbi);
+      nwarn("No TX MB available mbi %" PRIi32 "\n", mbi);
       NETDEV_TXERRORS(&priv->dev);
       return 0;       /* No transmission for you! */
     }
@@ -1012,10 +1006,13 @@ static void imxrt_txdone(FAR struct imxrt_driver_s *priv)
           NETDEV_TXDONE(&priv->dev);
 #ifdef TX_TIMEOUT_WQ
           /* We are here because a transmission completed, so the
-           * corresponding watchdog can be canceled.
+           * corresponding watchdog can be canceled
+           * mailbox be set to inactive
            */
 
-          wd_cancel(priv->txtimeout[mbi]);
+          wd_cancel(&priv->txtimeout[mbi]);
+          struct mb_s *mb = &priv->tx[mbi];
+          mb->cs.code = CAN_TXMB_INACTIVE;
 #endif
         }
 
@@ -1135,7 +1132,9 @@ static int imxrt_flexcan_interrupt(int irq, FAR void *context,
 static void imxrt_txtimeout_work(FAR void *arg)
 {
   FAR struct imxrt_driver_s *priv = (FAR struct imxrt_driver_s *)arg;
+  uint32_t flags;
   uint32_t mbi;
+  uint32_t mb_bit;
 
   struct timespec ts;
   struct timeval *now = (struct timeval *)&ts;
@@ -1146,6 +1145,8 @@ static void imxrt_txtimeout_work(FAR void *arg)
    * transmit function transmitted a new frame
    */
 
+  flags  = getreg32(priv->base + IMXRT_CAN_IFLAG1_OFFSET);
+
   for (mbi = 0; mbi < TXMBCOUNT; mbi++)
     {
       if (priv->txmb[mbi].deadline.tv_sec != 0
@@ -1153,6 +1154,14 @@ static void imxrt_txtimeout_work(FAR void *arg)
           || now->tv_usec > priv->txmb[mbi].deadline.tv_usec))
         {
           NETDEV_TXTIMEOUTS(&priv->dev);
+
+          mb_bit = 1 << (RXMBCOUNT +  mbi);
+
+          if (flags & mb_bit)
+            {
+              putreg32(mb_bit, priv->base + IMXRT_CAN_IFLAG1_OFFSET);
+            }
+
           struct mb_s *mb = &priv->tx[mbi];
           mb->cs.code = CAN_TXMB_ABORT;
           priv->txmb[mbi].pending = TX_ABORT;
@@ -1596,7 +1605,7 @@ static int imxrt_initialize(struct imxrt_driver_s *priv)
   imxrt_setfreeze(priv->base, 1);
   if (!imxrt_waitfreezeack_change(priv->base, 1))
     {
-      ninfo("FLEXCAN: freeze fail\r\n");
+      ninfo("FLEXCAN: freeze fail\n");
       return -1;
     }
 
@@ -1690,7 +1699,7 @@ static int imxrt_initialize(struct imxrt_driver_s *priv)
   for (i = 0; i < RXMBCOUNT; i++)
     {
       struct mb_s *rx = flexcan_get_mb(priv, i);
-      ninfo("Set MB%" PRIi32 " to receive %p\r\n", i, rx);
+      ninfo("Set MB%" PRIi32 " to receive %p\n", i, rx);
       rx->cs.edl = 0x1;
       rx->cs.brs = 0x1;
       rx->cs.esi = 0x0;
@@ -1708,7 +1717,7 @@ static int imxrt_initialize(struct imxrt_driver_s *priv)
   imxrt_setfreeze(priv->base, 0);
   if (!imxrt_waitfreezeack_change(priv->base, 0))
     {
-      ninfo("FLEXCAN: unfreeze fail\r\n");
+      ninfo("FLEXCAN: unfreeze fail\n");
       return -1;
     }
 
@@ -1755,8 +1764,8 @@ static void imxrt_reset(struct imxrt_driver_s *priv)
   for (i = 0; i < TOTALMBCOUNT; i++)
     {
       struct mb_s *rx = flexcan_get_mb(priv, i);
-      ninfo("MB %" PRIi32 " %p\r\n", i, rx);
-      ninfo("MB %" PRIi32 " %p\r\n", i, &rx->id.w);
+      ninfo("MB %" PRIi32 " %p\n", i, rx);
+      ninfo("MB %" PRIi32 " %p\n", i, &rx->id.w);
       rx->cs.cs = 0x0;
       rx->id.w = 0x0;
       rx->data[0].w00 = 0x0;
@@ -1937,7 +1946,7 @@ int imxrt_caninitialize(int intf)
    * the device and/or calling imxrt_ifdown().
    */
 
-  ninfo("callbacks done\r\n");
+  ninfo("callbacks done\n");
 
   imxrt_ifdown(&priv->dev);
 

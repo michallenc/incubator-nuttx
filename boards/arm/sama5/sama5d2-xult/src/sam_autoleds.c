@@ -1,5 +1,5 @@
 /****************************************************************************
- *  boards/arm/sama5/sama5d2-xult/src/sam_autoleds.c
+ * boards/arm/sama5/sama5d2-xult/src/sam_autoleds.c
  *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
@@ -61,6 +61,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/board.h>
@@ -95,7 +96,7 @@ void board_autoled_on(int led)
   switch (led)
     {
       default:
-      case 0: /* LED_STARTED, LED_HEAPALLOCATE, LED_IRQSENABLED */
+      case 0:  /* LED_STARTED, LED_HEAPALLOCATE, LED_IRQSENABLED */
         break; /* Leave Green LED off */
 
       case 1:   /* LED_STACKCREATED */

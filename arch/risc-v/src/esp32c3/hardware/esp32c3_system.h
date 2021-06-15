@@ -25,11 +25,17 @@
  * Included Files
  ****************************************************************************/
 
-#include "hardware/esp32c3_soc.h"
+#include "esp32c3_soc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* Performance Counter */
+
+#define CSR_PCER_MACHINE    0x7e0
+#define CSR_PCMR_MACHINE    0x7e1
+#define CSR_PCCR_MACHINE    0x7e2
 
 #define SYSTEM_CPU_PERI_CLK_EN_REG          (DR_REG_SYSTEM_BASE + 0x000)
 

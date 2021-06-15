@@ -1,26 +1,20 @@
 /****************************************************************************
  * arch/xtensa/src/esp32/hardware/esp32_uart.h
  *
- * Adapted from use in NuttX by:
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Derives from logic originally provided by Espressif Systems:
- *
- *   Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
-
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -31,16 +25,18 @@
  * Included Files
  ****************************************************************************/
 
-#include "hardware/esp32_soc.h"
+#include "esp32_soc.h"
 
 /****************************************************************************
  * Pre-processor Macros
  ****************************************************************************/
 
 #define REG_UART_BASE(i)                 (DR_REG_UART_BASE + (i) * 0x10000 + (i > 1 ? 0xe000 : 0))
+#define AHB_FIFO_BASE(i)                 (AHB_REG_UART_BASE + (i) * 0x10000 + (i > 1 ? 0xe000 : 0))
 
 #define UART_FIFO_OFFSET                 0x00
-#define UART_FIFO_REG(i)                 (REG_UART_BASE(i) + UART_FIFO_OFFSET)
+#define AHB_UART_FIFO_REG(i)             (AHB_FIFO_BASE(i) + UART_FIFO_OFFSET)
+#define DR_UART_FIFO_REG(i)              (REG_UART_BASE(i) + UART_FIFO_OFFSET)
 
 /* UART_RXFIFO_RD_BYTE : RO ;bitpos:[7:0] ;default: 8'b0 ; */
 
@@ -1803,6 +1799,24 @@
 #define UART_MEM_RX_STATUS_M            ((UART_MEM_RX_STATUS_V) << (UART_MEM_RX_STATUS_S))
 #define UART_MEM_RX_STATUS_V            0xFFFFFF
 #define UART_MEM_RX_STATUS_S            0
+
+/* UART_RD_ADDRESS : bitpos:[12:2] */
+
+/* Description: Read address of the UART RX FIFO. (a pointer) */
+
+#define UART_RD_ADDRESS                 0x000007FF
+#define UART_RD_ADDRESS_M               ((UART_RD_ADDRESS_V) << (UART_RD_ADDRESS_S))
+#define UART_RD_ADDRESS_V               0x7FF
+#define UART_RD_ADDRESS_S               2
+
+/* UART_WR_ADDRESS : bitpos:[23:13] */
+
+/* Description: Write address of the UART RX FIFO. (a pointer) */
+
+#define UART_WR_ADDRESS                 0x000007FF
+#define UART_WR_ADDRESS_M               ((UART_WR_ADDRESS_V) << (UART_WR_ADDRESS_S))
+#define UART_WR_ADDRESS_V               0x7FF
+#define UART_WR_ADDRESS_S               13
 
 #define UART_MEM_CNT_STATUS_OFFSET      0x64
 #define UART_MEM_CNT_STATUS_REG(i)      (REG_UART_BASE(i) + UART_MEM_CNT_STATUS_OFFSET)

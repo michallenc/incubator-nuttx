@@ -36,24 +36,33 @@
 #include <stdio.h>
 
 #include <syslog.h>
-#include <sys/errno.h>
+#include <errno.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
 
-#include "esp32_wlan.h"
 #include "esp32_spiflash.h"
 #include "esp32_partition.h"
+
+#include <arch/board/board.h>
 
 #ifdef CONFIG_USERLED
 #  include <nuttx/leds/userled.h>
 #endif
 
 #ifdef CONFIG_TIMER
-#  include "esp32_board_tim.h"
+#include <esp32_tim_lowerhalf.h>
+#endif
+
+#ifdef CONFIG_ONESHOT
+#  include "esp32_board_oneshot.h"
 #endif
 
 #ifdef CONFIG_WATCHDOG
 #  include "esp32_board_wdt.h"
+#endif
+
+#ifdef CONFIG_ESP32_WIRELESS
+#  include "esp32_board_wlan.h"
 #endif
 
 #ifdef CONFIG_ESP32_I2C
@@ -64,11 +73,24 @@
 #  include "esp32_bmp180.h"
 #endif
 
-#include "esp32-wrover-kit.h"
+#ifdef CONFIG_INPUT_BUTTONS
+#  include <nuttx/input/buttons.h>
+#endif
 
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
+#ifdef CONFIG_VIDEO_FB
+#  include <nuttx/video/fb.h>
+#endif
+
+#ifdef CONFIG_ESP32_RT_TIMER
+#  include "esp32_rt_timer.h"
+#endif
+
+#ifdef CONFIG_LCD_DEV
+#  include <nuttx/board.h>
+#  include <nuttx/lcd/lcd_dev.h>
+#endif
+
+#include "esp32-wrover-kit.h"
 
 /****************************************************************************
  * Public Functions
@@ -87,38 +109,6 @@
  *     Called from the NSH library
  *
  ****************************************************************************/
-
-#ifdef CONFIG_ESP32_WIFI_SAVE_PARAM
-static int esp32_init_wifi_storage(void)
-{
-  int ret;
-  const char *path = "/dev/mtdblock1";
-  FAR struct mtd_dev_s *mtd_part;
-
-  mtd_part = esp32_spiflash_alloc_mtdpart();
-  if (!mtd_part)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to alloc MTD partition of SPI Flash\n");
-      return -1;
-    }
-
-  ret = register_mtddriver(path, mtd_part, 0777, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to regitser MTD: %d\n", ret);
-      return -1;
-    }
-
-  ret = nx_mount(path, CONFIG_ESP32_WIFI_FS_MOUNTPT, "spiffs", 0, NULL);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to mount the FS volume: %d\n", ret);
-      return ret;
-    }
-
-  return 0;
-}
-#endif
 
 int esp32_bringup(void)
 {
@@ -140,6 +130,17 @@ int esp32_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to mount procfs at /proc: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_FS_TMPFS
+  /* Mount the tmpfs file system */
+
+  ret = nx_mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to mount tmpfs at %s: %d\n",
+             CONFIG_LIBC_TMPDIR, ret);
     }
 #endif
 
@@ -176,39 +177,87 @@ int esp32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_ESP32_RT_TIMER
+  ret = esp32_rt_timer_init();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize RT timer: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_ESP32_WIRELESS
-
-#ifdef CONFIG_ESP32_WIFI_SAVE_PARAM
-  ret = esp32_init_wifi_storage();
-  if (ret)
+  ret = board_wlan_init();
+  if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize WiFi storage\n");
+      syslog(LOG_ERR, "ERROR: Failed to initialize wireless subsystem=%d\n",
+             ret);
       return ret;
     }
 #endif
 
-#ifdef CONFIG_NET
-  ret = esp32_wlan_sta_initialize();
-  if (ret)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize WiFi\n");
-      return ret;
-    }
-#endif
-
-#endif
+/* First, register the timer drivers and let timer 1 for oneshot
+ * if it is enabled.
+ */
 
 #ifdef CONFIG_TIMER
-  /* Configure timer driver */
 
-  ret = board_timer_init();
+#if defined(CONFIG_ESP32_TIMER0) && !defined(CONFIG_ESP32_RT_TIMER)
+  ret = esp32_timer_initialize("/dev/timer0", TIMER0);
   if (ret < 0)
     {
       syslog(LOG_ERR,
-             "ERROR: Failed to initialize timer drivers: %d\n",
+             "ERROR: Failed to initialize timer driver: %d\n",
              ret);
+      return ret;
     }
 #endif
+
+#if defined(CONFIG_ESP32_TIMER1) && !defined(CONFIG_ONESHOT)
+  ret = esp32_timer_initialize("/dev/timer1", TIMER1);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to initialize timer driver: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_ESP32_TIMER2
+  ret = esp32_timer_initialize("/dev/timer2", TIMER2);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to initialize timer driver: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_ESP32_TIMER3
+  ret = esp32_timer_initialize("/dev/timer3", TIMER3);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to initialize timer driver: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#endif /* CONFIG_TIMER */
+
+  /* Now register one oneshot driver */
+
+#if defined(CONFIG_ONESHOT) && defined(CONFIG_ESP32_TIMER1)
+
+  ret = esp32_oneshot_init(ONESHOT_TIMER, ONESHOT_RESOLUTION_US);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: esp32_oneshot_init() failed: %d\n", ret);
+    }
+
+#endif /* CONFIG_ONESHOT */
 
 #ifdef CONFIG_USERLED
   /* Register the LED driver */
@@ -263,6 +312,8 @@ int esp32_bringup(void)
     }
 #endif
 
+#endif
+
 #ifdef CONFIG_SENSORS_BMP180
   /* Try to register BMP180 device in I2C0 */
 
@@ -270,12 +321,41 @@ int esp32_bringup(void)
 
   if (ret < 0)
     {
-      syslog(LOG_ERR, "Failed to initialize BMP180"
-                       "Driver for I2C0: %d\n", ret);
+      syslog(LOG_ERR, "Failed to initialize BMP180 driver: %d\n", ret);
       return ret;
     }
 #endif
 
+#ifdef CONFIG_INPUT_BUTTONS
+  /* Register the BUTTON driver */
+
+  ret = btn_lower_initialize("/dev/buttons");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_VIDEO_FB
+  ret = fb_register(0, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize Frame Buffer Driver.\n");
+    }
+#endif
+
+#ifdef CONFIG_LCD_DEV
+  ret = board_lcd_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
+    }
+
+  ret = lcddev_register(0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
+    }
 #endif
 
   /* If we got here then perhaps not all initialization was successful, but

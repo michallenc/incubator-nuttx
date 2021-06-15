@@ -34,10 +34,6 @@
 #include <nuttx/sched.h>
 #include <nuttx/userspace.h>
 
-#ifdef CONFIG_LIB_SYSCALL
-#  include <syscall.h>
-#endif
-
 #include "signal/signal.h"
 #include "svcall.h"
 #include "exc_return.h"
@@ -108,7 +104,7 @@ static void dispatch_syscall(void)
       " add sp, sp, r2\n"            /* Restore SP */
       " mov r2, r0\n"                /* R2=Save return value in R2 */
       " mov r0, #3\n"                /* R0=SYS_syscall_return */
-      " svc 0"                       /* Return from the syscall */
+      " svc %0\n"::"i"(SYS_syscall)  /* Return from the SYSCALL */
     );
 }
 #endif
@@ -316,34 +312,65 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
         break;
 #endif
 
+#if !defined(CONFIG_BUILD_FLAT) && !defined(CONFIG_DISABLE_PTHREAD)
+
       /* R0=SYS_pthread_start:  This a user pthread start
        *
-       *   void up_pthread_start(pthread_startroutine_t entrypt,
-       *                         pthread_addr_t arg) noreturn_function;
+       *   void up_pthread_start(pthread_trampoline_t startup,
+       *          pthread_startroutine_t entrypt, pthread_addr_t arg)
        *
        * At this point, the following values are saved in context:
        *
        *   R0 = SYS_pthread_start
-       *   R1 = entrypt
-       *   R2 = arg
+       *   R1 = startup
+       *   R2 = entrypt
+       *   R3 = arg
        */
 
-#if defined(CONFIG_BUILD_PROTECTED) && !defined(CONFIG_DISABLE_PTHREAD)
       case SYS_pthread_start:
         {
           /* Set up to return to the user-space pthread start-up function in
            * unprivileged mode.
            */
 
-          regs[REG_PC]         = (uint32_t)USERSPACE->pthread_startup & ~1;
+          regs[REG_PC]         = (uint32_t)regs[REG_R1] & ~1;  /* startup */
           regs[REG_EXC_RETURN] = EXC_RETURN_UNPRIVTHR;
 
-          /* Change the parameter ordering to match the expectation of struct
-           * userpace_s pthread_startup:
+          /* Change the parameter ordering to match the expectation of the
+           * user space pthread_startup:
            */
 
-          regs[REG_R0]         = regs[REG_R1]; /* pthread entry */
-          regs[REG_R1]         = regs[REG_R2]; /* arg */
+          regs[REG_R0]         = regs[REG_R2]; /* pthread entry */
+          regs[REG_R1]         = regs[REG_R3]; /* arg */
+        }
+        break;
+
+      /* R0=SYS_pthread_exit:  This pthread_exit call in user-space
+       *
+       *   void up_pthread_exit(pthread_exitroutine_t exit,
+       *                        FAR void *exit_value)
+       *
+       * At this point, the following values are saved in context:
+       *
+       *   R0 = SYS_pthread_exit
+       *   R1 = pthread_exit trampoline routine
+       *   R2 = exit_value
+       */
+
+      case SYS_pthread_exit:
+        {
+          /* Set up to return to the user-space pthread start-up function in
+           * unprivileged mode.
+           */
+
+          regs[REG_PC]         = (uint32_t)regs[REG_R1] & ~1;  /* startup */
+          regs[REG_EXC_RETURN] = EXC_RETURN_UNPRIVTHR;
+
+          /* Change the parameter ordering to match the expectation of the
+           * user space pthread_startup:
+           */
+
+          regs[REG_R0]         = regs[REG_R2]; /* exit_value */
         }
         break;
 #endif

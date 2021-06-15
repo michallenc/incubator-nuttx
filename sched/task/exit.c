@@ -1,5 +1,5 @@
 /****************************************************************************
- * sched/exit.c
+ * sched/task/exit.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -85,12 +85,6 @@ void exit(int status)
    */
 
   group_kill_children(tcb);
-#endif
-
-#ifdef CONFIG_PTHREAD_CLEANUP
-  /* Perform any stack pthread clean-up callbacks */
-
-  pthread_cleanup_popall(tcb);
 #endif
 
 #if !defined(CONFIG_DISABLE_PTHREAD) && !defined(CONFIG_PTHREAD_MUTEX_UNSAFE)

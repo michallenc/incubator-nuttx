@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/tiva/tm4c123g-launchpad/src/tiva_mcp2515.c
+ * boards/arm/tiva/tm4c123g-launchpad/src/tm4c_mcp2515.c
  *
  *   Copyright (C) 2017 Alan Carvalho de Assis. All rights reserved.
  *   Author: Alan Carvalho de Assis <acassis@gmail.com>
@@ -40,6 +40,7 @@
 
 #include <nuttx/config.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

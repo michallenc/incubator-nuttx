@@ -1,38 +1,24 @@
 /****************************************************************************
  * drivers/wireless/bluetooth/bt_null.c
- * UART based Bluetooth driver
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
+
+/* UART based Bluetooth driver */
 
 /****************************************************************************
  * Included Files
@@ -49,6 +35,7 @@
 #include <nuttx/net/bluetooth.h>
 #include <nuttx/wireless/bluetooth/bt_hci.h>
 #include <nuttx/wireless/bluetooth/bt_null.h>
+#include <nuttx/wireless/bluetooth/bt_driver.h>
 
 /****************************************************************************
  * Private Function Prototypes
@@ -59,15 +46,16 @@ static void btnull_format_cmdcomplete(FAR struct bt_buf_s *buf,
 static void btnull_format_bdaddr_rsp(FAR struct bt_buf_s *buf,
                                      uint16_t opcode);
 
-static int  btnull_open(FAR const struct bt_driver_s *dev);
-static int  btnull_send(FAR const struct bt_driver_s *dev,
-                        FAR struct bt_buf_s *buf);
+static int  btnull_open(FAR struct bt_driver_s *dev);
+static int  btnull_send(FAR struct bt_driver_s *dev,
+                        enum bt_buf_type_e type,
+                        FAR void *data, size_t len);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static const struct bt_driver_s g_bt_null =
+static struct bt_driver_s g_bt_null =
 {
   0,            /* head_reserve */
   btnull_open,  /* open */
@@ -186,23 +174,25 @@ static void btnull_format_buffersize_rsp(FAR struct bt_buf_s *buf,
   bufsize.status     = 0;
   bufsize.le_max_len = BLUETOOTH_MAX_FRAMELEN;
   bufsize.le_max_num = 1;
-  memcpy(&data[ndx], &bufsize, sizeof(struct bt_hci_rp_le_read_buffer_size_s));
+  memcpy(&data[ndx], &bufsize,
+          sizeof(struct bt_hci_rp_le_read_buffer_size_s));
   ndx       += sizeof(struct bt_hci_rp_le_read_buffer_size_s);
 
   buf->frame->io_len = len;
   buf->len           = len;
 }
 
-static int btnull_send(FAR const struct bt_driver_s *dev,
-                       FAR struct bt_buf_s *buf)
+static int btnull_send(FAR struct bt_driver_s *dev,
+                       enum bt_buf_type_e type,
+                       FAR void *data, size_t len)
 {
-  wlinfo("Bit bucket: length %d\n", (int)buf->len);
+  wlinfo("Bit bucket: length %zu\n", len);
 
   /* Is the Bluetooth stack waiting for an event? */
 
-  if (buf->type == BT_CMD)
+  if (type == BT_CMD)
     {
-      FAR struct bt_hci_cmd_hdr_s *hdr = (FAR void *)buf->data;
+      FAR struct bt_hci_cmd_hdr_s *hdr = data;
       FAR struct bt_buf_s *outbuf;
       uint16_t opcode = hdr->opcode;
 
@@ -237,13 +227,15 @@ static int btnull_send(FAR const struct bt_driver_s *dev,
 
       wlinfo("Send CMD complete event\n");
 
-      bt_hci_receive(outbuf);
+      bt_netdev_receive(dev, outbuf->type,
+                        outbuf->data, outbuf->len);
+      bt_buf_release(outbuf);
     }
 
-  return buf->len;
+  return len;
 }
 
-static int btnull_open(FAR const struct bt_driver_s *dev)
+static int btnull_open(FAR struct bt_driver_s *dev)
 {
   return OK;
 }

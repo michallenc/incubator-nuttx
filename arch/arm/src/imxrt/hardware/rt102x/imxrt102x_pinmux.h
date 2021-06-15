@@ -1,52 +1,36 @@
-/*****************************************************************************
+/****************************************************************************
  * arch/arm/src/imxrt/hardware/rt102x/imxrt102x_pinmux.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Dave Marples <dave@marples.net>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- *****************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_PINMUX_H
 #define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_PINMUX_H
 
-/*****************************************************************************
+/****************************************************************************
  * Included Files
- *****************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include "imxrt_iomuxc.h"
 
-/*****************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- *****************************************************************************/
+ ****************************************************************************/
 
 /* Alternate Pin Functions.
  *
@@ -119,7 +103,6 @@
 #define GPIO_ENET_MDIO_3               (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_SD_B0_02_INDEX))
 #define GPIO_ENET_REF_CLK_1            (GPIO_PERIPH | GPIO_ALT3 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_SD_B1_04_INDEX))
 #define GPIO_ENET_REF_CLK_2            (GPIO_PERIPH | GPIO_ALT4 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_AD_B0_08_INDEX))
-
 
 #define GPIO_ENET_RX_CLK_1             (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC36_INDEX))
 #define GPIO_ENET_RX_DATA00_1          (GPIO_PERIPH | GPIO_ALT2 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_SD_B1_06_INDEX))
@@ -250,7 +233,6 @@
 #define GPIO_FLEXPWM2_PWMX01_1         (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_11_INDEX))
 #define GPIO_FLEXPWM2_PWMX02_1         (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_12_INDEX))
 #define GPIO_FLEXPWM2_PWMX03_1         (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_13_INDEX))
-
 
 /* Flexible SPI (FlexSPI) */
 
@@ -773,7 +755,6 @@
 #define GPIO_USB_OTG_PWR_1            (GPIO_PERIPH | GPIO_ALT0 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_AD_B1_10_INDEX))
 #define GPIO_USB_OTG_PWR_2            (GPIO_PERIPH | GPIO_ALT3 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_41_INDEX))
 #define GPIO_USB_OTG_PWR_3            (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_AD_B0_04_INDEX))
-
 
 #define GPIO_USBPHY1_TSTI_TX_DN_1     (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_06_INDEX))
 #define GPIO_USBPHY1_TSTI_TX_DP_1     (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_33_INDEX))

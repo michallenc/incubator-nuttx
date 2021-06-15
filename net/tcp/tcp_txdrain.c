@@ -29,8 +29,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#include <nuttx/net/net.h>
 #include <nuttx/semaphore.h>
 
+#include "utils/utils.h"
 #include "tcp/tcp.h"
 
 #if defined(CONFIG_NET_TCP_WRITE_BUFFERS) && defined(CONFIG_NET_TCP_NOTIFIER)
@@ -90,7 +92,7 @@ int tcp_txdrain(FAR struct socket *psock, unsigned int timeout)
   sem_t waitsem;
   int ret;
 
-  DEBUGASSERT(psock != NULL && psock->s_crefs > 0 && psock->s_conn != NULL);
+  DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
   DEBUGASSERT(psock->s_type == SOCK_STREAM);
 
   conn = (FAR struct tcp_conn_s *)psock->s_conn;

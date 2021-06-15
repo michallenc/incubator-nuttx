@@ -27,7 +27,7 @@
 #include <string.h>
 #include <debug.h>
 #include <stdio.h>
-#include <sys/errno.h>
+#include <errno.h>
 
 #include <nuttx/kmalloc.h>
 
@@ -497,8 +497,8 @@ static int esp32_part_ioctl(FAR struct mtd_dev_s *dev, int cmd,
 
   if (!_MTDIOCVALID(cmd))
     {
-      ferr("ERROR: cmd=%d(%x) is error\n", cmd, cmd);
-      return -EINVAL;
+      finfo("INFO: cmd=%d(%x) is error\n", cmd, cmd);
+      return -ENOTTY;
     }
 
   switch (_IOC_NR(cmd))

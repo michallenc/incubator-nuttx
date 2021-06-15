@@ -25,11 +25,14 @@
 #include <nuttx/config.h>
 
 #include <stdint.h>
+#include <assert.h>
 #include <debug.h>
 
+#include <nuttx/board.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <arch/irq.h>
+#include <nuttx/spinlock.h>
+#include <arch/board/board.h>
 
 #include "chip.h"
 #include "nvic.h"
@@ -564,6 +567,10 @@ void up_enable_irq(int irq)
 
 void arm_ack_irq(int irq)
 {
+#ifdef CONFIG_ARCH_LEDS_CPU_ACTIVITY
+  board_autoled_on(LED_CPU);
+#endif
+
   /* Check for external interrupt */
 
   if (irq >= CXD56_IRQ_EXTINT)
@@ -623,16 +630,16 @@ int up_prioritize_irq(int irq, int priority)
 #endif
 
 /****************************************************************************
- * Name: arm_intstack_base
+ * Name: arm_intstack_top
  *
  * Description:
- *   Return a pointer to the "base" the correct interrupt stack allocation
- *   for the current CPU. NOTE: Here, the base means "top" of the stack
+ *   Return a pointer to the top the correct interrupt stack allocation
+ *   for the current CPU.
  *
  ****************************************************************************/
 
 #if defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 7
-uintptr_t arm_intstack_base(void)
+uintptr_t arm_intstack_top(void)
 {
   return g_cpu_intstack_top[up_cpu_index()];
 }

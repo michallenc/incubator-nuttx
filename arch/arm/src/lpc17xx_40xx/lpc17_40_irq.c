@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/lpc17/lpc17_40_irq.c
+ * arch/arm/src/lpc17xx_40xx/lpc17_40_irq.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <stdint.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/irq.h>

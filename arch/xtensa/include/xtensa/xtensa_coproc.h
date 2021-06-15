@@ -38,7 +38,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <arch/esp32/core-isa.h>
+#include <arch/chip/core-isa.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -46,7 +46,9 @@
 
 #if XCHAL_CP_NUM > 0
 
-/* Align a value up/down to nearest n-byte boundary, where n is a power of 2. */
+/* Align a value up/down to nearest n-byte boundary,
+ * where n is a power of 2.
+ */
 
 #define _CP_MASK(n)           ((n) - 1)
 #define _CP_ALIGNUP(n,val)   (((val) + _CP_MASK(n)) & ~_CP_MASK(n))

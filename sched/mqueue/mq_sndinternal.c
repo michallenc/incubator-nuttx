@@ -1,5 +1,5 @@
 /****************************************************************************
- *  sched/mqueue/mq_sndinternal.c
+ * sched/mqueue/mq_sndinternal.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <mqueue.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <sched.h>
 #include <debug.h>
@@ -62,7 +63,7 @@
  *   prio   - The priority of the message
  *
  * Returned Value:
- *   One success, 0 (OK) is returned. On failure, a negated errno value is
+ *   On success, 0 (OK) is returned. On failure, a negated errno value is
  *   returned.
  *
  *     EINVAL   Either msg or msgq is NULL or the value of prio is invalid.
@@ -365,7 +366,11 @@ int nxmq_do_send(FAR struct mqueue_inode_s *msgq,
 
   /* Increment the count of messages in the queue */
 
-  msgq->nmsgs++;
+  if (msgq->nmsgs++ == 0)
+    {
+      nxmq_pollnotify(msgq, POLLIN);
+    }
+
   leave_critical_section(flags);
 
   /* Check if we need to notify any tasks that are attached to the

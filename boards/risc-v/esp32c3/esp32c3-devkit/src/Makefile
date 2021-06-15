@@ -34,12 +34,48 @@ endif
 
 endif
 
+ifeq ($(CONFIG_ESP32C3_SPIFLASH),y)
+CSRCS += esp32c3_spiflash.c
+endif
+
 ifeq ($(CONFIG_DEV_GPIO),y)
 CSRCS += esp32c3_gpio.c
 endif
 
+ifeq ($(CONFIG_ESP32C3_SPI),y)
+CSRCS += esp32c3_board_spi.c
+endif
+
+ifeq ($(CONFIG_SPI_DRIVER),y)
+CSRCS += esp32c3_board_spidev.c
+endif
+
+ifeq ($(CONFIG_SPI_SLAVE_DRIVER),y)
+CSRCS += esp32c3_board_spislavedev.c
+endif
+
+ifeq ($(CONFIG_I2C_DRIVER),y)
+CSRCS += esp32c3_i2c.c
+endif
+
+ifeq ($(CONFIG_SENSORS_BMP180),y)
+CSRCS += esp32c3_bmp180.c
+endif
+
 ifeq ($(CONFIG_WATCHDOG),y)
 CSRCS += esp32c3_wdt.c
+endif
+
+ifeq ($(CONFIG_ONESHOT),y)
+CSRCS += esp32c3_oneshot.c
+endif
+
+ifeq ($(CONFIG_PWM),y)
+CSRCS += esp32c3_ledc.c
+endif
+
+ifeq ($(CONFIG_ADC),y)
+CSRCS += esp32c3_adc.c
 endif
 
 SCRIPTIN = $(SCRIPTDIR)$(DELIM)esp32c3.template.ld

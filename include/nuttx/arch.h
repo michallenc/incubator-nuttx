@@ -78,13 +78,13 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <sched.h>
 
 #include <arch/arch.h>
 #include <arch/types.h>
 
 #include <nuttx/compiler.h>
 #include <nuttx/cache.h>
+#include <nuttx/sched.h>
 
 /****************************************************************************
  * Pre-processor definitions
@@ -232,8 +232,8 @@ void up_initial_state(FAR struct tcb_s *tcb);
  *   - adj_stack_size: Stack size after adjustment for hardware, processor,
  *     etc.  This value is retained only for debug purposes.
  *   - stack_alloc_ptr: Pointer to allocated stack
- *   - adj_stack_ptr: Adjusted stack_alloc_ptr for HW.  The initial value of
- *     the stack pointer.
+ *   - stack_base_ptr: Adjusted stack base pointer after the TLS Data and
+ *     Arguments has been removed from the stack allocation.
  *
  * Input Parameters:
  *   - tcb: The TCB of new task
@@ -274,8 +274,8 @@ int up_create_stack(FAR struct tcb_s *tcb, size_t stack_size, uint8_t ttype);
  *     processor, etc.  This value is retained only for debug
  *     purposes.
  *   - stack_alloc_ptr: Pointer to allocated stack
- *   - adj_stack_ptr: Adjusted stack_alloc_ptr for HW.  The
- *     initial value of the stack pointer.
+ *   - stack_base_ptr: Adjusted stack base pointer after the TLS Data and
+ *     Arguments has been removed from the stack allocation.
  *
  * Input Parameters:
  *   - tcb:  The TCB of new task
@@ -308,9 +308,24 @@ int up_use_stack(FAR struct tcb_s *tcb, FAR void *stack, size_t stack_size);
  *
  *   - adj_stack_size: Stack size after removal of the stack frame from
  *     the stack
- *   - adj_stack_ptr: Adjusted initial stack pointer after the frame has
- *     been removed from the stack.  This will still be the initial value
- *     of the stack pointer when the task is started.
+ *   - stack_base_ptr: Adjusted stack base pointer after the TLS Data and
+ *     Arguments has been removed from the stack allocation.
+ *
+ *   Here is the diagram after some allocation(tls, arg):
+ *
+ *                   +-------------+ <-stack_alloc_ptr(lowest)
+ *                   |  TLS Data   |
+ *                   +-------------+
+ *                   |  Arguments  |
+ *  stack_base_ptr-> +-------------+\
+ *                   |  Available  | +
+ *                   |    Stack    | |
+ *                |  |             | |
+ *                |  |             | +->adj_stack_size
+ *                v  |             | |
+ *                   |             | |
+ *                   |             | +
+ *                   +-------------+/
  *
  * Input Parameters:
  *   - tcb:  The TCB of new task
@@ -543,6 +558,8 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
        noreturn_function;
 #endif
 
+#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
+    !defined(CONFIG_DISABLE_PTHREAD)
 /****************************************************************************
  * Name: up_pthread_start
  *
@@ -554,9 +571,10 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
  *   pthread by calling this function.
  *
  *   Normally the a user-mode start-up stub will also execute before the
- *   pthread actually starts.  See libc/pthread/pthread_startup.c
+ *   pthread actually starts.  See libc/pthread/pthread_create.c
  *
  * Input Parameters:
+ *   startup - The user-space pthread startup function
  *   entrypt - The user-space address of the pthread entry point
  *   arg     - Standard argument for the pthread entry point
  *
@@ -567,10 +585,28 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
  *
  ****************************************************************************/
 
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
-    !defined(CONFIG_DISABLE_PTHREAD)
-void up_pthread_start(pthread_startroutine_t entrypt, pthread_addr_t arg)
+void up_pthread_start(pthread_trampoline_t startup,
+                      pthread_startroutine_t entrypt, pthread_addr_t arg);
        noreturn_function;
+
+/****************************************************************************
+ * Name: up_pthread_exit
+ *
+ * Description:
+ *   In this kernel mode build, this function will be called to execute a
+ *   pthread in user-space. This kernel-mode stub will then be called
+ *   transfer control to the user-mode pthread_exit.
+ *
+ * Input Parameters:
+ *   exit       - The user-space pthread_exit function
+ *   exit_value - The pointer of the pthread exit parameter
+ *
+ * Returned Value:
+ *   None
+ ****************************************************************************/
+
+void up_pthread_exit(pthread_exitroutine_t exit, FAR void *exit_value);
+        noreturn_function;
 #endif
 
 /****************************************************************************
@@ -730,15 +766,15 @@ void up_module_text_init(void);
 #endif
 
 /****************************************************************************
- * Name: up_module_text_alloc
+ * Name: up_module_text_memalign
  *
  * Description:
- *   Allocate memory for module text.
+ *   Allocate memory for module text with the specified alignment.
  *
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_USE_MODULE_TEXT)
-FAR void *up_module_text_alloc(size_t size);
+FAR void *up_module_text_memalign(size_t align, size_t size);
 #endif
 
 /****************************************************************************
@@ -1355,39 +1391,6 @@ void up_irqinitialize(void);
 bool up_interrupt_context(void);
 
 /****************************************************************************
- * Name: up_irq_save
- *
- * Description:
- *   Save the current interrupt state and disable interrupts.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   Interrupt state prior to disabling interrupts.
- *
- ****************************************************************************/
-
-irqstate_t up_irq_save(void);
-
-/****************************************************************************
- * Name: up_irq_restore
- *
- * Description:
- *   Restore the previous irq state (i.e., the one previously
- *   returned by up_irq_save())
- *
- * Input Parameters:
- *   irqstate - The interrupt state to be restored.
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void up_irq_restore(irqstate_t irqstate);
-
-/****************************************************************************
  * Name: up_enable_irq
  *
  * Description:
@@ -1539,7 +1542,7 @@ void up_timer_initialize(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_CLOCK_TIMEKEEPING)
+#if defined(CONFIG_SCHED_TICKLESS)
 int up_timer_gettime(FAR struct timespec *ts);
 #endif
 
@@ -1683,6 +1686,23 @@ int up_timer_cancel(FAR struct timespec *ts);
 #if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_ALARM)
 int up_timer_start(FAR const struct timespec *ts);
 #endif
+
+/****************************************************************************
+ * Name: up_getsp
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Current stack pointer.
+ *
+ ****************************************************************************/
+
+/* uintptr_t up_getsp(void);
+ *
+ * The actual declaration or definition is provided in arch/arch.h.
+ * The actual implementation may be a MACRO or an inline function.
+ */
 
 /****************************************************************************
  * TLS support
@@ -1847,8 +1867,8 @@ int up_cpu_index(void);
  *   - adj_stack_size: Stack size after adjustment for hardware, processor,
  *     etc.  This value is retained only for debug purposes.
  *   - stack_alloc_ptr: Pointer to allocated stack
- *   - adj_stack_ptr: Adjusted stack_alloc_ptr for HW.  The initial value of
- *     the stack pointer.
+ *   - stack_base_ptr: Adjusted stack base pointer after the TLS Data and
+ *     Arguments has been removed from the stack allocation.
  *
  * Input Parameters:
  *   - cpu:         CPU index that indicates which CPU the IDLE task is
@@ -1856,7 +1876,7 @@ int up_cpu_index(void);
  *   - tcb:         The TCB of new CPU IDLE task
  *   - stack_size:  The requested stack size for the IDLE task.  At least
  *                  this much must be allocated.  This should be
- *                  CONFIG_SMP_IDLETHREAD_STACKSIZE.
+ *                  CONFIG_IDLETHREAD_STACKSIZE.
  *
  ****************************************************************************/
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/risc-v/src/esp32c3/hardware/esp32c3_rcccntl.h
+ * arch/risc-v/src/esp32c3/hardware/esp32c3_rtccntl.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -3614,5 +3614,14 @@
 #define RTC_CNTL_CNTL_DATE_M  ((RTC_CNTL_CNTL_DATE_V)<<(RTC_CNTL_CNTL_DATE_S))
 #define RTC_CNTL_CNTL_DATE_V  0xFFFFFFF
 #define RTC_CNTL_CNTL_DATE_S  0
+
+#define RTC_SLOW_CLK_CAL_REG    RTC_CNTL_STORE1_REG
+#define RTC_BOOT_TIME_LOW_REG   RTC_CNTL_STORE2_REG
+#define RTC_BOOT_TIME_HIGH_REG  RTC_CNTL_STORE3_REG
+#define RTC_XTAL_FREQ_REG       RTC_CNTL_STORE4_REG
+#define RTC_APB_FREQ_REG        RTC_CNTL_STORE5_REG
+#define RTC_ENTRY_ADDR_REG      RTC_CNTL_STORE6_REG
+#define RTC_RESET_CAUSE_REG     RTC_CNTL_STORE6_REG
+#define RTC_MEMORY_CRC_REG      RTC_CNTL_STORE7_REG
 
 #endif /* __ARCH_RISCV_SRC_ESP32C3_HARDWARE_ESP32C3_RTCCNTL_H */

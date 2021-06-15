@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/or1k/src/common/up_reprioritizertr.c
+ * arch/or1k/src/common/up_reprioritizertr.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sched.h>
+#include <assert.h>
 #include <debug.h>
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>

@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/samd2l2/sam_usb.h
+ * arch/arm/src/samd2l2/sam_usb.c
  *
  *   Copyright (C) 2015 Filament - www.filament.com
  *   Copyright (C) 2015 Offcode Ltd. All rights reserved.
@@ -91,6 +91,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

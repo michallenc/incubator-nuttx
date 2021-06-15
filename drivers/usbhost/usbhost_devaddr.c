@@ -1,6 +1,5 @@
 /****************************************************************************
  * drivers/usbhost/usbhost_devaddr.c
- * Manage USB device addresses
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,6 +18,8 @@
  *
  ****************************************************************************/
 
+/* Manage USB device addresses */
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
@@ -26,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

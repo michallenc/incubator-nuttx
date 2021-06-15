@@ -1,5 +1,5 @@
 /****************************************************************************
- * graphics/vnc/vnc_receiver.c
+ * graphics/vnc/server/vnc_receiver.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -277,7 +277,8 @@ int vnc_receiver(FAR struct vnc_session_s *session)
                                        1);
               if (ret < 0)
                 {
-                  gerr("ERROR: Failed to read FramebufferUpdateRequest message: %d\n",
+                  gerr("ERROR: "
+                     "Failed to read FramebufferUpdateRequest message: %d\n",
                        ret);
                 }
               else

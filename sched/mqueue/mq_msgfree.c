@@ -1,5 +1,5 @@
 /****************************************************************************
- *  sched/mqueue/mq_msgfree.c
+ * sched/mqueue/mq_msgfree.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <assert.h>
 #include <queue.h>
 
 #include <nuttx/irq.h>

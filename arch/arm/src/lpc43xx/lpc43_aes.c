@@ -1,35 +1,20 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_aes.c
  *
- *   Copyright (C) 2015 Gregory Nutt. All rights reserved.
- *   Author:  Alexander Vasiljev <alexvasiljev@gmail.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -68,7 +53,8 @@ static struct lpc43_aes_s *g_aes;
  * Private Functions
  ****************************************************************************/
 
-static int aes_init(FAR const void *iv, FAR const void *key, uint32_t keysize,
+static int aes_init(FAR const void *iv,
+                    FAR const void *key, uint32_t keysize,
                     int mode, int encrypt)
 {
   unsigned int cmd = 0;
@@ -96,40 +82,42 @@ static int aes_init(FAR const void *iv, FAR const void *key, uint32_t keysize,
 
   if (encrypt == CYPHER_ENCRYPT)
     {
-      cmd = mode == AES_MODE_ECB ? AES_API_CMD_ENCODE_ECB : AES_API_CMD_ENCODE_CBC;
+      cmd = mode == AES_MODE_ECB ?
+                    AES_API_CMD_ENCODE_ECB : AES_API_CMD_ENCODE_CBC;
     }
   else
     {
-      cmd = mode == AES_MODE_ECB ? AES_API_CMD_DECODE_ECB : AES_API_CMD_DECODE_CBC;
+      cmd = mode == AES_MODE_ECB ?
+                    AES_API_CMD_DECODE_ECB : AES_API_CMD_DECODE_CBC;
     }
 
-  g_aes->aes_Init();
+  g_aes->aes_init();
 
   if (key != NULL)
     {
-      g_aes->aes_LoadKeySW(key);
+      g_aes->aes_load_key_sw(key);
     }
   else
     {
       switch (keysize)
         {
           case 0:
-            g_aes->aes_LoadKey1();
+            g_aes->aes_load_key1();
             break;
 
           case 1:
-            g_aes->aes_LoadKey2();
+            g_aes->aes_load_key2();
             break;
 
           case 2:
-            g_aes->aes_LoadKeyRNG();
+            g_aes->aes_load_key_rng();
             break;
         }
     }
 
-  g_aes->aes_LoadIV_SW((const unsigned char*)iv);
+  g_aes->aes_load_iv_sw((const unsigned char *)iv);
 
-  ret = g_aes->aes_SetMode(cmd);
+  ret = g_aes->aes_set_mode(cmd);
   switch (ret)
     {
       case AES_API_ERR_WRONG_CMD:
@@ -148,7 +136,8 @@ static int aes_init(FAR const void *iv, FAR const void *key, uint32_t keysize,
   return 0;
 }
 
-static int aes_update(FAR const void *out, uint32_t *outl, FAR const void *in,
+static int aes_update(FAR const void *out,
+                      uint32_t *outl, FAR const void *in,
                       uint32_t inl)
 {
   if (g_aes == NULL)
@@ -166,8 +155,8 @@ static int aes_update(FAR const void *out, uint32_t *outl, FAR const void *in,
       return -EINVAL;
     }
 
-  return g_aes->aes_Operate((unsigned char*)out,
-                            (unsigned char*)in, inl / 16);
+  return g_aes->aes_operate((unsigned char *)out,
+                            (unsigned char *)in, inl / 16);
 }
 
 /****************************************************************************
@@ -180,7 +169,7 @@ int aes_cypher(void *out, const void *in, uint32_t size, const void *iv,
   unsigned int ret = 0;
   uint32_t outl = size;
 
-  g_aes = (struct lpc43_g_aes*)*((uint32_t*)LPC43_ROM_AES_DRIVER_TABLE);
+  g_aes = (struct lpc43_g_aes *) * ((uint32_t *)LPC43_ROM_AES_DRIVER_TABLE);
 
   ret = aes_init(iv, key, keysize, mode, encrypt);
 

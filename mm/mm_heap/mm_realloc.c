@@ -31,6 +31,8 @@
 
 #include <nuttx/mm/mm.h>
 
+#include "mm_heap/mm.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -90,6 +92,13 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
    */
 
   newsize = MM_ALIGN_UP(size + SIZEOF_MM_ALLOCNODE);
+  if (newsize < size)
+    {
+      /* There must have been an integer overflow */
+
+      DEBUGASSERT(false);
+      return NULL;
+    }
 
   /* Map the memory chunk into an allocated node structure */
 

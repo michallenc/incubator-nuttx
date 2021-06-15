@@ -1,59 +1,42 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/include/stm32f0l0g0/chip.h
  *
- *   Copyright (C) 2017-2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Alan Carvalho de Assis <acassis@gmail.com>
- *           Daniel Pereira Volpato <dpo@certi.org.br>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_INCLUDE_STM32F0L0G0_CHIP_H
 #define __ARCH_ARM_INCLUDE_STM32F0L0G0_CHIP_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
-/************************************************************************************
- * Pre-processor Definitions
- ************************************************************************************/
+/****************************************************************************
+ * Pre-processor Prototypes
+ ****************************************************************************/
 
 /* Get customizations for each supported chip */
 
 #if defined(CONFIG_ARCH_CHIP_STM32F030RC) || defined(CONFIG_ARCH_CHIP_STM32F030CC)
 
-#  define STM32_FLASH_SIZE      (256*1024) /* 256Kb */
-#  define STM32_SRAM_SIZE       (32*1024)  /*  32Kb */
+#  define STM32_FLASH_SIZE      (256 * 1024) /* 256Kb */
+#  define STM32_SRAM_SIZE       (32 * 1024)  /*  32Kb */
 
 #  define STM32_NSPI            2  /* Two SPI modules (SPI or I2S) */
 #  define STM32_NI2S            0  /* No I2S modules */
@@ -71,8 +54,8 @@
 
 #elif defined(CONFIG_ARCH_CHIP_STM32F051R8)
 
-#  define STM32_FLASH_SIZE      (64*1024) /* 64Kb */
-#  define STM32_SRAM_SIZE       (8*1024)  /*  8Kb */
+#  define STM32_FLASH_SIZE      (64 * 1024) /* 64Kb */
+#  define STM32_SRAM_SIZE       (8 * 1024)  /*  8Kb */
 
 #  define STM32_NSPI            2  /* Two SPI modules (SPI or I2S) */
 #  define STM32_NI2S            2  /* Two I2S modules (SPI or I2S) */
@@ -91,11 +74,11 @@
 #elif defined(CONFIG_ARCH_CHIP_STM32F072C8) || defined(CONFIG_ARCH_CHIP_STM32F072CB)
 
 #  ifdef CONFIG_ARCH_CHIP_STM32F072C8
-#    define STM32_FLASH_SIZE    (64*1024)  /*  64Kb */
+#    define STM32_FLASH_SIZE    (64 * 1024)  /*  64Kb */
 #  else
-#    define STM32_FLASH_SIZE    (128*1024) /* 128Kb */
+#    define STM32_FLASH_SIZE    (128 * 1024) /* 128Kb */
 #  endif
-#  define STM32_SRAM_SIZE       (16*1024)  /*  16Kb */
+#  define STM32_SRAM_SIZE       (16 * 1024)  /*  16Kb */
 
 #  define STM32_NATIM           1  /* One advanced timer TIM1 */
 #  define STM32_NGTIM16         5  /* 16-bit general up/down timers TIM3, TIM14-17 */
@@ -147,11 +130,11 @@
 #elif defined(CONFIG_ARCH_CHIP_STM32F072V8) || defined(CONFIG_ARCH_CHIP_STM32F072VB)
 
 #  ifdef CONFIG_ARCH_CHIP_STM32F072V8
-#    define STM32_FLASH_SIZE    (64*1024)  /*  64Kb */
+#    define STM32_FLASH_SIZE    (64 * 1024)  /*  64Kb */
 #  else
-#    define STM32_FLASH_SIZE    (128*1024) /* 128Kb */
+#    define STM32_FLASH_SIZE    (128 * 1024) /* 128Kb */
 #  endif
-#  define STM32_SRAM_SIZE       (16*1024)  /*  16Kb */
+#  define STM32_SRAM_SIZE       (16 * 1024)  /*  16Kb */
 
 #  define STM32_NATIM           1  /* One advanced timer TIM1 */
 #  define STM32_NGTIM16         5  /* 16-bit general up/down timers TIM3, TIM14-17 */
@@ -175,11 +158,11 @@
 #elif defined(CONFIG_ARCH_CHIP_STM32F091CB) || defined(CONFIG_ARCH_CHIP_STM32F091CC)
 
 #  ifdef CONFIG_ARCH_CHIP_STM32F091CB
-#    define STM32_FLASH_SIZE    (128*1024) /* 128Kb */
+#    define STM32_FLASH_SIZE    (128 * 1024) /* 128Kb */
 #  else
-#    define STM32_FLASH_SIZE    (256*1024) /* 256Kb */
+#    define STM32_FLASH_SIZE    (256 * 1024) /* 256Kb */
 #  endif
-#  define STM32_SRAM_SIZE       (32*1024)  /*  32Kb */
+#  define STM32_SRAM_SIZE       (32 * 1024)  /*  32Kb */
 
 #  define STM32_NATIM           1  /* One advanced timer TIM1 */
 #  define STM32_NGTIM16         5  /* 16-bit general up/down timers TIM3, TIM14-17 */
@@ -204,11 +187,11 @@
       defined(CONFIG_ARCH_CHIP_STM32F091VB) || defined(CONFIG_ARCH_CHIP_STM32F091VC)
 
 #  if defined(CONFIG_ARCH_CHIP_STM32F091RB) || defined(CONFIG_ARCH_CHIP_STM32F091VB)
-#    define STM32_FLASH_SIZE    (128*1024) /* 128Kb */
+#    define STM32_FLASH_SIZE    (128 * 1024) /* 128Kb */
 #  else
-#    define STM32_FLASH_SIZE    (256*1024) /* 256Kb */
+#    define STM32_FLASH_SIZE    (256 * 1024) /* 256Kb */
 #  endif
-#  define STM32_SRAM_SIZE       (32*1024)  /*  32Kb */
+#  define STM32_SRAM_SIZE       (32 * 1024)  /*  32Kb */
 
 #  define STM32_NATIM           1  /* One advanced timer TIM1 */
 #  define STM32_NGTIM16         5  /* 16-bit general up/down timers TIM3, TIM14-17 */
@@ -236,8 +219,8 @@
 #elif defined(CONFIG_ARCH_CHIP_STM32G070KB) || defined(CONFIG_ARCH_CHIP_STM32G070CB) || \
       defined(CONFIG_ARCH_CHIP_STM32G070RB)
 
-#  define STM32_FLASH_SIZE     (128*1024) /* 128Kb */
-#  define STM32_SRAM_SIZE      (32*1024)  /* 32Kb */
+#  define STM32_FLASH_SIZE     (128 * 1024) /* 128Kb */
+#  define STM32_SRAM_SIZE      (32 * 1024)  /* 32Kb */
 
 #  define STM32_NATIM           1  /* One advanced timer TIM1 */
 #  define STM32_NGTIM16         5  /* 16-bit general up/down timers TIM3,
@@ -287,7 +270,7 @@
 #  define STM32_NUSBDEV         0  /* No USB full-speed device controller */
 #  define STM32_NUSBOTG         0  /* No USB OTG */
 #  define STM32_NCEC            1  /* One HDMI-CEC controller */
-#  define STM32_NADC            1   /* (1) ADC1, 12-channels */
+#  define STM32_NADC            1  /* (1) ADC1, 12-channels */
 
 #  define STM32_NDAC            2  /* Two DAC channels */
 #  define STM32_NCOMP           2  /* Two Analog Comparators */
@@ -296,7 +279,7 @@
 #  define STM32_NCAP            0  /* No Capacitive sensing channels */
 #  define STM32_NPORTS          6  /* Six GPIO ports, GPIOA-E, H */
 
-/* STM32L EnergyLite Line ***********************************************************/
+/* STM32L EnergyLite Line ***************************************************/
 
 /* STM32L073XX  - With LCD
  * STM32L072XX  - No LCD
@@ -491,7 +474,7 @@
 #  define STM32_NADC            1  /* One 12-bit module */
 #  define STM32_NDAC            2  /* Two DAC channels */
 #  define STM32_NCOMP           2  /* Two Analog Comparators */
-#  define STM32_NCRC            1   /* One CRC module */
+#  define STM32_NCRC            1  /* One CRC module */
 #  define STM32_NRNG            1  /* One Random number generator (RNG) */
 #  define STM32_NCAP            24 /* Twenty-four Capacitive sensing channels */
 #  define STM32_NPORTS          6  /* Six GPIO ports, GPIOA-E, H */
@@ -544,7 +527,7 @@
 #  define STM32_NADC            1  /* One 12-bit module */
 #  define STM32_NDAC            2  /* Two DAC channels */
 #  define STM32_NCOMP           2  /* Two Analog Comparators */
-#  define STM32_NCRC            1   /* One CRC module */
+#  define STM32_NCRC            1  /* One CRC module */
 #  define STM32_NRNG            1  /* One Random number generator (RNG) */
 #  define STM32_NCAP            17 /* Seventeen Capacitive sensing channels */
 #  define STM32_NPORTS          6  /* Six GPIO ports, GPIOA-E, H */
@@ -579,10 +562,12 @@
 #  error "Unsupported STM32F0xx chip"
 #endif
 
-/* NVIC priority levels *************************************************************/
-/* Each priority field holds a priority value, 0-31. The lower the value, the greater
- * the priority of the corresponding interrupt. The processor implements only
- * bits[7:6] of each field, bits[5:0] read as zero and ignore writes.
+/* NVIC priority levels *****************************************************/
+
+/* Each priority field holds a priority value, 0-31. The lower the value,
+ * the greater the priority of the corresponding interrupt.  The processor
+ * implements only bits[7:6] of each field, bits[5:0] read as zero and
+ * ignore writes.
  */
 
 #define NVIC_SYSH_PRIORITY_MIN     0xc0 /* All bits[7:6] set is minimum priority */
@@ -590,16 +575,16 @@
 #define NVIC_SYSH_PRIORITY_MAX     0x00 /* Zero is maximum priority */
 #define NVIC_SYSH_PRIORITY_STEP    0x40 /* Two bits of interrupt priority used */
 
-/************************************************************************************
+/****************************************************************************
  * Public Types
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Public Data
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
- * Public Functions
- ************************************************************************************/
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
 
 #endif /* __ARCH_ARM_INCLUDE_STM32F0L0G0_CHIP_H */

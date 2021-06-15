@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/am225x/am335x_lcdc.c
+ * arch/arm/src/am335x/am335x_lcdc.c
  *
  *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -48,6 +48,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

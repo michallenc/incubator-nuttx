@@ -1,58 +1,42 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4_adc.h
  *
- *   Copyright (C) 2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Juha Niskanen <juha.niskanen@haltian.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_ADC_H
 #define __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_ADC_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
 #include "chip.h"
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Register Offsets *****************************************************************/
+/* Register Offsets *********************************************************/
 
-/* Register Offsets for each ADC (ADC1-3).  At offset 0x0000 for master and offset
- * 0x0100 for slave.
+/* Register Offsets for each ADC (ADC1-3).  At offset 0x0000 for master and
+ * offset 0x0100 for slave.
  */
 
 #define STM32L4_ADC_ISR_OFFSET         0x0000  /* ADC interrupt and status register */
@@ -92,7 +76,7 @@
 #  define STM32L4_ADC_CDR_OFFSET       0x000c  /* Common regular data register for dual mode */
 #endif
 
-/* Register Addresses ***************************************************************/
+/* Register Addresses *******************************************************/
 
 #define STM32L4_ADC1_ISR               (STM32L4_ADC1_BASE+STM32L4_ADC_ISR_OFFSET)
 #define STM32L4_ADC1_IER               (STM32L4_ADC1_BASE+STM32L4_ADC_IER_OFFSET)
@@ -187,9 +171,11 @@
 #  define STM32L4_ADC_CDR              (STM32L4_ADCCMN_BASE+STM32L4_ADC_CDR_OFFSET)
 #endif
 
-/* Register Bitfield Definitions ****************************************************/
+/* Register Bitfield Definitions ********************************************/
 
-/* ADC interrupt and status register (ISR) and ADC interrupt enable register (IER) */
+/* ADC interrupt and status register (ISR) and
+ * ADC interrupt enable register (IER)
+ */
 
 #define ADC_INT_ADRDY                (1 << 0)  /* Bit 0:  ADC ready */
 #define ADC_INT_EOSMP                (1 << 1)  /* Bit 1:  End of sampling flag */
@@ -236,7 +222,7 @@
 #  define ADC_CFGR_EXTSEL_T1CC1      (0x0 << ADC_CFGR_EXTSEL_SHIFT)    /* 0000: Timer 1 CC1 event */
 #  define ADC_CFGR_EXTSEL_T1CC2      (0x01 << ADC_CFGR_EXTSEL_SHIFT)   /* 0001: Timer 1 CC2 event */
 #  define ADC_CFGR_EXTSEL_T1CC3      (0x02 << ADC_CFGR_EXTSEL_SHIFT)   /* 0010: Timer 1 CC3 event */
-#  define ADC_CFGR_EXTSEL_T2CC2      (0x03 << ADC_CFGR_EXTSEL_SHIFT)   /* 0011: Timer 2 CC2 event */
+#  define ADC_CFGR_EXTSEL_T2CC4      (0x03 << ADC_CFGR_EXTSEL_SHIFT)   /* 0011: Timer 2 CC4 event */
 #  define ADC_CFGR_EXTSEL_T3TRGO     (0x04 << ADC_CFGR_EXTSEL_SHIFT)   /* 0100: Timer 3 TRGO event */
 #  if !defined(CONFIG_STM32L4_STM32L4X3)
 #    define ADC_CFGR_EXTSEL_T4CC4    (0x05 << ADC_CFGR_EXTSEL_SHIFT)   /* 0101: Timer 4 CC4 event */

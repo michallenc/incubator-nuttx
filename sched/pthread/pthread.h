@@ -31,9 +31,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <sched.h>
 
 #include <nuttx/compiler.h>
+#include <nuttx/semaphore.h>
+#include <nuttx/sched.h>
 
 /****************************************************************************
  * Public Type Declarations
@@ -78,13 +79,8 @@ extern "C"
 struct pthread_tcb_s; /* Forward reference */
 struct task_group_s;  /* Forward reference */
 
-void weak_function pthread_initialize(void);
 int pthread_setup_scheduler(FAR struct pthread_tcb_s *tcb, int priority,
                             start_t start, pthread_startroutine_t entry);
-
-#ifdef CONFIG_PTHREAD_CLEANUP
-void pthread_cleanup_popall(FAR struct tcb_s *tcb);
-#endif
 
 int pthread_completejoin(pid_t pid, FAR void *exit_value);
 void pthread_destroyjoin(FAR struct task_group_s *group,

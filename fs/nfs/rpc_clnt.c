@@ -43,8 +43,8 @@
  *   Copyright (c) 1989, 1991, 1993, 1995 The Regents of the University of
  *   California.  All rights reserved.
  *
- * This code is derived from software contributed to Berkeley by Rick Macklem at
- * The University of Guelph.
+ * This code is derived from software contributed to Berkeley by Rick Macklem
+ * at The University of Guelph.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -60,11 +60,11 @@
  * endorse or promote products derived from this software without specific
  * prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
@@ -241,27 +241,30 @@ static int rpcclnt_socket(FAR struct rpcclnt *rpc, in_port_t rport)
       goto bad;
     }
 
-  /* Some servers require that the client port be a reserved port
-   * number. We always allocate a reserved port, as this prevents
-   * filehandle disclosure through UDP port capture.
-   */
-
-  do
+  if (rpc->rc_sotype == SOCK_DGRAM)
     {
-      *lport = htons(--port);
-      error = psock_bind(&rpc->rc_so, (FAR struct sockaddr *)&laddr,
-                         addrlen);
-      if (error < 0)
+      /* Some servers require that the client port be a reserved port
+       * number. We always allocate a reserved port, as this prevents
+       * filehandle disclosure through UDP port capture.
+       */
+
+      do
+        {
+          *lport = htons(--port);
+          error = psock_bind(&rpc->rc_so, (FAR struct sockaddr *)&laddr,
+                             addrlen);
+          if (error < 0)
+            {
+              ferr("ERROR: psock_bind failed: %d\n", error);
+            }
+        }
+      while (error == -EADDRINUSE && port >= 512);
+
+      if (error)
         {
           ferr("ERROR: psock_bind failed: %d\n", error);
+          goto bad;
         }
-    }
-  while (error == -EADDRINUSE && port >= 512);
-
-  if (error)
-    {
-      ferr("ERROR: psock_bind failed: %d\n", error);
-      goto bad;
     }
 
   /* Protocols that do not require connections could be optionally left
@@ -297,32 +300,49 @@ bad:
 static int rpcclnt_send(FAR struct rpcclnt *rpc,
                         FAR void *call, int reqlen)
 {
+  struct iovec  iov[2];
+  struct msghdr msg;
   uint32_t mark;
   int ret = OK;
 
-  /* Send the record marking(RM) for stream only */
-
   if (rpc->rc_sotype == SOCK_STREAM)
     {
-      mark = txdr_unsigned(0x80000000 | reqlen);
-      ret = psock_send(&rpc->rc_so, &mark, sizeof(mark), 0);
-      if (ret < 0)
-        {
-          ferr("ERROR: psock_send mark failed: %d\n", ret);
-          return ret;
-        }
+      /* Prepare the record marking(RM) and compose an RPC request
+       * NOTE: Sending a separate packet does not work with Linux host
+       */
+
+      mark = txdr_unsigned(0x80000000 | (reqlen));
+
+      iov[0].iov_base = (FAR void *)&mark;
+      iov[0].iov_len = sizeof(mark);
+      iov[1].iov_base = (FAR void *)call;
+      iov[1].iov_len = reqlen;
+
+      msg.msg_name = NULL;
+      msg.msg_namelen = 0;
+      msg.msg_iov = iov;
+      msg.msg_iovlen = 2;
+      msg.msg_control = NULL;
+      msg.msg_controllen = 0;
+      msg.msg_flags = 0;
+
+      ret = psock_sendmsg(&rpc->rc_so, &msg, 0);
+      ferr("ERROR: psock_sendmsg request failed: %d\n", ret);
+    }
+  else
+    {
+      /* Send the call message
+       *
+       * On success, psock_send returns the number of bytes sent;
+       * On failure, it returns a negated errno value.
+       */
+
+      ret = psock_send(&rpc->rc_so, call, reqlen, 0);
+      ferr("ERROR: psock_send request failed: %d\n", ret);
     }
 
-  /* Send the call message
-   *
-   * On success, psock_send returns the number of bytes sent;
-   * On failure, it returns a negated errno value.
-   */
-
-  ret = psock_send(&rpc->rc_so, call, reqlen, 0);
   if (ret < 0)
     {
-      ferr("ERROR: psock_send request failed: %d\n", ret);
       return ret;
     }
 
@@ -342,6 +362,7 @@ static int rpcclnt_receive(FAR struct rpcclnt *rpc,
 {
   uint32_t mark;
   int error = 0;
+  int offset = 0;
 
   /* Receive the record marking(RM) for stream only */
 
@@ -371,12 +392,20 @@ static int rpcclnt_receive(FAR struct rpcclnt *rpc,
       resplen = mark;
     }
 
-  error = psock_recv(&rpc->rc_so, reply, resplen, 0);
-  if (error < 0)
+  do
     {
-      ferr("ERROR: psock_recv response failed: %d\n", error);
-      return error;
+      error = psock_recv(&rpc->rc_so, reply + offset, resplen, 0);
+
+      if (error < 0)
+        {
+          ferr("ERROR: psock_recv response failed: %d\n", error);
+          return error;
+        }
+
+      resplen -= error;
+      offset  += error;
     }
+  while (rpc->rc_sotype == SOCK_STREAM && resplen != 0);
 
   return OK;
 }

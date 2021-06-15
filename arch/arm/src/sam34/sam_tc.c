@@ -1,36 +1,20 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_tc.c
  *
- *   Copyright (C) 2014, 2016 Gregory Nutt. All rights reserved.
- *   Authors: Gregory Nutt <gnutt@nuttx.org>
- *            Bob Dioron
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -44,6 +28,7 @@
 #include <sys/types.h>
 
 #include <stdint.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -63,6 +48,7 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
 /* Configuration ************************************************************/
 
 #ifndef CONFIG_DEBUG_TIMER_INFO
@@ -79,6 +65,7 @@
 /****************************************************************************
  * Private Types
  ****************************************************************************/
+
 /* This structure provides the private representation of the "lower-half"
  * driver state structure.  This structure must be cast-compatible with the
  * timer_lowerhalf_s structure.
@@ -103,6 +90,7 @@ struct sam34_lowerhalf_s
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
+
 /* Register operations ******************************************************/
 
 #ifdef CONFIG_SAM34_TC_REGDEBUG
@@ -133,6 +121,7 @@ static int      sam34_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
 /* "Lower half" driver methods */
 
 static const struct timer_ops_s g_tcops =
@@ -176,8 +165,8 @@ static uint32_t sam34_getreg(uint32_t addr)
 
   uint32_t val = getreg32(addr);
 
-  /* Is this the same value that we read from the same register last time?  Are
-   * we polling the register?  If so, suppress some of the output.
+  /* Is this the same value that we read from the same register last time?
+   * Are we polling the register?  If so, suppress some of the output.
    */
 
   if (addr == prevaddr && val == preval)
@@ -203,7 +192,7 @@ static uint32_t sam34_getreg(uint32_t addr)
         {
           /* Yes.. then show how many times the value repeated */
 
-          tmrinfo("[repeats %d more times]\n", count-3);
+          tmrinfo("[repeats %d more times]\n", count - 3);
         }
 
       /* Save the new address, value, and count */
@@ -257,7 +246,7 @@ static void sam34_putreg(uint32_t val, uint32_t addr)
 
 static int sam34_interrupt(int irq, FAR void *context, FAR void *arg)
 {
-  FAR struct sam34_lowerhalf_s *priv = &g_tcdevs[irq-SAM_IRQ_TC0];
+  FAR struct sam34_lowerhalf_s *priv = &g_tcdevs[irq - SAM_IRQ_TC0];
 
   tmrinfo("Entry\n");
   DEBUGASSERT((irq >= SAM_IRQ_TC0) && (irq <= SAM_IRQ_TC5));
@@ -276,13 +265,16 @@ static int sam34_interrupt(int irq, FAR void *context, FAR void *arg)
         {
           /* Calculate new ticks / dither adjustment */
 
-          priv->clkticks = ((uint64_t)(priv->adjustment + priv->timeout))*TC_FCLK / 1000000;
+          priv->clkticks = ((uint64_t)(priv->adjustment + priv->timeout)) *
+                             TC_FCLK / 1000000;
 
-          /* Set next interval interval. TODO: make sure the interval is not so soon it will be missed! */
+          /* Set next interval interval.
+           * TODO: make sure the interval is not so soon it will be missed!
+           */
 
           sam34_putreg(priv->clkticks, priv->base + SAM_TC_RC_OFFSET);
 
-          timeout = (1000000ULL * priv->clkticks) / TC_FCLK;    /* truncated timeout */
+          timeout = (1000000ULL * priv->clkticks) / TC_FCLK;                /* truncated timeout */
           priv->adjustment = (priv->adjustment + priv->timeout) - timeout;  /* truncated time to be added to next interval (dither) */
         }
       else
@@ -306,8 +298,8 @@ static int sam34_interrupt(int irq, FAR void *context, FAR void *arg)
  *   Start the timer, resetting the time to the current timeout,
  *
  * Input Parameters:
- *   lower - A pointer the publicly visible representation of the "lower-half"
- *           driver state structure.
+ *   lower - A pointer the publicly visible representation of the
+ *           "lower-half" driver state structure.
  *
  * Returned Value:
  *   Zero on success; a negated errno value on failure.
@@ -362,8 +354,8 @@ static int sam34_start(FAR struct timer_lowerhalf_s *lower)
  *   Stop the timer
  *
  * Input Parameters:
- *   lower - A pointer the publicly visible representation of the "lower-half"
- *           driver state structure.
+ *   lower - A pointer the publicly visible representation of the
+ *           "lower-half" driver state structure.
  *
  * Returned Value:
  *   Zero on success; a negated errno value on failure.
@@ -397,8 +389,8 @@ static int sam34_stop(FAR struct timer_lowerhalf_s *lower)
  *   Get the current timer status
  *
  * Input Parameters:
- *   lower  - A pointer the publicly visible representation of the "lower-half"
- *            driver state structure.
+ *   lower  - A pointer the publicly visible representation of the
+ *            "lower-half" driver state structure.
  *   status - The location to return the status information.
  *
  * Returned Value:
@@ -450,8 +442,8 @@ static int sam34_getstatus(FAR struct timer_lowerhalf_s *lower,
  *   Set a new timeout value (and reset the timer)
  *
  * Input Parameters:
- *   lower   - A pointer the publicly visible representation of the "lower-half"
- *             driver state structure.
+ *   lower   - A pointer the publicly visible representation of the
+ *             "lower-half" driver state structure.
  *   timeout - The new timeout value in milliseconds.
  *
  * Returned Value:
@@ -500,8 +492,8 @@ static int sam34_settimeout(FAR struct timer_lowerhalf_s *lower,
  *   Call this user provided timeout callback.
  *
  * Input Parameters:
- *   lower    - A pointer the publicly visible representation of the "lower-half"
- *              driver state structure.
+ *   lower    - A pointer the publicly visible representation of the
+ *              "lower-half" driver state structure.
  *   callback - The new timer expiration function pointer.  If this
  *              function pointer is NULL, then the reset-on-expiration
  *              behavior is restored,
@@ -526,8 +518,8 @@ static void sam34_setcallback(FAR struct timer_lowerhalf_s *lower,
 
   /* Save the new callback and its argument */
 
-   priv->callback = callback;
-   priv->arg      = arg;
+  priv->callback = callback;
+  priv->arg      = arg;
 
   leave_critical_section(flags);
 }
@@ -540,8 +532,8 @@ static void sam34_setcallback(FAR struct timer_lowerhalf_s *lower,
  *   are forwarded to the lower half driver through this method.
  *
  * Input Parameters:
- *   lower - A pointer the publicly visible representation of the "lower-half"
- *           driver state structure.
+ *   lower - A pointer the publicly visible representation of the
+ *           "lower-half" driver state structure.
  *   cmd   - The ioctl command value
  *   arg   - The optional argument that accompanies the 'cmd'.  The
  *           interpretation of this argument depends on the particular
@@ -587,7 +579,7 @@ static int sam34_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
 
 void sam_tcinitialize(FAR const char *devpath, int irq)
 {
-  FAR struct sam34_lowerhalf_s *priv = &g_tcdevs[irq-SAM_IRQ_TC0];
+  FAR struct sam34_lowerhalf_s *priv = &g_tcdevs[irq - SAM_IRQ_TC0];
 
   tmrinfo("Entry: devpath=%s\n", devpath);
   DEBUGASSERT((irq >= SAM_IRQ_TC0) && (irq <= SAM_IRQ_TC5));

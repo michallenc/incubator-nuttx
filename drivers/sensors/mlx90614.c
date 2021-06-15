@@ -1,9 +1,5 @@
 /****************************************************************************
  * drivers/sensors/mlx90614.c
- * Character driver for the Melexis MLX90614 Infrared Thermometer
- *
- *   Copyright (C) 2018 Alan Carvalho de Assis. All rights reserved.
- *   Author: Alan Carvalho de Assis <acassis@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,12 +30,15 @@
  *
  ****************************************************************************/
 
+/* Character driver for the Melexis MLX90614 Infrared Thermometer */
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 #include <stdlib.h>

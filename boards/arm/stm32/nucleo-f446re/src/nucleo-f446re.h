@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32/nucleo-f4x1re/src/nucleo-f4x1re.h
+ * boards/arm/stm32/nucleo-f446re/src/nucleo-f446re.h
  *
  *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
  *   Authors: Frank Bennett
@@ -57,6 +57,8 @@
     !defined(CONFIG_MMCSD_SDIO)
 #  undef HAVE_MMCSD
 #endif
+
+#define HAVE_LCD 1
 
 /* LED.  User LD2: the green LED is a user LED connected to Arduino signal
  * D13 corresponding to MCU I/O PA5 (pin 21) or PB13 (pin 34) depending on
@@ -125,6 +127,15 @@
      GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN5)
 #endif
 
+#ifdef HAVE_LCD
+#define GPIO_LCD_CS  (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz | \
+                      GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN9)
+#define GPIO_LCD_RST (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz | \
+                      GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN10)
+#define GPIO_LCD_RS  (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz | \
+                      GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN8)
+#endif
+
 /* Devices on the onboard bus.
  *
  * Note that these are unshifted addresses.
@@ -181,6 +192,19 @@
 #define GPIO_BUTTON_G \
   (GPIO_INPUT | GPIO_PULLUP |GPIO_EXTI | GPIO_PORTC | GPIO_PIN7)
 
+/* GPIO pins used by the GPIO Subsystem */
+
+#define BOARD_NGPIOIN     1 /* Amount of GPIO Input pins */
+#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
+#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
+
+#define GPIO_IN1          (GPIO_INPUT | GPIO_PULLDOWN | GPIO_SPEED_2MHz | \
+                           GPIO_PORTA | GPIO_PIN7)
+#define GPIO_OUT1         (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_2MHz | \
+                           GPIO_OUTPUT_SET | GPIO_PORTB | GPIO_PIN6)
+#define GPIO_INT1         (GPIO_INPUT | GPIO_PULLDOWN | GPIO_SPEED_2MHz | \
+                           GPIO_PORTC | GPIO_PIN7)
+
 /* Itead Joystick Signal interpretation:
  *
  *   --------- ----------------------- ---------------------------
@@ -220,6 +244,9 @@ extern struct spi_dev_s *g_spi1;
 #ifdef CONFIG_STM32_SPI2
 extern struct spi_dev_s *g_spi2;
 #endif
+#ifdef CONFIG_STM32_SPI3
+extern struct spi_dev_s *g_spi3;
+#endif
 #ifdef HAVE_MMCSD
 extern struct sdio_dev_s *g_sdio;
 #endif
@@ -227,6 +254,26 @@ extern struct sdio_dev_s *g_sdio;
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: stm32_bringup
+ *
+ * Description:
+ *   Perform architecture specific initialization
+ *
+ *   CONFIG_LIB_BOARDCTL=y:
+ *     If CONFIG_NSH_ARCHINITIALIZE=y:
+ *       Called from the NSH library (or other application)
+ *     Otherwise, assumed to be called from some other application.
+ *
+ *   Otherwise CONFIG_BOARD_LATE_INITIALIZE=y:
+ *     Called from board_late_initialize().
+ *
+ *   Otherwise, bad news:  Never called
+ *
+ ****************************************************************************/
+
+int stm32_bringup(void);
 
 /****************************************************************************
  * Name: stm32_spidev_initialize
@@ -261,6 +308,18 @@ int stm32_adc_setup(void);
 #endif
 
 /****************************************************************************
+ * Name: stm32_can_setup
+ *
+ * Description:
+ *  Initialize CAN and register the CAN device
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_CAN
+int stm32_can_setup(void);
+#endif
+
+/****************************************************************************
  * Name: board_ajoy_initialize
  *
  * Description:
@@ -268,8 +327,50 @@ int stm32_adc_setup(void);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_AJOYSTICK
+#ifdef CONFIG_INPUT_AJOYSTICK
 int board_ajoy_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_foc_setup
+ *
+ * Description:
+ *  Initialize FOC peripheral for the board.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_FOC
+int stm32_foc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_pwm_setup
+ *
+ * Description:
+ *   Initialize PWM and register the PWM device.
+ *
+ * Return Value:
+ *   OK on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_PWM
+int stm32_pwm_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_gpio_initialize
+ *
+ * Description:
+ *   Initialize GPIO drivers for use with /apps/examples/gpio
+ *
+ * Return Value:
+ *   OK on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_DEV_GPIO
+int stm32_gpio_initialize(void);
 #endif
 
 #endif /* __BOARDS_ARM_STM32_NUCLEO_F401RE_SRC_NUCLEO_F446RE_H */

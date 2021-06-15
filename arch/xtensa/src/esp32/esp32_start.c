@@ -1,25 +1,20 @@
 /****************************************************************************
- * arch/xtensa/src/common/esp32_start.c
+ * arch/xtensa/src/esp32/esp32_start.c
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Basic initialize sequence derives from logic originally provided by
- * Espressif Systems:
- *
- *   Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -31,6 +26,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 
 #include <nuttx/init.h>
 #include <nuttx/irq.h>
@@ -46,6 +42,16 @@
 #include "esp32_spiram.h"
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifdef CONFIG_DEBUG_FEATURES
+#  define showprogress(c) up_puts(c)
+#else
+#  define showprogress(c)
+#endif
+
+/****************************************************************************
  * Public Data
  ****************************************************************************/
 
@@ -57,6 +63,10 @@ uint32_t g_idlestack[IDLETHREAD_STACKWORDS]
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+#ifndef CONFIG_SUPPRESS_UART_CONFIG
+extern void esp32_lowsetup(void);
+#endif
 
 /****************************************************************************
  * Name: __start
@@ -82,10 +92,6 @@ void IRAM_ATTR __start(void)
   regval &= ~RTC_CNTL_WDT_FLASHBOOT_MOD_EN;
   putreg32(regval, RTC_CNTL_WDTCONFIG0_REG);
 
-  regval  = getreg32(0x6001f048); /* DR_REG_BB_BASE+48 */
-  regval &= ~(1 << 14);
-  putreg32(regval, 0x6001f048);
-
   /* Make sure that normal interrupts are disabled.  This is really only an
    * issue when we are started in un-usual ways (such as from IRAM).  In this
    * case, we can at least defer some unexpected interrupts left over from
@@ -93,22 +99,6 @@ void IRAM_ATTR __start(void)
    */
 
   up_irq_disable();
-
-#ifdef CONFIG_STACK_COLORATION
-    {
-      register uint32_t *ptr;
-      register int i;
-
-      /* If stack debug is enabled, then fill the stack with a recognizable
-       * value that we can use later to test for high water marks.
-       */
-
-      for (i = 0, ptr = g_idlestack;  i < IDLETHREAD_STACKWORDS; i++)
-        {
-          *ptr++ = STACK_COLOR;
-        }
-    }
-#endif
 
   /* Move the stack to a known location.  Although we were given a stack
    * pointer at start-up, we don't know where that stack pointer is
@@ -141,11 +131,19 @@ void IRAM_ATTR __start(void)
 
   esp32_clockconfig();
 
+#ifndef CONFIG_SUPPRESS_UART_CONFIG
+  /* Configure the UART so we can get debug output */
+
+  esp32_lowsetup();
+#endif
+
 #ifdef USE_EARLYSERIALINIT
   /* Perform early serial initialization */
 
-  xtensa_early_serial_initialize();
+  xtensa_earlyserialinit();
 #endif
+
+  showprogress("A");
 
 #if defined(CONFIG_ESP32_SPIRAM_BOOT_INIT)
   esp_spiram_init_cache();
@@ -157,11 +155,21 @@ void IRAM_ATTR __start(void)
       PANIC();
 #  endif
     }
+
+  /* Set external memory bss section to zero */
+
+#  ifdef CONFIG_XTENSA_EXTMEM_BSS
+     memset(&_sbss_extmem, 0,
+            (&_ebss_extmem - &_sbss_extmem) * sizeof(_sbss_extmem));
+#  endif
+
 #endif
 
   /* Initialize onboard resources */
 
   esp32_board_initialize();
+
+  showprogress("B");
 
   /* Bring up NuttX */
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/lpc54xx/lpx54_ethernet.c
+ * arch/arm/src/lpc54xx/lpc54_ethernet.c
  *
  *   Copyright (C) 2017 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -3048,7 +3048,7 @@ int arm_netinitialize(int intf)
     {
       /* We could not attach the ISR to the interrupt */
 
-      nerr("ERROR:  irq_attach failed: %d\n", ret);
+      nerr("ERROR: irq_attach failed: %d\n", ret);
       return -EAGAIN;
     }
 

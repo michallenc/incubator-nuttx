@@ -44,6 +44,7 @@
 
 #include <stdlib.h>
 #include <fixedmath.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -105,7 +106,8 @@ static ssize_t lm92_read(FAR struct file *filep, FAR char *buffer,
                          size_t buflen);
 static ssize_t lm92_write(FAR struct file *filep, FAR const char *buffer,
                           size_t buflen);
-static int     lm92_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
+static int     lm92_ioctl(FAR struct file *filep,
+                          int cmd, unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -215,7 +217,8 @@ static int lm92_readb16(FAR struct lm92_dev_s *priv, uint8_t regaddr,
       return ret;
     }
 
-  /* Data format is:  TTTTTTTT TTTTTxxx where TTTTTTTTTTTTT is a thirteen-bit,
+  /* Data format is:
+   *  TTTTTTTT TTTTTxxx where TTTTTTTTTTTTT is a thirteen-bit,
    * signed temperature value with LSB = 0.0625 degrees Centigrade.
    */
 
@@ -230,7 +233,8 @@ static int lm92_readb16(FAR struct lm92_dev_s *priv, uint8_t regaddr,
  * Name: lm92_writeb16
  *
  * Description:
- *   Write to a 16-bit register (LM92_TEMP_REG, LM92_THYS_REG, LM92_TCRIT_REG,
+ *   Write to a 16-bit register
+ *  (LM92_TEMP_REG, LM92_THYS_REG, LM92_TCRIT_REG,
  *   LM92_TLOW_REG, LM92_THIGH_REG, or LM92_ID_REG)
  *
  ****************************************************************************/

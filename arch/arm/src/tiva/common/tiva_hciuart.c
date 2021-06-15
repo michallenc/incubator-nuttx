@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/tiva/tiva_hciuart.c
+ * arch/arm/src/tiva/common/tiva_hciuart.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -29,11 +29,13 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/wireless/bluetooth/bt_uart.h>
 #include <nuttx/power/pm.h>

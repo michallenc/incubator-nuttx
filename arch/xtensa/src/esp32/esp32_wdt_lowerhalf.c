@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/esp32/esp32_wdt_lowerhalf.c
+ * arch/xtensa/src/esp32/esp32_wdt_lowerhalf.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

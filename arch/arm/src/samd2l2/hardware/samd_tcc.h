@@ -1,47 +1,33 @@
-/********************************************************************************************
+/****************************************************************************
  * arch/arm/src/samd2l2/hardware/samd_tcc.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Matt Thompson <matt@extent3d.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * References:
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ ****************************************************************************/
+
+/* References:
  *   "Microchip SAMD21 datasheet"
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ********************************************************************************************/
+ */
 
 #ifndef __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_TCC_H
 #define __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_TCC_H
 
-/********************************************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -49,10 +35,11 @@
 
 #ifdef CONFIG_ARCH_FAMILY_SAMD21
 
-/********************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ********************************************************************************************/
-/* TCC register offsets *********************************************************************/
+ ****************************************************************************/
+
+/* TCC register offsets *****************************************************/
 
 #define SAM_TCC_CTRLA_OFFSET          0x0000  /* Control A register */
 #define SAM_TCC_CTRLBCLR_OFFSET       0x0004  /* Control B clear register */
@@ -84,7 +71,7 @@
 #define SAM_TCC_CCB2_OFFSET           0x0078  /* Capture Compare B0 register */
 #define SAM_TCC_CCB3_OFFSET           0x007C  /* Capture Compare B0 register */
 
-/* TC register addresses *******************************************************************/
+/* TC register addresses ****************************************************/
 
 #define SAM_TCC0_CTRLA                (SAM_TCC0_BASE+SAM_TCC_CTRLA_OFFSET)
 #define SAM_TCC0_CTRLBCLR             (SAM_TCC0_BASE+SAM_TCC_CTRLBCLR_OFFSET)
@@ -176,7 +163,7 @@
 #define SAM_TCC2_CCB2                 (SAM_TCC2_BASE+SAM_TCC_CCB2_OFFSET)
 #define SAM_TCC2_CCB3                 (SAM_TCC2_BASE+SAM_TCC_CCB3_OFFSET)
 
-/* TC register bit definitions *************************************************************/
+/* TC register bit definitions **********************************************/
 
 /* Control A register */
 
@@ -447,17 +434,17 @@
 #define TCC_VALUE_SHIFT               (6)
 #define TCC_VALUE_MASK                (0x3ff << TCC_VALUE_SHIFT)
 
-/********************************************************************************************
+/****************************************************************************
  * Public Types
- ********************************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************************
+/****************************************************************************
  * Public Data
- ********************************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************************
- * Public Functions
- ********************************************************************************************/
+/****************************************************************************
+ * Public Functions Prototypes
+ ****************************************************************************/
 
 #endif /* CONFIG_ARCH_FAMILY_SAMD21 */
 #endif /* __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_TCC_H */

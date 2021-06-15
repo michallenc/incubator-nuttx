@@ -1,5 +1,5 @@
 /****************************************************************************
- * net/udp/udp_send_buffered.c
+ * net/udp/udp_sendto_buffered.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -41,8 +41,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
-#include <debug.h>
 #include <debug.h>
 
 #include <arch/irq.h>
@@ -806,7 +806,7 @@ int psock_udp_cansend(FAR struct socket *psock)
 {
   /* Verify that we received a valid socket */
 
-  if (!psock || psock->s_crefs <= 0)
+  if (psock == NULL || psock->s_conn == NULL)
     {
       nerr("ERROR: Invalid socket\n");
       return -EBADF;

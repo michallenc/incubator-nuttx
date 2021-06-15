@@ -1,4 +1,4 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/src/armv6-m/svcall.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -16,38 +16,38 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_ARM_SRC_ARMV6_M_SVCALL_H
 #define __ARCH_ARM_SRC_ARMV6_M_SVCALL_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
-#ifdef CONFIG_LIB_SYSCALL
-#  include <syscall.h>
-#endif
+#include <syscall.h>
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Configuration ********************************************************************/
+/* Configuration ************************************************************/
 
-/* This logic uses three system calls {0,1,2} for context switching and one for the
- * syscall return.  So a minimum of four syscall values must be reserved.  If
- * CONFIG_BUILD_PROTECTED is defined, then four more syscall values must be reserved.
+/* This logic uses three system calls {0,1,2} for context switching and one
+ * for the syscall return.
+ * So a minimum of four syscall values must be reserved.
+ * If CONFIG_BUILD_PROTECTED is defined, then four more syscall values must
+ * be reserved.
  */
 
 #ifdef CONFIG_LIB_SYSCALL
 #  ifdef CONFIG_BUILD_PROTECTED
 #    ifndef CONFIG_SYS_RESERVED
-#      error "CONFIG_SYS_RESERVED must be defined to have the value 8"
-#    elif CONFIG_SYS_RESERVED != 8
-#      error "CONFIG_SYS_RESERVED must have the value 8"
+#      error "CONFIG_SYS_RESERVED must be defined to have the value 9"
+#    elif CONFIG_SYS_RESERVED != 9
+#      error "CONFIG_SYS_RESERVED must have the value 9"
 #    endif
 #  else
 #    ifndef CONFIG_SYS_RESERVED
@@ -58,7 +58,7 @@
 #  endif
 #endif
 
-/* Cortex M0 system calls ***********************************************************/
+/* Cortex M0 system calls ***************************************************/
 
 /* SYS call 0:
  *
@@ -89,6 +89,7 @@
 
 #define SYS_syscall_return        (3)
 
+#ifndef CONFIG_BUILD_FLAT
 #ifdef CONFIG_BUILD_PROTECTED
 /* SYS call 4:
  *
@@ -98,17 +99,10 @@
 
 #define SYS_task_start            (4)
 
-/* SYS call 5:
- *
- * void up_pthread_start(pthread_startroutine_t entrypt, pthread_addr_t arg)
- *        noreturn_function
- */
-
-#define SYS_pthread_start         (5)
-
 /* SYS call 6:
  *
- * void signal_handler(_sa_sigaction_t sighand, int signo, FAR siginfo_t *info,
+ * void signal_handler(_sa_sigaction_t sighand, int signo,
+ *                     FAR siginfo_t *info,
  *                     FAR void *ucontext);
  */
 
@@ -122,10 +116,21 @@
 #define SYS_signal_handler_return (7)
 
 #endif /* CONFIG_BUILD_PROTECTED */
+
+/* SYS call 5:
+ *
+ * void up_pthread_start(pthread_startroutine_t startup,
+ *                       pthread_startroutine_t entrypt, pthread_addr_t arg)
+ *        noreturn_function
+ */
+
+#define SYS_pthread_start         (5)
+
+#endif /* !CONFIG_BUILD_FLAT */
 #endif /* CONFIG_LIB_SYSCALL */
 
-/************************************************************************************
+/****************************************************************************
  * Inline Functions
- ************************************************************************************/
+ ****************************************************************************/
 
 #endif /* __ARCH_ARM_SRC_ARMV6_M_SVCALL_H */

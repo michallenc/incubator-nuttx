@@ -509,7 +509,9 @@ static int spi_performtx(struct imx_spidev_s *priv)
         }
       else
         {
-          /* Yes.. The transfer is complete, disable Tx FIFO empty interrupt */
+          /* Yes..
+           * The transfer is complete, disable Tx FIFO empty interrupt
+           */
 
           regval = spi_getreg(priv, ECSPI_INTREG_OFFSET);
           regval &= ~ECSPI_INT_TE;
@@ -927,19 +929,19 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
 
       switch (mode)
         {
-        case SPIDEV_MODE0: /* CPOL=0 CHPHA=0 */
+        case SPIDEV_MODE0: /* CPOL=0 CPHA=0 */
           modebits = 0;
           break;
 
-        case SPIDEV_MODE1: /* CPOL=0 CHPHA=1 */
+        case SPIDEV_MODE1: /* CPOL=0 CPHA=1 */
           modebits = ECSPI_CONREG_PHA;
           break;
 
-        case SPIDEV_MODE2: /* CPOL=1 CHPHA=0 */
+        case SPIDEV_MODE2: /* CPOL=1 CPHA=0 */
           modebits = ECSPI_CONREG_POL;
          break;
 
-        case SPIDEV_MODE3: /* CPOL=1 CHPHA=1 */
+        case SPIDEV_MODE3: /* CPOL=1 CPHA=1 */
           modebits = ECSPI_CONREG_PHA | ECSPI_CONREG_POL;
           break;
 
@@ -1295,7 +1297,9 @@ FAR struct spi_dev_s *imx_spibus_initialize(int port)
 #endif
   nxsem_init(&priv->exclsem, 0, 1);
 
-  /* Initialize control register: min frequency, ignore ready, master mode, mode=0, 8-bit */
+  /* Initialize control register:
+   * min frequency, ignore ready, master mode, mode=0, 8-bit
+   */
 
   spi_putreg(priv, ECSPI_CONREG_OFFSET,
              ECSPI_CONREG_DIV512 |                /* Lowest frequency */

@@ -1,35 +1,20 @@
 /****************************************************************************
  * drivers/usbdev/dfu.c
  *
- *   Copyright (C) 2011-2018 Gregory Nutt. All rights reserved.
- *   Authors: Petteri Aimonen <jpa@git.mail.kapsi.fi>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -54,6 +39,7 @@
 #include <nuttx/usb/dfu.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
+#include <debug.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -159,7 +145,7 @@ static const struct dfu_cfgdesc_s g_dfu_cfgdesc =
     .ifno           = 0,
     .alt            = 0,
     .neps           = 0,
-    .classid        = 0xFE,
+    .classid        = 0xfe,
     .subclass       = 0x01,
     .protocol       = 0x01, /* DFU runtime protocol */
     .iif            = 0
@@ -167,10 +153,22 @@ static const struct dfu_cfgdesc_s g_dfu_cfgdesc =
   {
     .len            = sizeof(struct dfu_funcdesc_s),
     .type           = 0x21,
-    .attributes     = 0x0B,
-    .detach_timeout = { LSBYTE(DFU_MAX_TIMEOUT), MSBYTE(DFU_MAX_TIMEOUT) },
-    .transfer_size  = { LSBYTE(DFU_MAX_TRANSFER), MSBYTE(DFU_MAX_TRANSFER) },
-    .dfu_version    = { LSBYTE(DFU_VERSION), MSBYTE(DFU_VERSION) }
+    .attributes     = 0x0b,
+    .detach_timeout =
+      {
+        LSBYTE(DFU_MAX_TIMEOUT),
+        MSBYTE(DFU_MAX_TIMEOUT)
+      },
+    .transfer_size  =
+      {
+        LSBYTE(DFU_MAX_TRANSFER),
+        MSBYTE(DFU_MAX_TRANSFER)
+      },
+    .dfu_version    =
+      {
+        LSBYTE(DFU_VERSION),
+        MSBYTE(DFU_VERSION)
+      }
   }
 };
 
@@ -315,6 +313,7 @@ static int dfu_make_msft_extprop_desc(FAR uint8_t *buf)
   *payload++ = LSBYTE(namelen); /* wPropertyNameLength */
   *payload++ = MSBYTE(namelen);
   payload   += convert_to_utf16(payload, propname); /* bPropertyName */
+
   *payload++ = 0; /* Null terminator */
   *payload++ = 0;
   *payload++ = LSBYTE(valuelen); /* dwPropertyDataLength */
@@ -365,7 +364,7 @@ static int  usbclass_setup(FAR struct usbdevclass_driver_s *driver,
           else if (ctrl->value[1] == USB_DESC_TYPE_STRING)
             {
               ret = usbclass_mkstrdesc(ctrl->value[0],
-                                       (FAR struct usb_strdesc_s *)ctrlreq->buf);
+                               (FAR struct usb_strdesc_s *)ctrlreq->buf);
             }
         }
       else if (ctrl->req == USB_REQ_SETCONFIGURATION)
@@ -395,7 +394,8 @@ static int  usbclass_setup(FAR struct usbdevclass_driver_s *driver,
            * we can send the USB reply packet first.
            */
 
-          work_queue(HPWORK, &priv->work_item, dfu_workqueue_callback, NULL, 1);
+          work_queue(HPWORK, &priv->work_item,
+                     dfu_workqueue_callback, NULL, 1);
           ret = 0;
         }
       else if (ctrl->req == USB_REQ_DFU_GETSTATUS)

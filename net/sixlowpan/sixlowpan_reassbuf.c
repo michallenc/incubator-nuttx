@@ -1,5 +1,5 @@
 /****************************************************************************
- *  net/sixlowpan/sixlowpan_reassbuf.c
+ * net/sixlowpan/sixlowpan_reassbuf.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <debug.h>
 #include <errno.h>
 
 #include <nuttx/kmalloc.h>

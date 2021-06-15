@@ -1,35 +1,20 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_serial.c
  *
- *   Copyright (C) 2016-2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -44,11 +29,17 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
+#ifdef CONFIG_SERIAL_TERMIOS
+#  include <termios.h>
+#endif
+
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/init.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/semaphore.h>
@@ -202,13 +193,18 @@ struct imx_uart_s
 {
   uint32_t uartbase;    /* Base address of UART registers */
   uint32_t baud;        /* Configured baud */
+  uint32_t ie;          /* Saved enabled interrupts */
   uint32_t ucr1;        /* Saved UCR1 value */
   uint8_t  irq;         /* IRQ associated with this UART */
   uint8_t  parity;      /* 0=none, 1=odd, 2=even */
   uint8_t  bits;        /* Number of bits (7 or 8) */
   uint8_t  stopbits2:1; /* 1: Configure with 2 stop bits vs 1 */
-  uint8_t  hwfc:1;      /* 1: Hardware flow control */
-  uint8_t  reserved:6;
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+  uint8_t  iflow:1;     /* input flow control (RTS) enabled */
+#endif
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+  uint8_t  oflow:1;     /* output flow control (CTS) enabled */
+#endif
 };
 
 /****************************************************************************
@@ -703,9 +699,10 @@ static int imx_interrupt(int irq, void *context, FAR void *arg)
 
 static int imx_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
-#ifdef CONFIG_SERIAL_TIOCSERGSTRUCT
+#if defined(CONFIG_SERIAL_TIOCSERGSTRUCT) || defined(CONFIG_SERIAL_TERMIOS)
   struct inode *inode = filep->f_inode;
   struct uart_dev_s *dev   = inode->i_private;
+  irqstate_t flags;
 #endif
   int ret   = OK;
 
@@ -726,6 +723,176 @@ static int imx_ioctl(struct file *filep, int cmd, unsigned long arg)
        }
        break;
 #endif
+
+#ifdef CONFIG_SERIAL_TERMIOS
+    case TCGETS:
+      {
+        struct termios  *termiosp = (struct termios *)arg;
+        struct imx_uart_s *priv = (struct imx_uart_s *)dev->priv;
+
+        if (!termiosp)
+          {
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Return parity */
+
+        termiosp->c_cflag = ((priv->parity != 0) ? PARENB : 0) |
+                            ((priv->parity == 1) ? PARODD : 0);
+
+        /* Return stop bits */
+
+        termiosp->c_cflag |= (priv->stopbits2) ? CSTOPB : 0;
+
+        /* Return flow control */
+
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+        termiosp->c_cflag |= ((priv->oflow) ? CCTS_OFLOW : 0);
+#endif
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+        termiosp->c_cflag |= ((priv->iflow) ? CRTS_IFLOW : 0);
+#endif
+        /* Return baud */
+
+        cfsetispeed(termiosp, priv->baud);
+
+        /* Return number of bits */
+
+        switch (priv->bits)
+          {
+          case 5:
+            termiosp->c_cflag |= CS5;
+            break;
+
+          case 6:
+            termiosp->c_cflag |= CS6;
+            break;
+
+          case 7:
+            termiosp->c_cflag |= CS7;
+            break;
+
+          default:
+          case 8:
+            termiosp->c_cflag |= CS8;
+            break;
+
+#if defined(CS9)
+          case 9:
+            termiosp->c_cflag |= CS9;
+            break;
+#endif
+          }
+      }
+      break;
+
+    case TCSETS:
+      {
+        struct termios  *termiosp = (struct termios *)arg;
+        struct imx_uart_s *priv = (struct imx_uart_s *)dev->priv;
+        uint32_t baud;
+        uint32_t ie;
+        uint8_t parity;
+        uint8_t nbits;
+        bool stop2;
+
+        if ((!termiosp)
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+            || ((termiosp->c_cflag & CCTS_OFLOW) && (priv->cts_gpio == 0))
+#endif
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+            || ((termiosp->c_cflag & CRTS_IFLOW) && (priv->rts_gpio == 0))
+#endif
+           )
+          {
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Decode baud. */
+
+        ret = OK;
+        baud = cfgetispeed(termiosp);
+
+        /* Decode number of bits */
+
+        switch (termiosp->c_cflag & CSIZE)
+          {
+          case CS5:
+            nbits = 5;
+            break;
+
+          case CS6:
+            nbits = 6;
+            break;
+
+          case CS7:
+            nbits = 7;
+            break;
+
+          case CS8:
+            nbits = 8;
+            break;
+
+#if defined(CS9)
+          case CS9:
+            nbits = 9;
+            break;
+#endif
+          default:
+            ret = -EINVAL;
+            break;
+          }
+
+        /* Decode parity */
+
+        if ((termiosp->c_cflag & PARENB) != 0)
+          {
+            parity = (termiosp->c_cflag & PARODD) ? 1 : 2;
+          }
+        else
+          {
+            parity = 0;
+          }
+
+        /* Decode stop bits */
+
+        stop2 = (termiosp->c_cflag & CSTOPB) != 0;
+
+        /* Verify that all settings are valid before committing */
+
+        if (ret == OK)
+          {
+            /* Commit */
+
+            priv->baud      = baud;
+            priv->parity    = parity;
+            priv->bits      = nbits;
+            priv->stopbits2 = stop2;
+#ifdef CONFIG_SERIAL_OFLOWCONTROL
+            priv->oflow     = (termiosp->c_cflag & CCTS_OFLOW) != 0;
+#endif
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+            priv->iflow     = (termiosp->c_cflag & CRTS_IFLOW) != 0;
+#endif
+            /* effect the changes immediately - note that we do not
+             * implement TCSADRAIN / TCSAFLUSH
+             */
+
+            flags  = spin_lock_irqsave(NULL);
+            imx_disableuartint(priv, &ie);
+            ret = imx_setup(dev);
+
+            /* Restore the interrupt state */
+
+            imx_restoreuartint(priv, ie);
+            priv->ie = ie;
+            spin_unlock_irqrestore(NULL, flags);
+          }
+      }
+      break;
+#endif /* CONFIG_SERIAL_TERMIOS */
 
     case TIOCSBRK:  /* BSD compatibility: Turn break on, unconditionally */
     case TIOCCBRK:  /* BSD compatibility: Turn break off, unconditionally */

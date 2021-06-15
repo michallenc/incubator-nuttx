@@ -1,38 +1,22 @@
-/************************************************************************************
+/****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_dac.c
  *
- *   Copyright (C) 2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           Juha Niskanen <juha.niskanen@haltian.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ************************************************************************************/
+ ****************************************************************************/
 
 /****************************************************************************
  * Included Files
@@ -44,6 +28,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -65,7 +50,9 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
 /* Configuration ************************************************************/
+
 /* Up to 1 DAC interface for up to 2 channels are supported */
 
 #if STM32L4_NDAC > 2
@@ -307,7 +294,9 @@
  * Private Types
  ****************************************************************************/
 
-/* This structure represents the internal state of the single STM32 DAC block */
+/* This structure represents the internal state of the single STM32 DAC
+ * block
+ */
 
 struct stm32_dac_s
 {
@@ -395,7 +384,7 @@ static struct stm32_chan_s g_dac1priv =
 {
   .intf       = 0,
 #ifdef CONFIG_STM32L4_DAC1_OUTPUT_ADC
-  .pin        = 0xffffffffU,
+  .pin        = 0xffffffffu,
 #else
   .pin        = GPIO_DAC1_OUT,
 #endif
@@ -432,7 +421,7 @@ static struct stm32_chan_s g_dac2priv =
 {
   .intf       = 1,
 #ifdef CONFIG_STM32L4_DAC2_OUTPUT_ADC
-  .pin        = 0xffffffffU,
+  .pin        = 0xffffffffu,
 #else
   .pin        = GPIO_DAC2_OUT,
 #endif
@@ -481,7 +470,8 @@ static struct stm32_dac_s g_dacblock;
  ****************************************************************************/
 
 static inline void stm32l4_dac_modify_cr(FAR struct stm32_chan_s *chan,
-                                         uint32_t clearbits, uint32_t setbits)
+                                         uint32_t clearbits,
+                                         uint32_t setbits)
 {
   unsigned int shift;
 
@@ -515,7 +505,8 @@ static inline void stm32l4_dac_modify_cr(FAR struct stm32_chan_s *chan,
  ****************************************************************************/
 
 static inline void stm32l4_dac_modify_mcr(FAR struct stm32_chan_s *chan,
-                                          uint32_t clearbits, uint32_t setbits)
+                                          uint32_t clearbits,
+                                          uint32_t setbits)
 {
   unsigned int shift;
 
@@ -615,8 +606,8 @@ static void dac_reset(FAR struct dac_dev_s *dev)
  * Description:
  *   Configure the DAC. This method is called the first time that the DAC
  *   device is opened.  This will occur when the port is first opened.
- *   This setup includes configuring and attaching DAC interrupts.  Interrupts
- *   are all disabled upon return.
+ *   This setup includes configuring and attaching DAC interrupts.
+ *   Interrupts are all disabled upon return.
  *
  * Input Parameters:
  *
@@ -681,7 +672,8 @@ static void dac_txint(FAR struct dac_dev_s *dev, bool enable)
  ****************************************************************************/
 
 #ifdef HAVE_DMA
-static void dac_dmatxcallback(DMA_HANDLE handle, uint8_t isr, FAR void *arg)
+static void dac_dmatxcallback(DMA_HANDLE handle, uint8_t isr,
+                              FAR void *arg)
 {
   struct stm32_chan_s *chan = (struct stm32_chan_s *)arg;
   struct dac_dev_s    *dev;
@@ -707,13 +699,15 @@ static void dac_dmatxcallback(DMA_HANDLE handle, uint8_t isr, FAR void *arg)
 
   DEBUGASSERT(dev->ad_priv == chan);
 
-  /* Report the result of the transfer only if the TX callback has not already
-   * reported an error.
+  /* Report the result of the transfer only if the TX callback has not
+   * already reported an error.
    */
 
   if (chan->result == -EBUSY)
     {
-      /* Save the result of the transfer if no error was previously reported. */
+      /* Save the result of the transfer if no error was previously
+       * reported.
+       */
 
       chan->result = (isr & DMA_CHAN_TEIF_BIT) ? -EIO : OK;
       dac_txdone(dev);
@@ -745,14 +739,16 @@ static int dac_send(FAR struct dac_dev_s *dev, FAR struct dac_msg_s *msg)
 #ifdef HAVE_DMA
   if (chan->hasdma)
     {
-      /* Copy the value to circular buffer. Since dmabuffer is initialized to zero,
-       * writing e.g. monotonously increasing values creates a continuously repeating
-       * ramp-effect, alternating with periods of zero output.
+      /* Copy the value to circular buffer. Since dmabuffer is initialized to
+       * zero, writing e.g. monotonously increasing values creates a
+       * continuously repeating ramp-effect, alternating with periods of zero
+       * output.
        *
-       * In real use it the dmabuffer should be initialized with a desired pattern
-       * beforehand, followed by a single dummy write to initiate circular DMA. If want
-       * to write just one value at a time with DMA, set the buffer size to 1 (mostly
-       * useful for just testing the functionality).
+       * In real use it the dmabuffer should be initialized with a desired
+       * pattern beforehand, followed by a single dummy write to initiate
+       * circular DMA. If want to write just one value at a time with DMA,
+       * set the buffer size to 1 (mostly useful for just testing the
+       * functionality).
        */
 
       chan->dmabuffer[chan->buffer_pos] = (uint16_t)msg->am_data;
@@ -798,7 +794,7 @@ static int dac_send(FAR struct dac_dev_s *dev, FAR struct dac_msg_s *msg)
   /* Reset counters (generate an update) */
 
 #ifdef HAVE_DMA
-  tim_modifyreg(chan, STM32L4_BTIM_EGR_OFFSET, 0, ATIM_EGR_UG);
+  tim_modifyreg(chan, STM32L4_GTIM_EGR_OFFSET, 0, GTIM_EGR_UG);
 #endif
   return OK;
 }
@@ -910,8 +906,8 @@ static int dac_timinit(FAR struct stm32_chan_s *chan)
 
   modifyreg32(regaddr, 0, setbits);
 
-  /* Calculate optimal values for the timer prescaler and for the timer reload
-   * register.  If 'frequency' is the desired frequency, then
+  /* Calculate optimal values for the timer prescaler and for the timer
+   * reload register.  If 'frequency' is the desired frequency, then
    *
    *   reload = timclk / frequency
    *   timclk = pclk / presc
@@ -967,26 +963,26 @@ static int dac_timinit(FAR struct stm32_chan_s *chan)
 
   /* Set the reload and prescaler values */
 
-  tim_putreg(chan, STM32L4_BTIM_ARR_OFFSET, (uint16_t)reload);
-  tim_putreg(chan, STM32L4_BTIM_PSC_OFFSET, (uint16_t)(prescaler - 1));
+  tim_putreg(chan, STM32L4_GTIM_ARR_OFFSET, (uint16_t)reload);
+  tim_putreg(chan, STM32L4_GTIM_PSC_OFFSET, (uint16_t)(prescaler - 1));
 
   /* Count mode up, auto reload */
 
-  tim_modifyreg(chan, STM32L4_BTIM_CR1_OFFSET, 0, ATIM_CR1_ARPE);
+  tim_modifyreg(chan, STM32L4_GTIM_CR1_OFFSET, 0, GTIM_CR1_ARPE);
 
   /* Selection TRGO selection: update */
 
-  tim_modifyreg(chan, STM32L4_BTIM_CR2_OFFSET, ATIM_CR2_MMS_MASK,
-                ATIM_CR2_MMS_UPDATE);
+  tim_modifyreg(chan, STM32L4_GTIM_CR2_OFFSET, GTIM_CR2_MMS_MASK,
+                GTIM_CR2_MMS_UPDATE);
 
   /* Update DMA request enable ???? */
 #if 0
-  tim_modifyreg(chan, STM32L4_BTIM_DIER_OFFSET, 0, ATIM_DIER_UDE);
+  tim_modifyreg(chan, STM32L4_GTIM_DIER_OFFSET, 0, GTIM_DIER_UDE);
 #endif
 
   /* Enable the counter */
 
-  tim_modifyreg(chan, STM32L4_BTIM_CR1_OFFSET, 0, ATIM_CR1_CEN);
+  tim_modifyreg(chan, STM32L4_GTIM_CR1_OFFSET, 0, GTIM_CR1_CEN);
   return OK;
 }
 #endif
@@ -1027,7 +1023,7 @@ static int dac_chaninit(FAR struct stm32_chan_s *chan)
    * should first be configured to analog (AIN)".
    */
 
-  if (chan->pin != 0xffffffffU)
+  if (chan->pin != 0xffffffffu)
     {
       stm32l4_configgpio(chan->pin);
     }
@@ -1055,7 +1051,7 @@ static int dac_chaninit(FAR struct stm32_chan_s *chan)
   /* Enable output buffer or route DAC output to on-chip peripherals (ADC) */
 
   clearbits = DAC_MCR_MODE1_MASK;
-  if (chan->pin != 0xffffffffU)
+  if (chan->pin != 0xffffffffu)
     {
       setbits = DAC_MCR_MODE_EXTBUF;
     }
@@ -1063,6 +1059,7 @@ static int dac_chaninit(FAR struct stm32_chan_s *chan)
     {
       setbits = DAC_MCR_MODE_IN;
     }
+
   stm32l4_dac_modify_mcr(chan, clearbits, setbits);
 
 #ifdef HAVE_DMA

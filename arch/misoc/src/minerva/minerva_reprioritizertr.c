@@ -1,5 +1,5 @@
 /****************************************************************************
- *  arch/misoc/src/minerva/minerva_reprioritizertr.c
+ * arch/misoc/src/minerva/minerva_reprioritizertr.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <sched.h>
 #include <syscall.h>
+#include <assert.h>
 #include <debug.h>
 
 #include <nuttx/arch.h>

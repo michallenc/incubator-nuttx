@@ -114,12 +114,10 @@
 
 #define REG_INT_CTX_NDX     32
 
-#ifdef CONFIG_ARCH_CHIP_GAP8
-/* 31 registers, ePC, plus 6 loop registers */
-
-#  define INT_XCPT_REGS     (32 + 6)
+#ifdef CONFIG_ARCH_RISCV_INTXCPT_EXTREGS
+  #define INT_XCPT_REGS     (33 + CONFIG_ARCH_RISCV_INTXCPT_EXTREGS)
 #else
-#  define INT_XCPT_REGS     33
+  #define INT_XCPT_REGS     33
 #endif
 
 #define INT_XCPT_SIZE       (4 * INT_XCPT_REGS)

@@ -23,6 +23,9 @@ SCRIPT_NAME=$(basename "${0}")
 
 BOOTLOADER_IMG=""
 PARTITION_IMG=""
+BOOTLOADER_OFFSET=0x1000
+PARTITION_OFFSET=0x8000
+NUTTX_OFFSET=0x10000
 NUTTX_IMG="nuttx.bin"
 FLASH_IMG="esp32_qemu_img.bin"
 
@@ -36,6 +39,11 @@ usage() {
   echo "  -n <nuttx> path to the nuttx image (default nuttx.bin)"
   echo "  -i <image_name> name of the resulting image (default esp32_qemu_img.bin)"
   echo "  -h will show this help and terminate"
+  echo ""
+}
+
+imgappend() {
+  dd of="${1}" if="${2}" bs=1 seek="$(printf '%d' ${3})" conv=notrunc status=none
 }
 
 while [ -n "${1}" ]; do
@@ -71,7 +79,8 @@ done
 # Make sure we have the required argument(s)
 
 if [ -z "${BOOTLOADER_IMG}" ] || [ -z "${PARTITION_IMG}" ] ; then
-  echo "Missing bootloader and partition table binary images."
+  echo ""
+  echo "${SCRIPT_NAME}: Missing bootloader and partition table binary images."
   usage
   exit 1
 fi
@@ -80,13 +89,13 @@ printf "Generating %s...\n" "${FLASH_IMG}"
 printf "\tBootloader: %s\n" "${BOOTLOADER_IMG}"
 printf "\tPartition Table: %s\n" "${PARTITION_IMG}"
 
-dd if=/dev/zero bs=1024 count=4096 of="${FLASH_IMG}" && \
-dd if="${BOOTLOADER_IMG}" bs=1 seek="$(printf '%d' 0x1000)" of="${FLASH_IMG}" conv=notrunc && \
-dd if="${PARTITION_IMG}" bs=1 seek="$(printf '%d' 0x8000)" of="${FLASH_IMG}" conv=notrunc && \
-dd if="${NUTTX_IMG}" bs=1 seek="$(printf '%d' 0x10000)" of="${FLASH_IMG}" conv=notrunc
+dd if=/dev/zero bs=1024 count=4096 of="${FLASH_IMG}" status=none
+imgappend ${FLASH_IMG} ${BOOTLOADER_IMG} ${BOOTLOADER_OFFSET}
+imgappend ${FLASH_IMG} ${PARTITION_IMG} ${PARTITION_OFFSET}
+imgappend ${FLASH_IMG} ${NUTTX_IMG} ${NUTTX_OFFSET}
 
 if [ ${?} -ne 0 ]; then
-  printf "Failed to generate %s.\n" "${FLASH_IMG}"
+  printf "Failed to generate %s!\n" "${FLASH_IMG}"
   exit 1
 fi
 

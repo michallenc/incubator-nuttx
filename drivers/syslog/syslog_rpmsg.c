@@ -33,6 +33,7 @@
 #include <nuttx/syslog/syslog.h>
 #include <nuttx/syslog/syslog_rpmsg.h>
 #include <nuttx/wqueue.h>
+#include <nuttx/compiler.h>
 
 #include "syslog.h"
 #include "syslog_rpmsg.h"
@@ -61,7 +62,6 @@ struct syslog_rpmsg_s
   struct work_s         work;         /* Used for deferred callback work */
 
   struct rpmsg_endpoint ept;
-  FAR const char        *cpuname;
   bool                  suspend;
   bool                  transfer;     /* The transfer flag */
   ssize_t               trans_len;    /* The data length when transfer */
@@ -186,7 +186,8 @@ static void syslog_rpmsg_putchar(FAR struct syslog_rpmsg_s *priv, int ch,
         }
     }
 
-  if (last && !priv->suspend && !priv->transfer)
+  if (last && !priv->suspend && !priv->transfer &&
+          is_rpmsg_ept_ready(&priv->ept))
     {
       clock_t delay = SYSLOG_RPMSG_WORK_DELAY;
       size_t space = SYSLOG_RPMSG_SPACE(priv->head, priv->tail, priv->size);
@@ -208,7 +209,8 @@ static void syslog_rpmsg_device_created(FAR struct rpmsg_device *rdev,
   FAR struct syslog_rpmsg_s *priv = priv_;
   int ret;
 
-  if (priv->buffer && strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)) == 0)
+  if (priv->buffer && strcmp(CONFIG_SYSLOG_RPMSG_SERVER_NAME,
+                             rpmsg_get_cpuname(rdev)) == 0)
     {
       priv->ept.priv = priv;
 
@@ -228,7 +230,8 @@ static void syslog_rpmsg_device_destroy(FAR struct rpmsg_device *rdev,
 {
   FAR struct syslog_rpmsg_s *priv = priv_;
 
-  if (priv->buffer && strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)) == 0)
+  if (priv->buffer && strcmp(CONFIG_SYSLOG_RPMSG_SERVER_NAME,
+                             rpmsg_get_cpuname(rdev)) == 0)
     {
       rpmsg_destroy_ept(&priv->ept);
     }
@@ -297,10 +300,12 @@ static int syslog_rpmsg_ept_cb(FAR struct rpmsg_endpoint *ept,
  * Public Functions
  ****************************************************************************/
 
-int syslog_rpmsg_putc(int ch)
+int syslog_rpmsg_putc(FAR struct syslog_channel_s *channel, int ch)
 {
   FAR struct syslog_rpmsg_s *priv = &g_syslog_rpmsg;
   irqstate_t flags;
+
+  UNUSED(channel);
 
   flags = enter_critical_section();
   syslog_rpmsg_putchar(priv, ch, true);
@@ -309,19 +314,24 @@ int syslog_rpmsg_putc(int ch)
   return ch;
 }
 
-int syslog_rpmsg_flush(void)
+int syslog_rpmsg_flush(FAR struct syslog_channel_s *channel)
 {
+  UNUSED(channel);
+
   FAR struct syslog_rpmsg_s *priv = &g_syslog_rpmsg;
 
   work_queue(HPWORK, &priv->work, syslog_rpmsg_work, priv, 0);
   return OK;
 }
 
-ssize_t syslog_rpmsg_write(FAR const char *buffer, size_t buflen)
+ssize_t syslog_rpmsg_write(FAR struct syslog_channel_s *channel,
+                           FAR const char *buffer, size_t buflen)
 {
   FAR struct syslog_rpmsg_s *priv = &g_syslog_rpmsg;
   irqstate_t flags;
   size_t nwritten;
+
+  UNUSED(channel);
 
   flags = enter_critical_section();
   for (nwritten = 1; nwritten <= buflen; nwritten++)
@@ -334,15 +344,13 @@ ssize_t syslog_rpmsg_write(FAR const char *buffer, size_t buflen)
   return buflen;
 }
 
-void syslog_rpmsg_init_early(FAR const char *cpuname, FAR void *buffer,
-                             size_t size)
+void syslog_rpmsg_init_early(FAR void *buffer, size_t size)
 {
   FAR struct syslog_rpmsg_s *priv = &g_syslog_rpmsg;
   char prev, cur;
   size_t i;
   size_t j;
 
-  priv->cpuname = cpuname;
   priv->buffer  = buffer;
   priv->size    = size;
 

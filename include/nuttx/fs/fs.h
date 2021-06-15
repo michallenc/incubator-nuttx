@@ -32,11 +32,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <semaphore.h>
 
-#ifdef CONFIG_FS_NAMED_SEMAPHORES
-#  include <nuttx/semaphore.h>
-#endif
+#include <nuttx/semaphore.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -114,6 +111,7 @@
 #define   FSNODEFLAG_TYPE_SHM       0x00000006 /*   Shared memory region   */
 #define   FSNODEFLAG_TYPE_MTD       0x00000007 /*   Named MTD driver       */
 #define   FSNODEFLAG_TYPE_SOFTLINK  0x00000008 /*   Soft link              */
+#define   FSNODEFLAG_TYPE_SOCKET    0x00000009 /*   Socket                 */
 #define FSNODEFLAG_DELETED          0x00000010 /* Unlinked                 */
 
 #define INODE_IS_TYPE(i,t) \
@@ -128,6 +126,7 @@
 #define INODE_IS_SHM(i)       INODE_IS_TYPE(i,FSNODEFLAG_TYPE_SHM)
 #define INODE_IS_MTD(i)       INODE_IS_TYPE(i,FSNODEFLAG_TYPE_MTD)
 #define INODE_IS_SOFTLINK(i)  INODE_IS_TYPE(i,FSNODEFLAG_TYPE_SOFTLINK)
+#define INODE_IS_SOCKET(i)    INODE_IS_TYPE(i,FSNODEFLAG_TYPE_SOCKET)
 
 #define INODE_GET_TYPE(i)     ((i)->i_flags & FSNODEFLAG_TYPE_MASK)
 #define INODE_SET_TYPE(i,t) \
@@ -145,6 +144,7 @@
 #define INODE_SET_SHM(i)      INODE_SET_TYPE(i,FSNODEFLAG_TYPE_SHM)
 #define INODE_SET_MTD(i)      INODE_SET_TYPE(i,FSNODEFLAG_TYPE_MTD)
 #define INODE_SET_SOFTLINK(i) INODE_SET_TYPE(i,FSNODEFLAG_TYPE_SOFTLINK)
+#define INODE_SET_SOCKET(i)   INODE_SET_TYPE(i,FSNODEFLAG_TYPE_SOCKET)
 
 /* Mountpoint fd_flags values */
 
@@ -374,12 +374,18 @@ struct file
   FAR void         *f_priv;     /* Per file driver private data */
 };
 
-/* This defines a list of files indexed by the file descriptor */
+/* This defines a two layer array of files indexed by the file descriptor.
+ * Each row of this array is fixed size: CONFIG_NFILE_DESCRIPTORS_PER_BLOCK.
+ * You can get file instance in filelist by the follow methods:
+ * (file descriptor / CONFIG_NFILE_DESCRIPTORS_PER_BLOCK) as row index and
+ * (file descriptor % CONFIG_NFILE_DESCRIPTORS_PER_BLOCK) as column index.
+ */
 
 struct filelist
 {
-  sem_t   fl_sem;               /* Manage access to the file list */
-  struct file fl_files[CONFIG_NFILE_DESCRIPTORS];
+  sem_t             fl_sem;     /* Manage access to the file list */
+  uint8_t           fl_rows;    /* The number of rows of fl_files array */
+  FAR struct file **fl_files;   /* The pointer of two layer file descriptors array */
 };
 
 /* The following structure defines the list of files used for standard C I/O.
@@ -711,6 +717,20 @@ void files_initlist(FAR struct filelist *list);
 void files_releaselist(FAR struct filelist *list);
 
 /****************************************************************************
+ * Name: files_duplist
+ *
+ * Description:
+ *   Duplicate parent task's file descriptors.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; a negated errno value is returned on
+ *   any failure.
+ *
+ ****************************************************************************/
+
+int files_duplist(FAR struct filelist *plist, FAR struct filelist *clist);
+
+/****************************************************************************
  * Name: file_dup
  *
  * Description:
@@ -772,7 +792,7 @@ int file_dup2(FAR struct file *filep1, FAR struct file *filep2);
  *   applications.
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is return on
+ *   fd2 is returned on success; a negated errno value is return on
  *   any failure.
  *
  ****************************************************************************/

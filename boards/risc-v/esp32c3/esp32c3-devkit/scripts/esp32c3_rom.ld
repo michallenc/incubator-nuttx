@@ -296,7 +296,7 @@ PROVIDE( Cache_Enable_Defalut_ICache_Mode = 0x400004c4 );
 PROVIDE( ROM_Boot_Cache_Init = 0x400004c8 );
 PROVIDE( Cache_Invalidate_ICache_Items = 0x400004cc );
 PROVIDE( Cache_Op_Addr = 0x400004d0 );
-PROVIDE( Cache_Invalidate_Addr = 0x400004d4 );
+PROVIDE( cache_invalidate_addr = 0x400004d4 );
 PROVIDE( Cache_Invalidate_ICache_All = 0x400004d8 );
 PROVIDE( Cache_Mask_All = 0x400004dc );
 PROVIDE( Cache_UnMask_Dram0 = 0x400004e0 );
@@ -316,8 +316,8 @@ PROVIDE( Cache_Lock_Addr = 0x40000514 );
 PROVIDE( Cache_Unlock_Addr = 0x40000518 );
 PROVIDE( Cache_Disable_ICache = 0x4000051c );
 PROVIDE( Cache_Enable_ICache = 0x40000520 );
-PROVIDE( Cache_Suspend_ICache = 0x40000524 );
-PROVIDE( Cache_Resume_ICache = 0x40000528 );
+PROVIDE( cache_suspend_icache = 0x40000524 );
+PROVIDE( cache_resume_icache = 0x40000528 );
 PROVIDE( Cache_Freeze_ICache_Enable = 0x4000052c );
 PROVIDE( Cache_Freeze_ICache_Disable = 0x40000530 );
 PROVIDE( Cache_Pms_Lock = 0x40000534 );
@@ -1527,7 +1527,6 @@ lmacReachShortLimit = 0x4000161c;
 lmacRecycleMPDU = 0x40001620;
 lmacRxDone = 0x40001624;
 lmacSetTxFrame = 0x40001628;
-lmacTxDone = 0x4000162c;
 lmacTxFrame = 0x40001630;
 mac_tx_set_duration = 0x40001634;
 mac_tx_set_htsig = 0x40001638;
@@ -1815,10 +1814,10 @@ rom_get_data_sat = 0x40001944;
 rom_get_i2c_read_mask = 0x40001948;
 rom_get_pwctrl_correct = 0x4000194c;
 rom_get_rf_gain_qdb = 0x40001950;
-rom_i2c_readReg = 0x40001954;
-rom_i2c_readReg_Mask = 0x40001958;
-rom_i2c_writeReg = 0x4000195c;
-rom_i2c_writeReg_Mask = 0x40001960;
+rom_i2c_readreg = 0x40001954;
+rom_i2c_readreg_mask = 0x40001958;
+rom_i2c_writereg = 0x4000195c;
+rom_i2c_writereg_mask = 0x40001960;
 rom_index_to_txbbgain = 0x40001964;
 rom_iq_est_disable = 0x40001968;
 rom_iq_est_enable = 0x4000196c;
@@ -1933,3 +1932,28 @@ rom_pll_correct_dcap = 0x40001b1c;
 rom_phy_en_hw_set_freq = 0x40001b20;
 rom_phy_dis_hw_set_freq = 0x40001b24;
 rom_pll_vol_cal = 0x40001b28;
+
+/***************************************
+ Group memory and string
+ ***************************************/
+
+memset = 0x40000354;
+memcpy = 0x40000358;
+memmove = 0x4000035c;
+memcmp = 0x40000360;
+memccpy = 0x400003c4;
+memchr = 0x400003c8;
+memrchr = 0x400003cc;
+strcpy = 0x40000364;
+strncpy = 0x40000368;
+strcmp = 0x4000036c;
+strncmp = 0x40000370;
+strlen = 0x40000374;
+strstr = 0x40000378;
+bzero = 0x4000037c;
+
+/***************************************
+ Redefine functions
+ ***************************************/
+
+PROVIDE ( esp_rom_delay_us = ets_delay_us );

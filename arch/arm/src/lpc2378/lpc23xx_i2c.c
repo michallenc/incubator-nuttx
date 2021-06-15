@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/lpc23xx/lpc23xx_i2c.c
+ * arch/arm/src/lpc2378/lpc23xx_i2c.c
  *
  *   Copyright (C) 2013, 2016 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -59,6 +59,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 

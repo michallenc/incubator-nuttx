@@ -1,47 +1,33 @@
-/********************************************************************************************
+/****************************************************************************
  * arch/arm/src/samd2l2/hardware/samd_adc.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Alexander Vasiljev <alexvasiljev@gmail.com>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * References:
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ ****************************************************************************/
+
+/* References:
  *   "Microchip SAM D21 Family Datasheet", Rev D - 9/2018
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ********************************************************************************************/
+ */
 
 #ifndef __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_ADC_H
 #define __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_ADC_H
 
-/********************************************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -49,10 +35,11 @@
 
 #ifdef CONFIG_ARCH_FAMILY_SAMD21
 
-/********************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ********************************************************************************************/
-/* ADC register offsets ********************************************************************/
+ ****************************************************************************/
+
+/* ADC register offsets *****************************************************/
 
 #define SAM_ADC_CTRLA_OFFSET       0x0000 /* Control A Register */
 #define SAM_ADC_REFCTL_OFFSET      0x0001 /* Reference Control Register */
@@ -75,7 +62,7 @@
 #define SAM_ADC_CALIB_OFFSET       0x0028 /* Calibration Register */
 #define SAM_ADC_DBGCTRL_OFFSET     0x002A /* Debug Control Register */
 
-/* ADC register addresses ******************************************************************/
+/* ADC register addresses ***************************************************/
 
 #define SAM_ADC_CTRLA              (SAM_ADC_BASE + SAM_ADC_CTRLA_OFFSET)
 #define SAM_ADC_REFCTL             (SAM_ADC_BASE + SAM_ADC_REFCTL_OFFSET)
@@ -98,7 +85,7 @@
 #define SAM_ADC_CALIB              (SAM_ADC_BASE + SAM_ADC_CALIB_OFFSET)
 #define SAM_ADC_ADC_DBGCTRL        (SAM_ADC_BASE + SAM_ADC_DBGCTRL_OFFSET)
 
-/* ADC register bit definitions ************************************************************/
+/* ADC register bit definitions *********************************************/
 
 /* Control A Register */
 
@@ -115,6 +102,7 @@
 #  define ADC_REFCTRL_REFSEL_INTVCC1 (2 << ADC_REFCTRL_REFSEL_OFFSET) /* 1/2 VDDANA (only for VDDANA > 2.0V) */
 #  define ADC_REFCTRL_REFSEL_VREFA   (3 << ADC_REFCTRL_REFSEL_OFFSET) /* External reference */
 #  define ADC_REFCTRL_REFSEL_VREFB   (4 << ADC_REFCTRL_REFSEL_OFFSET) /* External reference */
+
 #define ADC_REFCTRL_REFCOMP          (1 << 7) /* Bit 7: Reference buffer offset compensation enable */
 
 /* Average Control Register */
@@ -146,12 +134,13 @@
 #define ADC_CTRLB_LEFTADJ            (1 << 1) /* Bit 1: Left-adjusted result */
 #define ADC_CTRLB_FREERUN            (1 << 2) /* Bit 2: Free running mode */
 #define ADC_CTRLB_CORREN             (1 << 3) /* Bit 3: Digital correction logic enabled */
-#define ADC_CTRLB_RESSEL_OFFSET      (4) /* Bit 5:4: Conversion result resolution */
+#define ADC_CTRLB_RESSEL_OFFSET      (4)      /* Bit 5:4: Conversion result resolution */
 #define ADC_CTRLB_RESSEL_MASK        (3 << ADC_CTRLB_RESSEL_OFFSET)
 #  define ADC_CTRLB_RESSEL_12BIT     (0 << ADC_CTRLB_RESSEL_OFFSET) /* 12-bit result */
 #  define ADC_CTRLB_RESSEL_16BIT     (1 << ADC_CTRLB_RESSEL_OFFSET) /* For averaging mode output */
 #  define ADC_CTRLB_RESSEL_10BIT     (2 << ADC_CTRLB_RESSEL_OFFSET) /* 10-bit result */
 #  define ADC_CTRLB_RESSEL_8BIT      (3 << ADC_CTRLB_RESSEL_OFFSET) /* 8-bit result */
+
 #define ADC_CTRLB_PRESCALER_OFFSET   (8) /* Bit 10:8: Prescaler configuration */
 #define ADC_CTRLB_PRESCALER_MASK     (7 << ADC_CTRLB_PRESCALER_OFFSET)
 #  define ADC_CTRLB_PRESCALER_DIV4   (0 << ADC_CTRLB_PRESCALER_OFFSET)
@@ -206,6 +195,7 @@
 #  define ADC_INPUTCTRL_MUXPOS_SCALEDCOREVCC  (0x1A << ADC_INPUTCTRL_MUXPOS_OFFSET) /* 1/4 scaled core voltage */
 #  define ADC_INPUTCTRL_MUXPOS_SCALEDIOVCC    (0x1B << ADC_INPUTCTRL_MUXPOS_OFFSET) /* 1/4 scaled I/) supplly */
 #  define ADC_INPUTCTRL_MUXPOS_DAC            (0x1C << ADC_INPUTCTRL_MUXPOS_OFFSET) /* DAC output */
+
 #define ADC_INPUTCTRL_MUXNEG_OFFSET           (8) /* Bit 12:8: Negative mux input selection */
 #define ADC_INPUTCTRL_MUXNEG_MASK             (0x1F << ADC_INPUTCTRL_MUXNEG_OFFSET)
 #  define ADC_INPUTCTRL_MUXNEG_AIN0             (0 << ADC_INPUTCTRL_MUXNEG_OFFSET)
@@ -216,8 +206,9 @@
 #  define ADC_INPUTCTRL_MUXNEG_AIN5             (5 << ADC_INPUTCTRL_MUXNEG_OFFSET)
 #  define ADC_INPUTCTRL_MUXNEG_AIN6             (6 << ADC_INPUTCTRL_MUXNEG_OFFSET)
 #  define ADC_INPUTCTRL_MUXNEG_AIN7             (7 << ADC_INPUTCTRL_MUXNEG_OFFSET)
-#  define ADC_INPUTCTRL_MUXNEG_GND              (0x18 << ADC_INPUTCTRL_MUXNEG_OFFSET) /* Internal ground */
+#  define ADC_INPUTCTRL_MUXNEG_GND              (0x18 << ADC_INPUTCTRL_MUXNEG_OFFSET)  /* Internal ground */
 #  define ADC_INPUTCTRL_MUXNEG_IOGND            (0x19 << ADC_INPUTCTRL_MUXNEG_OFFSET)  /* I/O ground */
+
 #define ADC_INPUTCTRL_INPUTSCAN_OFFSET        (16) /* Bit 19:16: Number of input channels included in scan */
 #define ADC_INPUTCTRL_INPUTSCAN_MASK          (0x0F << ADC_INPUTCTRL_INPUTSCAN_OFFSET)
 #define ADC_INPUTCTRL_INPUTOFFSET_OFFSET      (20) /* Bit 23:20: Positive mux setting offset */
@@ -238,8 +229,9 @@
 #define ADC_EVCTRL_RESRDYEO              (1 << 4) /* Bit 4: Result ready event out */
 #define ADC_EVCTRL_WINMONEO              (1 << 5) /* Bit 5: Window monitor event out */
 
-/* Common bit definitions for Interrupt Enable Clear Register, Interrupt Enable Set
- * Register, and Interrupt Flag Status and Clear Register
+/* Common bit definitions for Interrupt Enable Clear Register,
+ * Interrupt Enable Set Register, and Interrupt Flag Status and Clear
+ * Register
  */
 
 #define ADC_INT_RESRDY              (1 << 0) /* Bit 0: Result ready */
@@ -261,17 +253,17 @@
 
 #define ADC_DBGCTRL_DBGRUN          (1) /* Bit 0: Debug run */
 
-/********************************************************************************************
+/****************************************************************************
  * Public Types
- ********************************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************************
+/****************************************************************************
  * Public Data
- ********************************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************************
- * Public Functions
- ********************************************************************************************/
+/****************************************************************************
+ * Public Functions Prototypes
+ ****************************************************************************/
 
 #endif /* CONFIG_ARCH_FAMILY_SAMD21 */
 #endif /* __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAMD_ADC_H */

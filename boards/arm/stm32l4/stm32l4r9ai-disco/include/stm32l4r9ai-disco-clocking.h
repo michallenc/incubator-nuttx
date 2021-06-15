@@ -51,11 +51,12 @@
 
 /* Clocking *****************************************************************/
 
-/* The stm32l4r9ai-disco supports both HSE and LSE crystals.  As shipped, the HSE
- * is a 16 MHz crystal X2. Therefore the stm32l4r9ai-disco can run off the 16MHz
- * HSI clock, or the MSI, or the HSE. Here we configure HSE to give us 120MHz system
- * clock (maximum supported for STM32L4+ chips) instead of the more traditional 80MHz
- * that is used by most STM32L4 boards supported by NuttX.
+/* The stm32l4r9ai-disco supports both HSE and LSE crystals.  As shipped,
+ * the HSE is a 16 MHz crystal X2. Therefore the stm32l4r9ai-disco can run
+ * off the 16MHz HSI clock, or the MSI, or the HSE. Here we configure HSE
+ * to give us 120MHz system clock (maximum supported for STM32L4+ chips)
+ * instead of the more traditional 80MHz that is used by most STM32L4 boards
+ * supported by NuttX.
  */
 
 /* HSI - 16 MHz RC factory-trimmed
@@ -102,9 +103,10 @@
 /* 'main' PLL config; we use this to generate our system clock via the R
  *  output.  We set it up as 16 MHz / 1 * 15 / 2 = 120 MHz
  *
- * XXX NOTE:  currently the main PLL is implicitly turned on and is implicitly
- * the system clock; this should be configurable since not all applications may
- * want things done this way.
+ * XXX NOTE:
+ * currently the main PLL is implicitly turned on and is implicitly
+ * the system clock; this should be configurable since not all
+ * applications may want things done this way.
  */
 
 #define STM32L4_PLLCFG_PLLN             RCC_PLLCFG_PLLN(15)
@@ -163,7 +165,6 @@
 
 #define STM32L4_RCC_CFGR_HPRE     RCC_CFGR_HPRE_SYSCLK      /* HCLK  = SYSCLK / 1 */
 #define STM32L4_HCLK_FREQUENCY    STM32L4_SYSCLK_FREQUENCY
-#define STM32L4_BOARD_HCLK        STM32L4_HCLK_FREQUENCY    /* Same as above, to satisfy compiler */
 
 /* APB1 clock (PCLK1) is HCLK/1 (120 MHz) */
 
@@ -212,9 +213,10 @@
 /* 'main' PLL config; we use this to generate our system clock via the R
  *  output.  We set it up as 16 MHz / 1 * 15 / 2 = 120 MHz
  *
- * XXX NOTE:  currently the main PLL is implicitly turned on and is implicitly
- * the system clock; this should be configurable since not all applications may
- * want things done this way.
+ * XXX NOTE:
+ * currently the main PLL is implicitly turned on and is implicitly
+ * the system clock; this should be configurable since not all
+ * applications may want things done this way.
  */
 
 #define STM32L4_PLLCFG_PLLN             RCC_PLLCFG_PLLN(15)
@@ -273,7 +275,6 @@
 
 #define STM32L4_RCC_CFGR_HPRE     RCC_CFGR_HPRE_SYSCLK      /* HCLK  = SYSCLK / 1 */
 #define STM32L4_HCLK_FREQUENCY    STM32L4_SYSCLK_FREQUENCY
-#define STM32L4_BOARD_HCLK        STM32L4_HCLK_FREQUENCY      /* Same as above, to satisfy compiler */
 
 /* Configure the APB1 prescaler */
 
@@ -309,9 +310,10 @@
 /* 'main' PLL config; we use this to generate our system clock via the R
  *  output.  We set it up as 4 MHz / 1 * 60 / 2 = 120 MHz
  *
- * XXX NOTE:  currently the main PLL is implicitly turned on and is implicitly
- * the system clock; this should be configurable since not all applications may
- * want things done this way.
+ * XXX NOTE:
+ * currently the main PLL is implicitly turned on and is implicitly
+ * the system clock; this should be configurable since not all
+ * applications may want things done this way.
  */
 
 #define STM32L4_PLLCFG_PLLN             RCC_PLLCFG_PLLN(60)
@@ -370,7 +372,6 @@
 
 #define STM32L4_RCC_CFGR_HPRE     RCC_CFGR_HPRE_SYSCLK      /* HCLK  = SYSCLK / 1 */
 #define STM32L4_HCLK_FREQUENCY    STM32L4_SYSCLK_FREQUENCY
-#define STM32L4_BOARD_HCLK        STM32L4_HCLK_FREQUENCY    /* Same as above, to satisfy compiler */
 
 /* Configure the APB1 prescaler */
 
@@ -395,8 +396,8 @@
 #endif /* clock selection */
 
 /* The timer clock frequencies are automatically defined by hardware.
- * If the APB prescaler equals 1, the timer clock frequencies are set to the same
- * frequency as that of the APB domain. Otherwise they are set to twice.
+ * If the APB prescaler equals 1, the timer clock frequencies are set to the
+ * same frequency as that of the APB domain. Otherwise they are set to twice.
  * Note: TIM1,8,15,16,17 are on APB2, others on APB1
  */
 

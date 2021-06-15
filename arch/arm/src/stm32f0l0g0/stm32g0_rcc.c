@@ -1,53 +1,38 @@
-/********************************************************************
+/****************************************************************************
  * arch/arm/src/stm32f0l0g0/stm32g0_rcc.c
  *
- *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
- *   Author: Mateusz Szafoni <raiden00@railab.me>
- *           Daniel Pereira Volpato <dpo@certi.org.br>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- ********************************************************************/
+ ****************************************************************************/
 
-/********************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************/
+ ****************************************************************************/
 
 #include "stm32_pwr.h"
 
-/********************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ********************************************************************/
+ ****************************************************************************/
 
-/* Allow up to 100 milliseconds for the high speed clock to become ready.
- * that is a very long delay, but if the clock does not become ready we are
- * hosed anyway.  Normally this is very fast, but I have seen at least one
- * board that required this long, long timeout for the HSE to be ready.
+/* Allow up to 100 milliseconds for the high speed clock to become
+ * ready. that is a very long delay, but if the clock does not become
+ * ready we are hosed anyway.  Normally this is very fast, but I have
+ * seen at least one board that required this long, long timeout for
+ * the HSE to be ready.
  */
 
 #define HSERDY_TIMEOUT (100 * CONFIG_BOARD_LOOPSPERMSEC)
@@ -56,21 +41,21 @@
 
 #define HSE_DIVISOR RCC_CR_RTCPRE_HSEd8
 
-/********************************************************************
+/****************************************************************************
  * Private Data
- ********************************************************************/
+ ****************************************************************************/
 
-/********************************************************************
+/****************************************************************************
  * Private Functions
- ********************************************************************/
+ ****************************************************************************/
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_reset
  *
  * Description:
  *   Put all RCC registers in reset state
  *
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_reset(void)
 {
@@ -94,13 +79,13 @@ static inline void rcc_reset(void)
   putreg32(regval, STM32_RCC_APB1ENR);
 }
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_enableio
  *
  * Description:
  *   Enable selected GPIO
  *
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_enableio(void)
 {
@@ -114,13 +99,13 @@ static inline void rcc_enableio(void)
   putreg32(regval, STM32_RCC_IOPENR);   /* Enable GPIO */
 }
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_enableahb
  *
  * Description:
  *   Enable selected AHB peripherals
  *
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_enableahb(void)
 {
@@ -165,13 +150,13 @@ static inline void rcc_enableahb(void)
   putreg32(regval, STM32_RCC_AHBENR);   /* Enable peripherals */
 }
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_enableapb1
  *
  * Description:
  *   Enable selected APB1 peripherals
  *
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_enableapb1(void)
 {
@@ -295,13 +280,13 @@ static inline void rcc_enableapb1(void)
   putreg32(regval, STM32_RCC_APB1ENR);
 }
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_enableapb2
  *
  * Description:
  *   Enable selected APB2 peripherals
  *
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_enableapb2(void)
 {
@@ -382,13 +367,13 @@ static inline void rcc_enableapb2(void)
   putreg32(regval, STM32_RCC_APB2ENR);
 }
 
-/********************************************************************
+/****************************************************************************
  * Name: stm32_rcc_enablehse
  *
  * Description:
  *   Enable the External High-Speed (HSE) Oscillator.
  *
- ********************************************************************/
+ ****************************************************************************/
 
 #if (STM32_PLLCFG_PLLSRC == RCC_PLLCFG_PLLSRC_HSE) || (STM32_SYSCLK_SW == RCC_CFGR_SW_HSE)
 static inline bool stm32_rcc_enablehse(void)
@@ -429,7 +414,7 @@ static inline bool stm32_rcc_enablehse(void)
 }
 #endif
 
-/********************************************************************
+/****************************************************************************
  * Name: stm32_stdclockconfig
  *
  * Description:
@@ -438,7 +423,7 @@ static inline bool stm32_rcc_enablehse(void)
  *   NOTE:  This logic would need to be extended if you need to select low-
  *   power clocking modes or any clocking other than PLL driven by the HSE.
  *
- ********************************************************************/
+ ****************************************************************************/
 
 #ifndef CONFIG_ARCH_BOARD_STM32_CUSTOM_CLOCKCONFIG
 static void stm32_stdclockconfig(void)
@@ -690,9 +675,9 @@ static void stm32_stdclockconfig(void)
 }
 #endif
 
-/********************************************************************
+/****************************************************************************
  * Name: rcc_enableperiphals
- ********************************************************************/
+ ****************************************************************************/
 
 static inline void rcc_enableperipherals(void)
 {
@@ -702,6 +687,6 @@ static inline void rcc_enableperipherals(void)
   rcc_enableapb1();
 }
 
-/********************************************************************
+/****************************************************************************
  * Public Functions
- ********************************************************************/
+ ****************************************************************************/

@@ -1,36 +1,20 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc178x_40xx_gpio.c
  *
- *   Copyright (C) 2010-2011, 2013 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *           With LPC178x extensions from Rommel Marcelo
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -43,6 +27,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -71,6 +56,7 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
+
 /* These tables have global scope because they are also used in
  * lpc17_40_gpiodbg.c
  */
@@ -125,7 +111,8 @@ const uint32_t g_intbase[GPIO_NPORTS] =
  *   Get the LPC178x/40xx IOCON register mask.
  *
  *   Type D: FUNC, MODE, HYS, INV, SLEW, OD             -
- *   Type A: FUNC, MODE, INV, ADMODE, FILTER, OD, DACEN -P0[12:13,23:26],P1[30:31]
+ *   Type A: FUNC, MODE, INV, ADMODE, FILTER, OD, DACEN -P0[12:13,23:26],
+ *                                                       P1[30:31]
  *   Type U: FUNC                                       -P0[29:31]
  *   Type I: FUNC, INV, HS, HIDRIVE                     -P0[27:28], P5[2:3]
  *   Type W: FUNC, MODE, HYS, INV, FILTER, SLEW, OD     -P0[7:9]
@@ -462,8 +449,9 @@ static void lpc17_40_clropendrain(unsigned int port, unsigned int pin)
  *
  ****************************************************************************/
 
-static void lpc17_40_sethysteresis(lpc17_40_pinset_t cfgset, unsigned int port,
-                                unsigned int pin)
+static void lpc17_40_sethysteresis(lpc17_40_pinset_t cfgset,
+                                   unsigned int port,
+                                   unsigned int pin)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -564,8 +552,9 @@ static void lpc17_40_setintedge(unsigned int port, unsigned int pin,
  *
  ****************************************************************************/
 
-static inline int lpc17_40_configinput(lpc17_40_pinset_t cfgset, unsigned int port,
-                                    unsigned int pin)
+static inline int lpc17_40_configinput(lpc17_40_pinset_t cfgset,
+                                       unsigned int port,
+                                       unsigned int pin)
 {
   uint32_t regval;
   uint32_t fiobase;
@@ -640,12 +629,14 @@ static inline int lpc17_40_configinput(lpc17_40_pinset_t cfgset, unsigned int po
  * Name: lpc17_40_configinterrupt
  *
  * Description:
- *   Configure a GPIO interrupt pin based on bit-encoded description of the pin.
+ *   Configure a GPIO interrupt pin based on bit-encoded description of the
+ *   pin.
  *
  ****************************************************************************/
 
-static inline int lpc17_40_configinterrupt(lpc17_40_pinset_t cfgset, unsigned int port,
-                                        unsigned int pin)
+static inline int lpc17_40_configinterrupt(lpc17_40_pinset_t cfgset,
+                                           unsigned int port,
+                                           unsigned int pin)
 {
   /* First, configure the port as a generic input so that we have a known
    * starting point and consistent behavior during the re-configuration.
@@ -657,7 +648,8 @@ static inline int lpc17_40_configinterrupt(lpc17_40_pinset_t cfgset, unsigned in
 
   DEBUGASSERT(port == 0 || port == 2);
 #ifdef CONFIG_LPC17_40_GPIOIRQ
-  lpc17_40_setintedge(port, pin, (cfgset & GPIO_EDGE_MASK) >> GPIO_EDGE_SHIFT);
+  lpc17_40_setintedge(port, pin,
+                     (cfgset & GPIO_EDGE_MASK) >> GPIO_EDGE_SHIFT);
 #endif
   return OK;
 }
@@ -670,8 +662,9 @@ static inline int lpc17_40_configinterrupt(lpc17_40_pinset_t cfgset, unsigned in
  *
  ****************************************************************************/
 
-static inline int lpc17_40_configoutput(lpc17_40_pinset_t cfgset, unsigned int port,
-                                     unsigned int pin)
+static inline int lpc17_40_configoutput(lpc17_40_pinset_t cfgset,
+                                        unsigned int port,
+                                        unsigned int pin)
 {
   uint32_t fiobase;
   uint32_t regval;
@@ -693,7 +686,8 @@ static inline int lpc17_40_configoutput(lpc17_40_pinset_t cfgset, unsigned int p
 
   if ((cfgset & GPIO_OPEN_DRAIN) != 0)
     {
-      /* Set pull-up mode.  This normally only applies to input pins, but does have
+      /* Set pull-up mode.
+       * This normally only applies to input pins, but does have
        * meaning if the port is an open drain output.
        */
 
@@ -724,8 +718,9 @@ static inline int lpc17_40_configoutput(lpc17_40_pinset_t cfgset, unsigned int p
  *
  ****************************************************************************/
 
-static int lpc17_40_configalternate(lpc17_40_pinset_t cfgset, unsigned int port,
-                                 unsigned int pin, uint32_t alt)
+static int lpc17_40_configalternate(lpc17_40_pinset_t cfgset,
+                                    unsigned int port,
+                                    unsigned int pin, uint32_t alt)
 {
   uint32_t i2cmode;
 
@@ -935,7 +930,8 @@ bool lpc17_40_gpioread(lpc17_40_pinset_t pinset)
       /* Get the pin number and return the input state of that pin */
 
       pin = (pinset & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT;
-      return ((getreg32(fiobase + LPC17_40_FIO_PIN_OFFSET) & (1 << pin)) != 0);
+      return ((getreg32(fiobase + LPC17_40_FIO_PIN_OFFSET) &
+               (1 << pin)) != 0);
     }
 
   return false;
