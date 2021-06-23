@@ -125,6 +125,19 @@ extern struct spi_dev_s *g_spi2;
 void stm32_spidev_initialize(void);
 
 /****************************************************************************
+ * Name: stm32_adc_setup
+ *
+ * Description:
+ *   Initialize ADC and register the ADC driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ADC
+int stm32_adc_setup(void);
+#endif
+
+
+/****************************************************************************
  * Name: stm32_usbinitialize
  *
  * Description:
