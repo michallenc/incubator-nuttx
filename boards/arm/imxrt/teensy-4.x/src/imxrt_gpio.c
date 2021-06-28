@@ -103,6 +103,7 @@ static struct imxrtgpio_dev_s g_gpin[BOARD_NGPIOIN];
 static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
 {
   GPIO_OUT1,
+  GPIO_OUT2,
 };
 
 static struct imxrtgpio_dev_s g_gpout[BOARD_NGPIOOUT];

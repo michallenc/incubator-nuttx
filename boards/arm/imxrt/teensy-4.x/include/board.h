@@ -281,6 +281,11 @@
 #define GPIO_FLEXPWM2_MOD1_A (GPIO_FLEXPWM2_PWMA00_1|IOMUX_PWM_DEFAULT) /* GPIO_EMC_06 */
 #define GPIO_FLEXPWM2_MOD2_A (GPIO_FLEXPWM2_PWMA01_1|IOMUX_PWM_DEFAULT) /* GPIO_EMC_08 */
 
+/* Teensy DC motor */
+
+#define GPIO_FLEXPWM3_MOD2_A (GPIO_FLEXPWM3_PWMA01_1|IOMUX_PWM_DEFAULT) /* GPIO_EMC_31 */
+#define GPIO_FLEXPWM2_MOD3_A (GPIO_FLEXPWM2_PWMA02_2|IOMUX_PWM_DEFAULT) /* GPIO_B0_10 */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
