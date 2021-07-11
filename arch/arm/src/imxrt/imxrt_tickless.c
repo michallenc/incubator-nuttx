@@ -67,7 +67,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define GPT_CLOCK 32000
+#define GPT_CLOCK 16600000
 
 /****************************************************************************
  * Private Types
@@ -265,7 +265,7 @@ void up_timer_initialize(void)
   /* Set clock source of the timer and enable free-run mode */
 
   regval = getreg32(g_tickless.base + IMXRT_GPT_CR_OFFSET);
-  regval |= GPT_CR_CLKSRC_IPG_LFR | GPT_CR_FRR;
+  regval |= GPT_CR_CLKSRC_IPG | GPT_CR_FRR;
   putreg32(regval, g_tickless.base + IMXRT_GPT_CR_OFFSET);
 
   /* Set the prescaler register */
@@ -287,6 +287,8 @@ void up_timer_initialize(void)
     {
       prescaler = 0xfff;
     }
+
+  tmrerr("prescaler is %d\n", prescaler);
 
   putreg32(prescaler, g_tickless.base + IMXRT_GPT_PR_OFFSET);
 
