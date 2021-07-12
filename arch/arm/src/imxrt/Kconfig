@@ -1919,7 +1919,7 @@ config IMXRT_TICKLESS_TIMER
 	range 1 2
 	---help---
 		If the Tickless OS feature is enabled, then one clock must be
-		assigned to provided the timer needed by the OS.
+		assigned to provided the GPT timer needed by the OS.
 
 config IMXRT_TICKLESS_CHANNEL
 	int "Tickless timer channel"

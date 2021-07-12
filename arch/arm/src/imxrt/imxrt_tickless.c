@@ -39,6 +39,22 @@
  *   void nxsched_timer_expiration(void):  Called by the platform-specific
  *     logic when the interval timer expires.
  *
+ * NOTE
+ * Only alarm option selected by CONFIG_SCHED_TICKLESS_ALARM is currently
+ * suported for iMXRT.
+ *
+ ****************************************************************************/
+
+/****************************************************************************
+ * iMXRT Timer Usage
+ *
+ * This implementation uses one timer:  A free running timer to provide
+ * the current time and a capture/compare channel for timed-events.
+ *
+ * This timer can be either General Purpose Timer (GPT) 1 or 2, which can
+ * be set by CONFIG_IMXRT_TICKLESS_TIMER. CONFIG_IMXRT_TICKLESS_CHANNEL
+ * selects which channel generates the interrupt for compare value.
+ *
  ****************************************************************************/
 
 /****************************************************************************
@@ -67,6 +83,26 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* Only alarm option is currently supported */
+
+#ifndef CONFIG_SCHED_TICKLESS_ALARM
+#  error Interval timer support is not supported yet, please select alarm
+#endif
+
+/* The Peripheral Clock (ipg_clk) is selected as the GPT clock source.
+ *
+ * REVISIT: Here we assume that the Peripheral Clock is 16.6 MHz. That is:
+ *
+ * PRECLK_CLOCK_ROOT = IPG_CLOCK_ROOT / IMXRT_PERCLK_PODF_DIVIDER
+ * where IPG_CLOCK_ROOT = 150 MHz and IMXRT_PERCLK_PODF_DIVIDER = 9
+ *
+ * Those clocks are set in imxrt_clockconfig.c, but makros are defined in
+ * board level section (file board.h) so clock settings may actually vary
+ * when using different boards.
+ *
+ * So, Peripheral Clock Frequency = 16.6 MHz
+ */
+
 #define GPT_CLOCK 16600000
 
 /****************************************************************************
@@ -77,12 +113,11 @@ struct imxrt_tickless_s
 {
   uint8_t timer;                   /* The timer/counter in use */
   uint8_t out_compare;             /* Number of output compare channel */
-  uint32_t frequency;
+  uint32_t frequency;              /* Frequency of the timer */
   uint32_t overflow;               /* Timer counter overflow */
-  uint32_t period;                 /* Interval period */
   uint32_t irq;                    /* Interrupt number */
   volatile bool pending;           /* True: pending task */
-  uint32_t base;
+  uint32_t base;                   /* Base address of the timer */
 };
 
 /****************************************************************************
@@ -120,7 +155,7 @@ static void imxrt_interval_handler(void)
   struct timespec tv;
   uint32_t regval;
 
-  /* Disable the compare interrupt now. */
+  /* Disable the compare interrupt for now */
 
   regval = getreg32(g_tickless.base + IMXRT_GPT_IR_OFFSET);
   regval &= ~(1 << (g_tickless.out_compare - 1));
@@ -128,7 +163,8 @@ static void imxrt_interval_handler(void)
 
   /* And clear it */
 
-  putreg32((1 << (g_tickless.out_compare - 1)), g_tickless.base + IMXRT_GPT_SR_OFFSET); 
+  putreg32((1 << (g_tickless.out_compare - 1)),
+           g_tickless.base + IMXRT_GPT_SR_OFFSET);
 
   g_tickless.pending = false;
 
@@ -158,7 +194,7 @@ static void imxrt_timing_handler(void)
 
   /* Clear interrupt bit */
 
-  putreg32(GPT_SR_ROV, g_tickless.base + IMXRT_GPT_SR_OFFSET); 
+  putreg32(GPT_SR_ROV, g_tickless.base + IMXRT_GPT_SR_OFFSET);
 }
 
 /****************************************************************************
@@ -180,12 +216,15 @@ static int imxrt_tickless_handler(int irq, void *context, void *arg)
 {
   uint32_t interrupt_flags;
   interrupt_flags = getreg32(g_tickless.base + IMXRT_GPT_SR_OFFSET);
+
   /* The free-run timer has reached its maximum value */
 
   if (interrupt_flags & GPT_SR_ROV)
     {
       imxrt_timing_handler();
     }
+
+  /* Compare interrupt was generated */
 
   if (interrupt_flags & (1 << (g_tickless.out_compare - 1)))
     {
@@ -194,7 +233,6 @@ static int imxrt_tickless_handler(int irq, void *context, void *arg)
 
   return OK;
 }
-
 
 /****************************************************************************
  * Public Functions
@@ -228,6 +266,8 @@ static int imxrt_tickless_handler(int irq, void *context, void *arg)
 void up_timer_initialize(void)
 {
   uint32_t regval;
+  int prescaler;
+
   switch (CONFIG_IMXRT_TICKLESS_TIMER)
     {
       case 1:
@@ -256,7 +296,6 @@ void up_timer_initialize(void)
   g_tickless.timer        = CONFIG_IMXRT_TICKLESS_TIMER;
   g_tickless.out_compare  = CONFIG_IMXRT_TICKLESS_CHANNEL;
   g_tickless.pending      = false;
-  g_tickless.period       = 0;
   g_tickless.overflow     = 0;
 
   tmrinfo("timer=%d channel=%d frequency=%lu Hz\n",
@@ -270,7 +309,7 @@ void up_timer_initialize(void)
 
   /* Set the prescaler register */
 
-  int prescaler = GPT_CLOCK / g_tickless.frequency;
+  prescaler = GPT_CLOCK / g_tickless.frequency;
 
   /* We need to decrement value for '1', but only, if that will not to
    * cause underflow.
@@ -288,7 +327,7 @@ void up_timer_initialize(void)
       prescaler = 0xfff;
     }
 
-  tmrerr("prescaler is %d\n", prescaler);
+  /* Set the prescaler value */
 
   putreg32(prescaler, g_tickless.base + IMXRT_GPT_PR_OFFSET);
 
@@ -309,14 +348,16 @@ void up_timer_initialize(void)
           (4 * (g_tickless.out_compare - 1)));
 
   /* Initialize the counter and enable interrupts */
-  
+
   regval = getreg32(g_tickless.base + IMXRT_GPT_IR_OFFSET);
-  regval |= GPT_IR_ROVIE | (1 << (g_tickless.out_compare -1 ));
+  regval |= GPT_IR_ROVIE | (1 << (g_tickless.out_compare -1));
   putreg32(regval, g_tickless.base + IMXRT_GPT_IR_OFFSET);
 
   regval = getreg32(g_tickless.base + IMXRT_GPT_CR_OFFSET);
   regval |= GPT_CR_ENMOD;
   putreg32(regval, g_tickless.base + IMXRT_GPT_CR_OFFSET);
+
+  /* Eneable the timer */
 
   regval = getreg32(g_tickless.base + IMXRT_GPT_CR_OFFSET);
   regval |= GPT_CR_EN;
@@ -383,7 +424,7 @@ int up_timer_gettime(FAR struct timespec *ts)
     {
       /* Clear the rollover interrupt */
 
-      putreg32(GPT_SR_ROV, g_tickless.base + IMXRT_GPT_SR_OFFSET); 
+      putreg32(GPT_SR_ROV, g_tickless.base + IMXRT_GPT_SR_OFFSET);
 
       /* Increment the overflow count and use the value of the
        * guaranteed to be AFTER the overflow occurred.
@@ -406,7 +447,8 @@ int up_timer_gettime(FAR struct timespec *ts)
    *   usecs     = (ticks * USEC_PER_SEC) / frequency;
    */
 
-  usec = ((((uint64_t)overflow << 32) + (uint64_t)counter) * USEC_PER_SEC) / g_tickless.frequency;
+  usec = ((((uint64_t)overflow << 32) + (uint64_t)counter) * \
+          USEC_PER_SEC) / g_tickless.frequency;
 
   /* And return the value of the timer */
 
@@ -457,10 +499,10 @@ int up_alarm_start(FAR const struct timespec *ts)
   putreg32(tm, g_tickless.base + IMXRT_GPT_OCR1_OFFSET + \
           (4 * (g_tickless.out_compare - 1)));
 
-  /* Clear interrupts bit */
- 
+  /* Clear interrupt bits */
+
   putreg32((1 << (g_tickless.out_compare - 1)) | GPT_SR_ROV,
-            g_tickless.base + IMXRT_GPT_SR_OFFSET); 
+            g_tickless.base + IMXRT_GPT_SR_OFFSET);
 
   /* Enable interrupts */
 
@@ -528,7 +570,8 @@ int up_alarm_start(FAR const struct timespec *ts)
 int up_alarm_cancel(FAR struct timespec *ts)
 {
   uint64_t nsecs =  (((uint64_t)g_tickless.overflow << 32) | \
-                    getreg32(g_tickless.base + IMXRT_GPT_CNT_OFFSET)) * NSEC_PER_TICK;
+                    getreg32(g_tickless.base + IMXRT_GPT_CNT_OFFSET)) * \
+                    NSEC_PER_TICK;
   uint32_t regval;
 
   ts->tv_sec = nsecs / NSEC_PER_SEC;
