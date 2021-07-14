@@ -2310,16 +2310,9 @@ int32_t esp_event_post(esp_event_base_t event_base,
 
 uint32_t esp_get_free_heap_size(void)
 {
-  int ret;
   struct mallinfo info;
 
-  ret = mm_mallinfo(&g_mmheap, &info);
-  if (ret)
-    {
-      wlerr("Failed to create task\n");
-      return 0;
-    }
-
+  info = kmm_mallinfo();
   return info.fordblks;
 }
 
@@ -3674,7 +3667,7 @@ static void *esp_realloc_internal(void *ptr, size_t size)
           return NULL;
         }
 
-      old_size = malloc_usable_size(old_ptr);
+      old_size = malloc_size(old_ptr);
       DEBUGASSERT(old_size > 0);
       memcpy(new_ptr, old_ptr, MIN(old_size, size));
       kmm_free(old_ptr);

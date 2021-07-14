@@ -130,6 +130,20 @@ static struct imxrt_tickless_s g_tickless;
  * Private Functions
  ****************************************************************************/
 
+/****************************************************************************
+ * Name: imxrt_get_counter
+ *
+ * Description:
+ *   Get counter value and add it to overflow value
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Counter value
+ *
+ ****************************************************************************/
+
 static uint64_t imxrt_get_counter(void)
 {
   return getreg32(g_tickless.base + IMXRT_GPT_CNT_OFFSET) | \
@@ -190,7 +204,6 @@ static void imxrt_interval_handler(void)
 static void imxrt_timing_handler(void)
 {
   g_tickless.overflow++;
-  uint32_t regval;
 
   /* Clear interrupt bit */
 
@@ -205,10 +218,11 @@ static void imxrt_timing_handler(void)
  *   interrupt and fires the appropriate handler.
  *
  * Input Parameters:
- *   None
+ *   irq     - Number of the IRQ that generated the interrupt
+ *   context - Interrupt register state save info (architecture-specific)
  *
  * Returned Value:
- *   None
+ *   OK on success
  *
  ****************************************************************************/
 
