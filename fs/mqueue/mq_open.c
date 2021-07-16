@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/stat.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -188,6 +189,8 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
       attr = va_arg(ap, FAR struct mq_attr *);
     }
 
+  mode &= ~getumask();
+
   /* Skip over any leading '/'.  All message queue paths are relative to
    * CONFIG_FS_MQUEUE_MPATH.
    */
@@ -274,7 +277,7 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
           goto errout_with_lock;
         }
 
-      ret = inode_reserve(fullpath, &inode);
+      ret = inode_reserve(fullpath, mode, &inode);
       inode_semgive();
 
       if (ret < 0)
@@ -286,7 +289,7 @@ static int file_mq_vopen(FAR struct file *mq, FAR const char *mq_name,
        * be created with a reference count of zero.
        */
 
-      msgq = (FAR struct mqueue_inode_s *)nxmq_alloc_msgq(mode, attr);
+      msgq = (FAR struct mqueue_inode_s *)nxmq_alloc_msgq(attr);
       if (!msgq)
         {
           ret = -ENOSPC;
@@ -406,7 +409,7 @@ void nxmq_pollnotify(FAR struct mqueue_inode_s *msgq, pollevent_t eventset)
  *   Optional parameters.  When the O_CREAT flag is specified, two optional
  *   parameters are expected:
  *
- *     1. mode_t mode (ignored), and
+ *     1. mode_t mode, and
  *     2. struct mq_attr *attr.  The mq_maxmsg attribute
  *        is used at the time that the message queue is
  *        created to determine the maximum number of
@@ -453,7 +456,7 @@ int file_mq_open(FAR struct file *mq,
  *   Optional parameters.  When the O_CREAT flag is specified, two optional
  *   parameters are expected:
  *
- *     1. mode_t mode (ignored), and
+ *     1. mode_t mode, and
  *     2. struct mq_attr *attr.  The mq_maxmsg attribute
  *        is used at the time that the message queue is
  *        created to determine the maximum number of
@@ -495,7 +498,7 @@ mqd_t nxmq_open(FAR const char *mq_name, int oflags, ...)
  *   Optional parameters.  When the O_CREAT flag is specified, two optional
  *   parameters are expected:
  *
- *     1. mode_t mode (ignored), and
+ *     1. mode_t mode, and
  *     2. struct mq_attr *attr.  The mq_maxmsg attribute
  *        is used at the time that the message queue is
  *        created to determine the maximum number of

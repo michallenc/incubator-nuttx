@@ -1,5 +1,5 @@
 /****************************************************************************
- * libs/libc/string/lib_strncmp.c
+ * boards/arm/stm32/nucleo-g431kb/src/stm32_dac.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,26 +23,67 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <sys/types.h>
-#include <string.h>
+#include <errno.h>
+#include <debug.h>
+
+#include <nuttx/analog/dac.h>
+#include <arch/board/board.h>
+
+#include "stm32_dac.h"
+#include "nucleo-g431kb.h"
+
+#ifdef CONFIG_DAC
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_DAC1CH1
+static struct dac_dev_s *g_dac1;
+#endif
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-#ifndef CONFIG_ARCH_STRNCMP
-#undef strncmp /* See mm/README.txt */
-int strncmp(const char *cs, const char *ct, size_t nb)
+/****************************************************************************
+ * Name: stm32_dac_setup
+ *
+ * Description:
+ *   Initialize and register the DAC driver.
+ *
+ * Input parameters:
+ *   devpath - The full path to the driver to register. E.g., "/dev/dac0"
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+int stm32_dac_setup(void)
 {
-  int result = 0;
-  for (; nb > 0; nb--)
+  int ret;
+#ifdef CONFIG_STM32_DAC1CH1
+  g_dac1 = stm32_dacinitialize(1);
+  if (g_dac1 == NULL)
     {
-      if ((result = (int)*cs - (int)*ct++) != 0 || !*cs++)
-        {
-          break;
-        }
+      aerr("ERROR: Failed to get DAC interface\n");
+      return -ENODEV;
     }
 
-  return result;
-}
+  /* Register the DAC driver at "/dev/dac0" */
+
+  ret = dac_register("/dev/dac0", g_dac1);
+  if (ret < 0)
+    {
+      aerr("ERROR: dac_register() failed: %d\n", ret);
+      return ret;
+    }
+
 #endif
+
+  UNUSED(ret);
+  return OK;
+}
+
+#endif  /* CONFIG_DAC */

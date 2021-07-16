@@ -63,6 +63,8 @@ int mkdir(const char *pathname, mode_t mode)
   int errcode;
   int ret;
 
+  mode &= ~getumask();
+
   /* Find the inode that includes this path */
 
   SETUP_SEARCH(&desc, pathname, false);
@@ -137,7 +139,7 @@ int mkdir(const char *pathname, mode_t mode)
           goto errout_with_search;
         }
 
-      ret = inode_reserve(pathname, &inode);
+      ret = inode_reserve(pathname, mode, &inode);
       inode_semgive();
 
       if (ret < 0)

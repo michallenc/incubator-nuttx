@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <stdbool.h>
 #include <fcntl.h>
 #include <sched.h>
@@ -51,7 +52,7 @@ static int file_vopen(FAR struct file *filep,
 {
   struct inode_search_s desc;
   FAR struct inode *inode;
-#if defined(CONFIG_FILE_MODE) || !defined(CONFIG_DISABLE_MOUNTPOINT)
+#ifndef CONFIG_DISABLE_MOUNTPOINT
   mode_t mode = 0666;
 #endif
   int ret;
@@ -61,10 +62,7 @@ static int file_vopen(FAR struct file *filep,
       return -EINVAL;
     }
 
-#ifdef CONFIG_FILE_MODE
-#  ifdef CONFIG_CPP_HAVE_WARNING
-#    warning "File creation not implemented"
-#  endif
+#ifndef CONFIG_DISABLE_MOUNTPOINT
 
   /* If the file is opened for creation, then get the mode bits */
 
@@ -72,6 +70,8 @@ static int file_vopen(FAR struct file *filep,
     {
       mode = va_arg(ap, mode_t);
     }
+
+  mode &= ~getumask();
 #endif
 
   /* Get an inode for this file */
