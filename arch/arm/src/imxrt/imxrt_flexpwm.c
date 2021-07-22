@@ -896,7 +896,10 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
         {
           /* Configure the module freq only if is set to be used */
 
-          ret = pwm_change_freq(dev, info, i);
+          if (info->channels[i].channel != 0)
+            {
+              ret = pwm_change_freq(dev, info, i);
+            }
         }
 
       /* Save current frequency */
@@ -907,14 +910,28 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
         }
     }
 
+    /* clear LDOK */
+
 #ifdef CONFIG_PWM_MULTICHAN
   for (int i = 0; ret == OK && i < PWM_NCHANNELS; i++)
     {
       /* Enable PWM output for each channel */
 
-      ret = pwm_set_output(dev, info->channels[i].channel,
-                                info->channels[i].duty);
+      if (info->channels[i].channel == -1)
+        {
+          break;
+        }
+
+      if (info->channels[i].channel != 0)
+        {
+          ret = pwm_set_output(dev, info->channels[i].channel,
+                                    info->channels[i].duty);
+
+          /* set bitmap */
+        }
     }
+
+    /* set LDOK * */
 #else
   /* Enable PWM output just for first channel */
 
