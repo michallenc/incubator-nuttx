@@ -98,9 +98,6 @@ ifeq ($(CONFIG_SMP),y)
   CSRCS += up_smpsignal.c up_cpuidlestack.c
   REQUIREDOBJS += up_smpsignal$(OBJEXT)
   HOSTCFLAGS += -DCONFIG_SMP=1 -DCONFIG_SMP_NCPUS=$(CONFIG_SMP_NCPUS)
-ifeq ($(CONFIG_SCHED_INSTRUMENTATION),y)
-  HOSTCFLAGS += -DCONFIG_SCHED_INSTRUMENTATION=1
-endif
   HOSTSRCS += up_simsmp.c
 endif
 
@@ -339,8 +336,6 @@ depend: .depend
 
 context::
 
-clean_context::
-
 clean:
 	$(Q) if [ -e board/Makefile ]; then \
 		$(MAKE) -C board clean ; \
@@ -351,7 +346,7 @@ clean:
 	$(call DELFILE, libarch$(LIBEXT))
 	$(call CLEAN)
 
-distclean: clean
+distclean:: clean
 	$(Q) if [ -e board/Makefile ]; then \
 		$(MAKE) -C board distclean ; \
 	fi

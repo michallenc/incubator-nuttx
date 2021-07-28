@@ -1692,7 +1692,7 @@ config ARCH_BOARD_STM32_BUTTERFLY2
 	select ARCH_HAVE_BUTTONS
 	---help---
 		A configuration for the Kamami STM32Butterfly2 development board
-		based on STM32F107VC micro-controler chip with optional ETH
+		based on STM32F107VC micro-controller chip with optional ETH
 		board.  See
 		https://kamami.pl/zestawy-uruchomieniowe-stm32/178507-stm32butterfly2.html
 
@@ -3261,7 +3261,7 @@ endif
 comment "Board-Common Options"
 
 if ARCH_CHIP_STM32
-source boards/arm/stm32/common/Kconfig
+source "boards/arm/stm32/common/Kconfig"
 endif
 
 config BOARD_CRASHDUMP
@@ -3388,6 +3388,16 @@ config BOARDCTL_UNIQUEKEY_SIZE
 	---help---
 		Provides the size of the memory buffer that must be provided by the
 		caller of board_uniquekey() in which to receive the board unique KEY.
+
+config BOARDCTL_SWITCH_BOOT
+	bool "Enable switch boot system support"
+	default n
+	---help---
+		BOARDIOC_SWITCH_BOOT is required to communicate the boot partition
+		from userspace (OTA subsystem) to board for A/B boot or single boot
+		case. It can be used to change the system boot behavior. For instance,
+		once a firmware updated successfully, this boardctl can be used to
+		modify FLASH bank selection.
 
 config BOARDCTL_MKRD
 	bool "Enable application space creation of RAM disks"

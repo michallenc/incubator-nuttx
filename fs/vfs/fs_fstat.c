@@ -169,7 +169,13 @@ int file_fstat(FAR struct file *filep, FAR struct stat *buf)
   /* Get the inode from the file structure */
 
   inode = filep->f_inode;
-  DEBUGASSERT(inode != NULL);
+
+  /* Was this file opened ? */
+
+  if (!inode)
+    {
+      return -EBADF;
+    }
 
   /* The way we handle the stat depends on the type of inode that we
    * are dealing with.
@@ -189,6 +195,15 @@ int file_fstat(FAR struct file *filep, FAR struct stat *buf)
 
           ret = inode->u.i_mops->fstat(filep, buf);
         }
+    }
+  else
+#endif
+#ifdef CONFIG_NET
+  if (INODE_IS_SOCKET(inode))
+    {
+      /* Let the networking logic handle the fstat() */
+
+      ret = psock_fstat(file_socket(filep), buf);
     }
   else
 #endif
@@ -243,21 +258,6 @@ int fstat(int fd, FAR struct stat *buf)
     {
       goto errout;
     }
-
-#ifdef CONFIG_NET
-  if (INODE_IS_SOCKET(filep->f_inode))
-    {
-      /* Let the networking logic handle the fstat() */
-
-      ret = psock_fstat(sockfd_socket(fd), buf);
-      if (ret < 0)
-        {
-          goto errout;
-        }
-
-      return OK;
-    }
-#endif
 
   /* Perform the fstat operation */
 

@@ -47,7 +47,7 @@ menuconfig 16550_UART
 	default n
 
 if 16550_UART
-source drivers/serial/Kconfig-16550
+source "drivers/serial/Kconfig-16550"
 endif
 
 #
@@ -183,10 +183,10 @@ config TTY_FORCE_PANIC
 
 config TTY_FORCE_PANIC_CHAR
 	hex "TTY force crash characters"
-	default 0x0
+	default 0x1F
 	depends on TTY_FORCE_PANIC
 	---help---
-		Use Ctrl-@  NULL(0x0) inputs to determine whether panic system
+		Use Ctrl-? 0x1F inputs to determine whether panic system
 
 config TTY_SIGINT
 	bool "Support SIGINT"
@@ -575,10 +575,10 @@ config UART_RXDMA
 
 endmenu
 
-source drivers/serial/Kconfig-uart
-source drivers/serial/Kconfig-lpuart
-source drivers/serial/Kconfig-usart
-source drivers/serial/Kconfig-sci
+source "drivers/serial/Kconfig-uart"
+source "drivers/serial/Kconfig-lpuart"
+source "drivers/serial/Kconfig-usart"
+source "drivers/serial/Kconfig-sci"
 
 menuconfig PSEUDOTERM
 	bool "Pseudo-Terminal (PTY) support"
