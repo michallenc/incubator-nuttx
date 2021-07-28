@@ -1,5 +1,5 @@
 /****************************************************************************
- * sched/wqueue/kwork_signal.c
+ * boards/xtensa/esp32/common/src/esp32_board_spidev.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,88 +24,49 @@
 
 #include <nuttx/config.h>
 
-#include <signal.h>
+#include <stdio.h>
+#include <debug.h>
 #include <errno.h>
 
-#include <nuttx/wqueue.h>
-#include <nuttx/signal.h>
+#include <nuttx/spi/spi_transfer.h>
 
-#include "wqueue/wqueue.h"
-
-#ifdef CONFIG_SCHED_WORKQUEUE
+#include "esp32_spi.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: work_signal
+ * Name: board_spidev_initialize
  *
  * Description:
- *   Signal the worker thread to process the work queue now.  This function
- *   is used internally by the work logic but could also be used by the
- *   user to force an immediate re-assessment of pending work.
- *
- * Input Parameters:
- *   qid    - The work queue ID
- *
- * Returned Value:
- *   Zero (OK) on success, a negated errno value on failure
+ *   Initialize and register SPI driver for the specified SPI port.
  *
  ****************************************************************************/
 
-int work_signal(int qid)
+int board_spidev_initialize(int port)
 {
-  FAR struct kwork_wqueue_s *work;
-  int threads;
-  int i;
+  int ret;
+  FAR struct spi_dev_s *spi;
 
-  /* Get the process ID of the worker thread */
+  spiinfo("Initializing /dev/spi%d...\n", port);
 
-#ifdef CONFIG_SCHED_HPWORK
-  if (qid == HPWORK)
+  /* Initialize SPI device */
+
+  spi = esp32_spibus_initialize(port);
+  if (spi == NULL)
     {
-      work = (FAR struct kwork_wqueue_s *)&g_hpwork;
-      threads = CONFIG_SCHED_HPNTHREADS;
-    }
-  else
-#endif
-#ifdef CONFIG_SCHED_LPWORK
-  if (qid == LPWORK)
-    {
-      work = (FAR struct kwork_wqueue_s *)&g_lpwork;
-      threads = CONFIG_SCHED_LPNTHREADS;
-    }
-  else
-#endif
-    {
-      return -EINVAL;
+      spierr("Failed to initialize SPI%d.\n", port);
+      return -ENODEV;
     }
 
-  /* Find an IDLE worker thread */
-
-  for (i = 0; i < threads; i++)
+  ret = spi_register(spi, port);
+  if (ret < 0)
     {
-      /* Is this worker thread busy? */
+      spierr("Failed to register /dev/spi%d: %d\n", port, ret);
 
-      if (!work->worker[i].busy)
-        {
-          /* No.. select this thread */
-
-          break;
-        }
+      esp32_spibus_uninitialize(spi);
     }
 
-  /* If all of the IDLE threads are busy, then just return successfully */
-
-  if (i >= threads)
-    {
-      return OK;
-    }
-
-  /* Otherwise, signal the first IDLE thread found */
-
-  return nxsig_kill(work->worker[i].pid, SIGWORK);
+  return ret;
 }
-
-#endif /* CONFIG_SCHED_WORKQUEUE */

@@ -1,5 +1,5 @@
 /****************************************************************************
- * libs/libc/wqueue/wqueue.h
+ * arch/xtensa/src/esp32s2/esp32s2_wdt.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,50 +18,17 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBC_WQUEUE_WQUEUE_H
-#define __LIBC_WQUEUE_WQUEUE_H
+#ifndef __ARCH_XTENSA_SRC_ESP32S2_ESP32S2_WDT_H
+#define __ARCH_XTENSA_SRC_ESP32S2_ESP32S2_WDT_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <semaphore.h>
-#include <pthread.h>
-
-#include <nuttx/wqueue.h>
-
-#if defined(CONFIG_LIB_USRWORK) && !defined(__KERNEL__)
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Type Definitions
- ****************************************************************************/
-
-/* This structure defines the state of one user-modework queue. */
-
-struct usr_wqueue_s
-{
-  struct sq_queue_s q;      /* The queue of pending work */
-  sem_t             lock;   /* exclusive access to user-mode work queue */
-  sem_t             wake;   /* The wake-up semaphore of the  usrthread */
-};
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* The state of the user mode work queue */
-
-extern struct usr_wqueue_s g_usrwork;
-
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* CONFIG_LIB_USRWORK && !__KERNEL__*/
-#endif /* __LIBC_WQUEUE_WQUEUE_H */
+void esp32s2_wdt_early_deinit(void);
+
+#endif /* __ARCH_XTENSA_SRC_ESP32S2_ESP32S2_WDT_H */

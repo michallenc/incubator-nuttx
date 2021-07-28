@@ -1,5 +1,5 @@
 /****************************************************************************
- * libs/libc/wqueue/work_lock.c
+ * arch/xtensa/src/esp32s2/esp32s2_wdt.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -22,84 +22,29 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
+#include "xtensa.h"
+#include "hardware/esp32s2_rtccntl.h"
 
-#include <pthread.h>
-#include <assert.h>
-#include <errno.h>
-
-#include <nuttx/semaphore.h>
-
-#include "wqueue/wqueue.h"
-
-#if defined(CONFIG_LIB_USRWORK) && !defined(__KERNEL__)
+#include "esp32s2_wdt.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: work_lock
+ * Name: esp32s2_wdt_early_deinit
  *
  * Description:
- *   Lock the user-mode work queue.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   Zero (OK) on success, a negated errno on failure.  This error may be
- *   reported:
- *
- *   -EINTR - Wait was interrupted by a signal
+ *   Disable the WDT(s) that was/were enabled by the bootloader.
  *
  ****************************************************************************/
 
-int work_lock(void)
+void esp32s2_wdt_early_deinit(void)
 {
-  int ret;
-
-#ifdef CONFIG_BUILD_PROTECTED
-  ret = _SEM_WAIT(&g_usrsem);
-  if (ret < 0)
-    {
-      DEBUGASSERT(_SEM_ERRNO(ret) == EINTR ||
-                  _SEM_ERRNO(ret) == ECANCELED);
-      return -EINTR;
-    }
-#else
-  ret = pthread_mutex_lock(&g_usrmutex);
-  if (ret != 0)
-    {
-      DEBUGASSERT(ret == EINTR);
-      return -EINTR;
-    }
-#endif
-
-  return ret;
+  uint32_t regval;
+  putreg32(RTC_CNTL_WDT_WKEY_VALUE, RTC_CNTL_WDTWPROTECT_REG);
+  regval  = getreg32(RTC_CNTL_WDTCONFIG0_REG);
+  regval &= ~RTC_CNTL_WDT_EN;
+  putreg32(regval, RTC_CNTL_WDTCONFIG0_REG);
+  putreg32(0, RTC_CNTL_WDTWPROTECT_REG);
 }
-
-/****************************************************************************
- * Name: work_unlock
- *
- * Description:
- *   Unlock the user-mode work queue.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void work_unlock(void)
-{
-#ifdef CONFIG_BUILD_PROTECTED
-  _SEM_POST(&g_usrsem);
-#else
-  pthread_mutex_unlock(&g_usrmutex);
-#endif
-}
-
-#endif /* CONFIG_LIB_USRWORK && !__KERNEL__*/

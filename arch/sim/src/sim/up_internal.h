@@ -25,9 +25,11 @@
  * Included Files
  ****************************************************************************/
 
-#ifdef __ASSEMBLY__
-#  include <nuttx/config.h>
-#else
+#ifdef __SIM__
+#include "config.h"
+#endif
+
+#ifndef __ASSEMBLY__
 #  include <sys/types.h>
 #  include <stdbool.h>
 #  include <netinet/in.h>
@@ -89,6 +91,7 @@
  ****************************************************************************/
 
 struct tcb_s;
+struct foc_dev_s;
 struct spi_dev_s;
 struct qspi_dev_s;
 struct ioexpander_dev_s;
@@ -119,6 +122,11 @@ extern volatile void *g_current_regs[1];
 #  define CURRENT_REGS (g_current_regs[0])
 
 #endif
+
+/* The command line  arguments passed to simulator */
+
+extern int g_argc;
+extern char **g_argv;
 
 /****************************************************************************
  * Public Function Prototypes
@@ -353,8 +361,7 @@ void up_stack_color(void *stackbase, size_t nbytes);
 /* up_foc.c *****************************************************************/
 
 #ifdef CONFIG_MOTOR_FOC
-struct foc_dev_s;
-FAR struct foc_dev_s *sim_foc_initialize(int inst);
+struct foc_dev_s *sim_foc_initialize(int inst);
 void sim_foc_update(void);
 #endif
 
