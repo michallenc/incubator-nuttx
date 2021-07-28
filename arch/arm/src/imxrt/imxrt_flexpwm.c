@@ -894,6 +894,8 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
     {
       for (int i = 0; i < PWM_NCHANNELS; i++)
         {
+
+#ifdef CONFIG_PWM_MULTICHAN
           /* Break the loop if all following channels are not configured */
 
           if (info->channels[i].channel == -1)
@@ -907,6 +909,9 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
             {
               ret = pwm_change_freq(dev, info, i);
             }
+#else
+          ret = pwm_change_freq(dev, info, i);
+#endif
         }
 
       /* Save current frequency */
