@@ -919,10 +919,26 @@ menuconfig IMXRT_ADC1
     default n
     select IMXRT_ADC
 
+if IMXRT_ADC1
+
+config IMXRT_ADC1_ETC
+	bool "ADC1 External Trigger"
+	default n
+
+endif
+
 menuconfig IMXRT_ADC2
     bool "ADC2"
     default n
     select IMXRT_ADC
+
+if IMXRT_ADC2
+
+config IMXRT_ADC2_ETC
+	bool "ADC2 External Trigger"
+	default n
+
+endif
 
 endmenu
 

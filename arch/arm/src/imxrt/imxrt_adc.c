@@ -44,6 +44,7 @@
 
 #include "chip.h"
 #include "hardware/imxrt_adc.h"
+#include "hardware/imxrt_adc_etc.h"
 #include "hardware/imxrt_pinmux.h"
 #include "imxrt_gpio.h"
 #include "imxrt_periphclks.h"
@@ -269,9 +270,14 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   /* Configure ADC */
 
-  uint32_t adc_cfg = ADC_CFG_AVGS_4SMPL | ADC_CFG_ADTRG_SW |
+  uint32_t adc_cfg = adc_cfg = ADC_CFG_AVGS_4SMPL |
       ADC_CFG_REFSEL_VREF | ADC_CFG_ADSTS_7_21 | ADC_CFG_ADIV_DIV8 | \
       ADC_CFG_ADLSMP | ADC_CFG_MODE_10BIT | ADC_CFG_ADICLK_IPGDIV2;
+
+#if defined(CONFIG_IMXRT_ADC1_ETC) || defined(CONFIG_IMXRT_ADC2_ETC)
+  adc_cfg |= ADC_CFG_ADTRG_HW;
+#endif
+
   adc_putreg(priv, IMXRT_ADC_CFG_OFFSET, adc_cfg);
 
   uint32_t adc_gc = 0;
