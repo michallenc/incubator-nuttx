@@ -46,6 +46,7 @@
 #include "hardware/imxrt_adc.h"
 #include "hardware/imxrt_adc_etc.h"
 #include "hardware/imxrt_pinmux.h"
+#include "imxrt_xbar.h"
 #include "imxrt_gpio.h"
 #include "imxrt_periphclks.h"
 
@@ -97,6 +98,7 @@ static void adc_shutdown(FAR struct adc_dev_s *dev);
 static void adc_rxint(FAR struct adc_dev_s *dev, bool enable);
 static int  adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg);
 static int  adc_interrupt(int irq, void *context, FAR void *arg);
+static int  adc_interrupt_etc(int irq, void *context, FAR void *arg);
 
 /****************************************************************************
  * Private Data
@@ -270,13 +272,9 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   /* Configure ADC */
 
-  uint32_t adc_cfg = adc_cfg = ADC_CFG_AVGS_4SMPL |
+  uint32_t adc_cfg = ADC_CFG_AVGS_4SMPL |
       ADC_CFG_REFSEL_VREF | ADC_CFG_ADSTS_7_21 | ADC_CFG_ADIV_DIV8 | \
       ADC_CFG_ADLSMP | ADC_CFG_MODE_10BIT | ADC_CFG_ADICLK_IPGDIV2;
-
-#if defined(CONFIG_IMXRT_ADC1_ETC) || defined(CONFIG_IMXRT_ADC2_ETC)
-  adc_cfg |= ADC_CFG_ADTRG_HW;
-#endif
 
   adc_putreg(priv, IMXRT_ADC_CFG_OFFSET, adc_cfg);
 
@@ -341,6 +339,39 @@ static void adc_reset(FAR struct adc_dev_s *dev)
       imxrt_config_gpio(pinset);
     }
 
+#ifdef CONFIG_IMXRT_ADC2_ETC
+  adc_cfg = adc_getreg(priv, IMXRT_ADC_CFG_OFFSET);
+  adc_cfg |= ADC_CFG_ADTRG_HW;
+  adc_putreg(priv, IMXRT_ADC_CFG_OFFSET, adc_cfg);
+
+  /* Set EXT module */
+
+  uint32_t regval = getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_CTRL_OFFSET);
+  regval |= ADC_ETC_CTRL_TRIG_EN(0);
+  putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_CTRL_OFFSET);
+
+  regval = getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CTRL_OFFSET);
+  regval |= ADC_ETC_TRIG_CTRL_TRIG_CHAIN(0) | ADC_ETC_TRIG_CTRL_TRIG_PR(7);
+  putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CTRL_OFFSET); 
+
+  regval = getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN01_OFFSET);
+  regval |= ADC_ETC_TRIG_CHAIN01_CSEL0(priv->chanlist[0]) | ADC_ETC_TRIG_CHAIN01_HWTS0(0) | \
+            ADC_ETC_TRIG_CHAIN01_IE0(1);
+  printf("regval is 0x%x\n", regval);
+  putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN01_OFFSET);
+
+  regval = getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN01_OFFSET);
+  printf("address is 0x%x, regval is 0x%x\n", IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN01_OFFSET, regval);
+
+  int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_ADC_ETC_XBAR0_TRIG0_SEL_OFFSET,
+                           IMXRT_XBARA1_IN_FLEXPWM2_PWM1_OUT_TRIG01);
+  if (ret < 0)
+    {
+      printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+    }
+
+#endif
+
   return;
 
 exit_leave_critical:
@@ -371,6 +402,16 @@ static int adc_setup(FAR struct adc_dev_s *dev)
 
   priv->initialized++;
 
+#ifdef CONFIG_IMXRT_ADC2_ETC
+  int ret = irq_attach(IMXRT_IRQ_ADCETC_0, adc_interrupt_etc, dev);
+  if (ret < 0)
+    {
+      ainfo("irq_attach failed: %d\n", ret);
+      return ret;
+    }
+
+  up_enable_irq(IMXRT_IRQ_ADCETC_0);
+#else
   int ret = irq_attach(priv->irq, adc_interrupt, dev);
   if (ret < 0)
     {
@@ -379,12 +420,19 @@ static int adc_setup(FAR struct adc_dev_s *dev)
     }
 
   up_enable_irq(priv->irq);
+#endif
 
   /* Start the first conversion */
 
   priv->current = 0;
+
+#ifdef CONFIG_IMXRT_ADC2_ETC
+  adc_putreg(priv, IMXRT_ADC_HC0_OFFSET,
+             ADC_HC_ADCH_EXT_ADC_ETC);
+#else  
   adc_putreg(priv, IMXRT_ADC_HC0_OFFSET,
              ADC_HC_ADCH(priv->chanlist[priv->current]));
+#endif
 
   return ret;
 }
@@ -534,6 +582,51 @@ static int adc_interrupt(int irq, void *context, FAR void *arg)
 
       adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET, ADC_HC_ADCH_MASK,
                     ADC_HC_ADCH(priv->chanlist[priv->current]));
+    }
+
+  /* There are no interrupt flags left to clear */
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: adc_interrupt_etc
+ *
+ * Description:
+ *   ADC ETC interrupt handler
+ *
+ ****************************************************************************/
+
+static int adc_interrupt_etc(int irq, void *context, FAR void *arg)
+{
+  FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
+  FAR struct imxrt_dev_s *priv = (FAR struct imxrt_dev_s *)dev->ad_priv;
+  int32_t data;
+
+  if ((getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET) & ADC_ETC_DONE01_IRQ_TRIG0_DONE0) != 0)
+    {
+      /* Read data. This also clears the COCO bit. */
+
+      data = (int32_t)getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_RESULT01_OFFSET);
+
+      if (priv->cb != NULL)
+        {
+          DEBUGASSERT(priv->cb->au_receive != NULL);
+          priv->cb->au_receive(dev, priv->chanlist[priv->current],  data);
+        }
+
+      /* Set the channel number of the next channel that will complete
+       * conversion.
+       */
+
+      priv->current++;
+
+      if (priv->current >= priv->nchannels)
+        {
+          /* Restart the conversion sequence from the beginning */
+
+          priv->current = 0;
+        }
     }
 
   /* There are no interrupt flags left to clear */
