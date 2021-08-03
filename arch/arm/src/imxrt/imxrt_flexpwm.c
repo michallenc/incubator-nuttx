@@ -282,7 +282,7 @@ static struct imxrt_flexpwm_module_s g_pwm2_modules[] =
   {
     .module = 2,
     .used = true,
-#ifdef IMXRT_FLEXPWM2_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -888,7 +888,7 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
         {
           regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                        + MODULE_OFFSET * shift);
-          regval |= SMT_OUT_TRIG_EN_VAL3;
+          regval |= SMT_OUT_TRIG_EN_VAL3 | SMT_PWBOT0_OUT_TRIG0;
           putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                       + MODULE_OFFSET * shift);
         }

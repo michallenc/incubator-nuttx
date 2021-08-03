@@ -32,7 +32,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define TRIG_OFFSET 0x24
+#define TRIG_OFFSET 0x28
 
 /* Register Offsets *********************************************************/
 
@@ -147,7 +147,7 @@
 #define ADC_ETC_TRIG_CTRL_TRIG_CHAIN_MASK   (0x7 << ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT)
 #define ADC_ETC_TRIG_CTRL_TRIG_CHAIN(n)     (((uint32_t)(n) << ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT) & ADC_ETC_TRIG_CTRL_TRIG_CHAIN_MASK)
                                                         /* Bit  11:    Reserved */
-#define ADC_ETC_TRIG_CTRL_TRIG_PR_SHIFT     (8)         /* Bits 12-14: External trigger priority */
+#define ADC_ETC_TRIG_CTRL_TRIG_PR_SHIFT     (12)        /* Bits 12-14: External trigger priority */
 #define ADC_ETC_TRIG_CTRL_TRIG_PR_MASK      (0x7 << ADC_ETC_TRIG_CTRL_TRIG_PR_SHIFT)
 #define ADC_ETC_TRIG_CTRL_TRIG_PR(n)        (((uint32_t)(n) << ADC_ETC_TRIG_CTRL_TRIG_PR_SHIFT) & ADC_ETC_TRIG_CTRL_TRIG_PR_MASK)
                                                         /* Bit  15:    Reserved */
@@ -266,7 +266,7 @@
 /* ADC_ETC TRIG result data 0 and 1 register */
 
 #define ADC_ETC_TRIG_RESULT01_DATA0_SHIFT   (0)         /* Bits 0-11:  Result DATA 0 */
-#define ADC_ETC_TRIG_RESULT01_DATA0_MASK    (0xf << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT)
+#define ADC_ETC_TRIG_RESULT01_DATA0_MASK    (0xfff << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT)
 #define ADC_ETC_TRIG_RESULT01_DATA0(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT) & ADC_ETC_TRIG_RESULT01_DATA0_MASK)
                                                         /* Bits 12-15: Reserved */
 #define ADC_ETC_TRIG_RESULT01_DATA1_SHIFT   (16)        /* Bits 16-27: Result DATA 1 */
@@ -277,7 +277,7 @@
 /* ADC_ETC TRIG result data 2 and 3 register */
 
 #define ADC_ETC_TRIG_RESULT23_DATA2_SHIFT   (0)         /* Bits 0-11:  Result DATA 2 */
-#define ADC_ETC_TRIG_RESULT23_DATA2_MASK    (0xf << ADC_ETC_TRIG_RESULT23_DATA2_SHIFT)
+#define ADC_ETC_TRIG_RESULT23_DATA2_MASK    (0xfff << ADC_ETC_TRIG_RESULT23_DATA2_SHIFT)
 #define ADC_ETC_TRIG_RESULT23_DATA2(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT23_DATA2_SHIFT) & ADC_ETC_TRIG_RESULT23_DATA2_MASK)
                                                         /* Bits 12-15: Reserved */
 #define ADC_ETC_TRIG_RESULT23_DATA3_SHIFT   (16)        /* Bits 16-27: Result DATA 3 */
@@ -288,7 +288,7 @@
 /* ADC_ETC TRIG result data 4 and 5 register */
 
 #define ADC_ETC_TRIG_RESULT45_DATA4_SHIFT   (0)         /* Bits 0-11:  Result DATA 4 */
-#define ADC_ETC_TRIG_RESULT45_DATA4_MASK    (0xf << ADC_ETC_TRIG_RESULT45_DATA4_SHIFT)
+#define ADC_ETC_TRIG_RESULT45_DATA4_MASK    (0xfff << ADC_ETC_TRIG_RESULT45_DATA4_SHIFT)
 #define ADC_ETC_TRIG_RESULT45_DATA4(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT45_DATA4_SHIFT) & ADC_ETC_TRIG_RESULT45_DATA4_MASK)
                                                         /* Bits 12-15: Reserved */
 #define ADC_ETC_TRIG_RESULT45_DATA5_SHIFT   (16)        /* Bits 16-27: Result DATA 5 */
@@ -299,7 +299,7 @@
 /* ADC_ETC TRIG result data 6 and 7 register */
 
 #define ADC_ETC_TRIG_RESULT67_DATA6_SHIFT   (0)         /* Bits 0-11:  Result DATA 6 */
-#define ADC_ETC_TRIG_RESULT67_DATA6_MASK    (0xf << ADC_ETC_TRIG_RESULT67_DATA6_SHIFT)
+#define ADC_ETC_TRIG_RESULT67_DATA6_MASK    (0xfff << ADC_ETC_TRIG_RESULT67_DATA6_SHIFT)
 #define ADC_ETC_TRIG_RESULT67_DATA6(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT67_DATA6_SHIFT) & ADC_ETC_TRIG_RESULT67_DATA6_MASK)
                                                         /* Bits 12-15: Reserved */
 #define ADC_ETC_TRIG_RESULT67_DATA7_SHIFT   (16)        /* Bits 16-27: Result DATA 7 */
