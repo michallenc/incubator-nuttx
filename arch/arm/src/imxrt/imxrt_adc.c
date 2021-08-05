@@ -358,23 +358,26 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   printf("regva0 is %x\n", getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_CTRL_OFFSET));
 
-  regval = ADC_ETC_TRIG_CTRL_TRIG_CHAIN(2) | ADC_ETC_TRIG_CTRL_TRIG_PR(7);
+  regval = ADC_ETC_TRIG_CTRL_TRIG_CHAIN(3) | ADC_ETC_TRIG_CTRL_TRIG_PR(7);
   putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CTRL_OFFSET + TRIG_OFFSET * 4);
 
   int shift = 0;
 
   regval = ADC_ETC_TRIG_CHAIN_CSEL0(priv->chanlist[0]) | ADC_ETC_TRIG_CHAIN_HWTS0(1) | \
-           ADC_ETC_TRIG_CHAIN_IE0(1) | ADC_ETC_TRIG_CHAIN_B2B0;
+           ADC_ETC_TRIG_CHAIN_IE0(0) | ADC_ETC_TRIG_CHAIN_B2B0;
   putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET + TRIG_OFFSET * 4);
 
   regval |= ADC_ETC_TRIG_CHAIN_CSEL1(priv->chanlist[1]) | ADC_ETC_TRIG_CHAIN_HWTS1(1 << 1) | \
-            ADC_ETC_TRIG_CHAIN_IE1(2) | ADC_ETC_TRIG_CHAIN_B2B1;
+            ADC_ETC_TRIG_CHAIN_IE1(0) | ADC_ETC_TRIG_CHAIN_B2B1;
   putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET + TRIG_OFFSET * 4);
 
   regval = ADC_ETC_TRIG_CHAIN_CSEL0(priv->chanlist[2]) | ADC_ETC_TRIG_CHAIN_HWTS0(1 << 2) | \
-           ADC_ETC_TRIG_CHAIN_IE0(3) | ADC_ETC_TRIG_CHAIN_B2B0;
+           ADC_ETC_TRIG_CHAIN_IE0(0) | ADC_ETC_TRIG_CHAIN_B2B0;
   putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET + TRIG_OFFSET * 4 + 4);
 
+  regval |= ADC_ETC_TRIG_CHAIN_CSEL1(priv->chanlist[3]) | ADC_ETC_TRIG_CHAIN_HWTS1(1 << 3) | \
+            ADC_ETC_TRIG_CHAIN_IE1(1) | ADC_ETC_TRIG_CHAIN_B2B1;
+  putreg32(regval, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET + TRIG_OFFSET * 4 + 4);
 
   int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_ADC_ETC_XBAR1_TRIG0_SEL_OFFSET,
                            IMXRT_XBARA1_IN_FLEXPWM2_PWM3_OUT_TRIG01);
@@ -443,7 +446,7 @@ static int adc_setup(FAR struct adc_dev_s *dev)
     }
 
   up_enable_irq(IMXRT_IRQ_ADCETC_1);
-
+/*
   ret = irq_attach(IMXRT_IRQ_ADCETC_2, adc_interrupt_etc, dev);
   if (ret < 0)
     {
@@ -463,8 +466,8 @@ static int adc_setup(FAR struct adc_dev_s *dev)
       aerr("irq_attach failed: %d\n", ret);
       return ret;
     }
-
-  up_enable_irq(IMXRT_IRQ_ADCETC_ERR);
+*/
+  //up_enable_irq(IMXRT_IRQ_ADCETC_ERR);
 #else
 
   ret = irq_attach(priv->irq, adc_interrupt, dev);
@@ -486,6 +489,8 @@ static int adc_setup(FAR struct adc_dev_s *dev)
     adc_putreg(priv, IMXRT_ADC_HC1_OFFSET,
                       ADC_HC_ADCH_EXT_ADC_ETC);
     adc_putreg(priv, IMXRT_ADC_HC2_OFFSET,
+                      ADC_HC_ADCH_EXT_ADC_ETC);
+    adc_putreg(priv, IMXRT_ADC_HC3_OFFSET,
                       ADC_HC_ADCH_EXT_ADC_ETC);
 #else  
   adc_putreg(priv, IMXRT_ADC_HC0_OFFSET,
@@ -549,6 +554,7 @@ static void adc_rxint(FAR struct adc_dev_s *dev, bool enable)
       adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET, 0, ADC_HC_AIEN);
       adc_modifyreg(priv, IMXRT_ADC_HC1_OFFSET, 0, ADC_HC_AIEN);
       adc_modifyreg(priv, IMXRT_ADC_HC2_OFFSET, 0, ADC_HC_AIEN);
+      adc_modifyreg(priv, IMXRT_ADC_HC3_OFFSET, 0, ADC_HC_AIEN);
     }
   else
     {
@@ -667,31 +673,32 @@ static int adc_interrupt_etc(int irq, void *context, FAR void *arg)
     {
       /* Read data. This also clears the COCO bit. */
       
-      //data = (int32_t)getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_TRIG_RESULT_OFFSET + TRIG_OFFSET * 4) & 0xfff;
-      data = (int32_t)adc_getreg(priv, IMXRT_ADC_R0_OFFSET);
-      putreg32(ADC_ETC_DONE01_IRQ_TRIG4_DONE0, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET);
-
-      if (priv->cb != NULL)
+      for (int i = 0; i < priv->nchannels;i++)
         {
-          DEBUGASSERT(priv->cb->au_receive != NULL);
-          priv->cb->au_receive(dev, priv->chanlist[priv->current],  data);
+          data = (int32_t)adc_getreg(priv, IMXRT_ADC_R0_OFFSET + 4 * i);
+          if (priv->cb != NULL)
+            {
+              DEBUGASSERT(priv->cb->au_receive != NULL);
+              priv->cb->au_receive(dev, priv->chanlist[priv->current],  data);
+            }
+
+            /* Set the channel number of the next channel that will complete
+            * conversion.
+            */
+
+            priv->current++;
+
+            if (priv->current >= priv->nchannels)
+              {
+                /* Restart the conversion sequence from the beginning */
+
+                priv->current = 0;
+              }
+
+            adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET + 4 * i, ADC_HC_ADCH_MASK,
+                          ADC_HC_ADCH_EXT_ADC_ETC);
         }
-
-        /* Set the channel number of the next channel that will complete
-         * conversion.
-         */
-
-        priv->current++;
-
-        if (priv->current >= priv->nchannels)
-          {
-            /* Restart the conversion sequence from the beginning */
-
-            priv->current = 0;
-          }
-
-        adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET, ADC_HC_ADCH_MASK,
-                      ADC_HC_ADCH_EXT_ADC_ETC);
+      putreg32(ADC_ETC_DONE01_IRQ_TRIG4_DONE0, IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET);
     }
     else if ((getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET) & ADC_ETC_DONE01_IRQ_TRIG4_DONE1) != 0)
       {

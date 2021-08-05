@@ -761,6 +761,12 @@ static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
       putreg16(regval, priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
     }
 
+  if (priv->modules[shift].ext_trig)
+    {
+      putreg16(period, priv->base + IMXRT_FLEXPWM_SM0VAL0_OFFSET
+                                 + MODULE_OFFSET * shift);
+    }
+
   return OK;
 }
 
@@ -920,7 +926,7 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
             {
               regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
-              regval |= SMT_OUT_TRIG_EN_VAL3;
+              regval |= SMT_OUT_TRIG_EN_VAL0;
               putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
             }
