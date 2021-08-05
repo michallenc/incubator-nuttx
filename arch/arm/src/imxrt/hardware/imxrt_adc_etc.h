@@ -32,7 +32,9 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define TRIG_OFFSET 0x28
+#define TRIG_OFFSET   0x28
+#define CHAIN_OFFSET  0x4
+#define RESULT_OFFSET 0x4
 
 /* Register Offsets *********************************************************/
 
@@ -42,14 +44,8 @@
 #define IMXRT_ADC_ETC_DMA_CTRL_OFFSET       0x000c  /* DMA control register */
 #define IMXRT_ADC_ETC_TRIG_CTRL_OFFSET      0x0010  /* TRIG control register */
 #define IMXRT_ADC_ETC_TRIG_COUNTER_OFFSET   0x0014  /* TRIG counter register */ 
-#define IMXRT_ADC_ETC_TRIG_CHAIN01_OFFSET   0x0018  /* TRIG chain 0 and 1 register */
-#define IMXRT_ADC_ETC_TRIG_CHAIN23_OFFSET   0x001c  /* TRIG chain 2 and 3 register */
-#define IMXRT_ADC_ETC_TRIG_CHAIN45_OFFSET   0x0020  /* TRIG chain 4 and 5 register */
-#define IMXRT_ADC_ETC_TRIG_CHAIN67_OFFSET   0x0024  /* TRIG chain 6 and 7 register */
-#define IMXRT_ADC_ETC_TRIG_RESULT01_OFFSET  0x0028  /* TRIG result data 0 and 1 register */
-#define IMXRT_ADC_ETC_TRIG_RESULT23_OFFSET  0x002c  /* TRIG result data 2 and 3 register */
-#define IMXRT_ADC_ETC_TRIG_RESULT45_OFFSET  0x0030  /* TRIG result data 4 and 5 register */
-#define IMXRT_ADC_ETC_TRIG_RESULT67_OFFSET  0x0034  /* TRIG result data 6 and 7 register */
+#define IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET     0x0018  /* TRIG chain register */
+#define IMXRT_ADC_ETC_TRIG_RESULT_OFFSET    0x0028  /* TRIG result data register */
 
 /* Register Bit Definitions *************************************************/
 
@@ -163,148 +159,40 @@
 #define ADC_ETC_TRIG_COUNTER_INIT_SAMPLE_INT_MASK  (0xffff << ADC_ETC_TRIG_COUNTER_INIT_SAMPLE_INT_SHIFT)
 #define ADC_ETC_TRIG_COUNTER_INIT_SAMPLE_INT(n)    (((uint32_t)(n) << ADC_ETC_TRIG_COUNTER_INIT_SAMPLE_INT_SHIFT) & ADC_ETC_TRIG_COUNTER_INIT_SAMPLE_INT_MASK)
 
-/* ADC_ETC TRIG chain 0 and 1 register */
+/* ADC_ETC TRIG chain register */
 
-#define ADC_ETC_TRIG_CHAIN01_CSEL0_SHIFT    (0)         /* Bits 0-3:   ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN01_CSEL0_MASK     (0xf << ADC_ETC_TRIG_CHAIN01_CSEL0_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_CSEL0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_CSEL0_SHIFT) & ADC_ETC_TRIG_CHAIN01_CSEL0_MASK)
-#define ADC_ETC_TRIG_CHAIN01_HWTS0_SHIFT    (4)         /* Bits 4-11:  ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN01_HTWS0_MASK     (0xff << ADC_ETC_TRIG_CHAIN01_HWTS0_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_HWTS0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_HWTS0_SHIFT) & ADC_ETC_TRIG_CHAIN01_HTWS0_MASK)
-#define ADC_ETC_TRIG_CHAIN01_B2B0           (1 << 12)   /* Bit  12:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN01_IE0_SHIFT      (13)        /* Bits 13-14: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN01_IE0_MASK       (0x3 << ADC_ETC_TRIG_CHAIN01_IE0_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_IE0(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_IE0_SHIFT) & ADC_ETC_TRIG_CHAIN01_IE0_MASK)
-                                                        /* Bit  15:    Reserved */
-#define ADC_ETC_TRIG_CHAIN01_CSEL1_SHIFT    (16)        /* Bits 16-19: ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN01_CSEL1_MASK     (0xf << ADC_ETC_TRIG_CHAIN01_CSEL1_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_CSEL1(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_CSEL1_SHIFT) & ADC_ETC_TRIG_CHAIN01_CSEL1_MASK)
-#define ADC_ETC_TRIG_CHAIN01_HWTS1_SHIFT    (20)        /* Bits 20-27: ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN01_HTWS1_MASK     (0xff << ADC_ETC_TRIG_CHAIN01_HWTS1_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_HWTS1(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_HWTS1_SHIFT) & ADC_ETC_TRIG_CHAIN01_HTWS1_MASK)
-#define ADC_ETC_TRIG_CHAIN01_B2B1           (1 << 28)   /* Bit  28:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN01_IE1_SHIFT      (29)        /* Bits 29-30: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN01_IE1_MASK       (0x3 << ADC_ETC_TRIG_CHAIN01_IE1_SHIFT)
-#define ADC_ETC_TRIG_CHAIN01_IE1(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN01_IE1_SHIFT) & ADC_ETC_TRIG_CHAIN01_IE1_MASK)
-                                                        /* Bit  31:    Reserved */
+#define ADC_ETC_TRIG_CHAIN_CSEL0_SHIFT    (0)         /* Bits 0-3:   ADC channel selection */
+#define ADC_ETC_TRIG_CHAIN_CSEL0_MASK     (0xf << ADC_ETC_TRIG_CHAIN_CSEL0_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_CSEL0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_CSEL0_SHIFT) & ADC_ETC_TRIG_CHAIN_CSEL0_MASK)
+#define ADC_ETC_TRIG_CHAIN_HWTS0_SHIFT    (4)         /* Bits 4-11:  ADC HW trigger selection */
+#define ADC_ETC_TRIG_CHAIN_HTWS0_MASK     (0xff << ADC_ETC_TRIG_CHAIN_HWTS0_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_HWTS0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_HWTS0_SHIFT) & ADC_ETC_TRIG_CHAIN_HTWS0_MASK)
+#define ADC_ETC_TRIG_CHAIN_B2B0           (1 << 12)   /* Bit  12:    Enable B2B */
+#define ADC_ETC_TRIG_CHAIN_IE0_SHIFT      (13)        /* Bits 13-14: Chain0 IE */
+#define ADC_ETC_TRIG_CHAIN_IE0_MASK       (0x3 << ADC_ETC_TRIG_CHAIN_IE0_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_IE0(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_IE0_SHIFT) & ADC_ETC_TRIG_CHAIN_IE0_MASK)
+                                                      /* Bit  15:    Reserved */
+#define ADC_ETC_TRIG_CHAIN_CSEL1_SHIFT    (16)        /* Bits 16-19: ADC channel selection */
+#define ADC_ETC_TRIG_CHAIN_CSEL1_MASK     (0xf << ADC_ETC_TRIG_CHAIN_CSEL1_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_CSEL1(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_CSEL1_SHIFT) & ADC_ETC_TRIG_CHAIN_CSEL1_MASK)
+#define ADC_ETC_TRIG_CHAIN_HWTS1_SHIFT    (20)        /* Bits 20-27: ADC HW trigger selection */
+#define ADC_ETC_TRIG_CHAIN_HTWS1_MASK     (0xff << ADC_ETC_TRIG_CHAIN_HWTS1_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_HWTS1(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_HWTS1_SHIFT) & ADC_ETC_TRIG_CHAIN_HTWS1_MASK)
+#define ADC_ETC_TRIG_CHAIN_B2B1           (1 << 28)   /* Bit  28:    Enable B2B */
+#define ADC_ETC_TRIG_CHAIN_IE1_SHIFT      (29)        /* Bits 29-30: Chain0 IE */
+#define ADC_ETC_TRIG_CHAIN_IE1_MASK       (0x3 << ADC_ETC_TRIG_CHAIN_IE1_SHIFT)
+#define ADC_ETC_TRIG_CHAIN_IE1(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN_IE1_SHIFT) & ADC_ETC_TRIG_CHAIN_IE1_MASK)
+                                                      /* Bit  31:    Reserved */
 
-/* ADC_ETC TRIG chain 2 and 3 register */
+/* ADC_ETC TRIG result data register */
 
-#define ADC_ETC_TRIG_CHAIN23_CSEL2_SHIFT    (0)         /* Bits 0-3:   ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN23_CSEL2_MASK     (0xf << ADC_ETC_TRIG_CHAIN23_CSEL2_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_CSEL2(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_CSEL2_SHIFT) & ADC_ETC_TRIG_CHAIN23_CSEL2_MASK)
-#define ADC_ETC_TRIG_CHAIN23_HWTS2_SHIFT    (4)         /* Bits 4-11:  ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN23_HTWS2_MASK     (0xff << ADC_ETC_TRIG_CHAIN23_HWTS2_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_HWTS2(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_HWTS2_SHIFT) & ADC_ETC_TRIG_CHAIN23_HTWS2_MASK)
-#define ADC_ETC_TRIG_CHAIN23_B2B2           (1 << 12)   /* Bit  12:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN23_IE2_SHIFT      (13)        /* Bits 13-14: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN23_IE2_MASK       (0x3 << ADC_ETC_TRIG_CHAIN23_IE2_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_IE2(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_IE2_SHIFT) & ADC_ETC_TRIG_CHAIN23_IE2_MASK)
-                                                        /* Bit  15:    Reserved */
-#define ADC_ETC_TRIG_CHAIN23_CSEL3_SHIFT    (16)        /* Bits 16-19: ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN23_CSEL3_MASK     (0xf << ADC_ETC_TRIG_CHAIN23_CSEL3_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_CSEL3(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_CSEL3_SHIFT) & ADC_ETC_TRIG_CHAIN23_CSEL3_MASK)
-#define ADC_ETC_TRIG_CHAIN23_HWTS3_SHIFT    (20)        /* Bits 20-27: ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN23_HTWS3_MASK     (0xff << ADC_ETC_TRIG_CHAIN23_HWTS3_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_HWTS3(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_HWTS3_SHIFT) & ADC_ETC_TRIG_CHAIN23_HTWS3_MASK)
-#define ADC_ETC_TRIG_CHAIN23_B2B3           (1 << 28)   /* Bit  28:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN23_IE3_SHIFT      (29)        /* Bits 29-30: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN23_IE3_MASK       (0x3 << ADC_ETC_TRIG_CHAIN23_IE3_SHIFT)
-#define ADC_ETC_TRIG_CHAIN23_IE3(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN23_IE3_SHIFT) & ADC_ETC_TRIG_CHAIN23_IE3_MASK)
-                                                        /* Bit  31:    Reserved */
-
-/* ADC_ETC TRIG chain 4 and 5 register */
-
-#define ADC_ETC_TRIG_CHAIN45_CSEL4_SHIFT    (0)         /* Bits 0-3:   ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN45_CSEL4_MASK     (0xf << ADC_ETC_TRIG_CHAIN45_CSEL4_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_CSEL4(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_CSEL4_SHIFT) & ADC_ETC_TRIG_CHAIN45_CSEL4_MASK)
-#define ADC_ETC_TRIG_CHAIN45_HWTS4_SHIFT    (4)         /* Bits 4-11:  ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN45_HTWS4_MASK     (0xff << ADC_ETC_TRIG_CHAIN45_HWTS4_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_HWTS4(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_HWTS4_SHIFT) & ADC_ETC_TRIG_CHAIN45_HTWS4_MASK)
-#define ADC_ETC_TRIG_CHAIN45_B2B4           (1 << 12)   /* Bit  12:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN45_IE4_SHIFT      (13)        /* Bits 13-14: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN45_IE4_MASK       (0x3 << ADC_ETC_TRIG_CHAIN45_IE4_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_IE4(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_IE4_SHIFT) & ADC_ETC_TRIG_CHAIN45_IE4_MASK)
-                                                        /* Bit  15:    Reserved */
-#define ADC_ETC_TRIG_CHAIN45_CSEL5_SHIFT    (16)        /* Bits 16-19: ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN45_CSEL5_MASK     (0xf << ADC_ETC_TRIG_CHAIN45_CSEL5_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_CSEL5(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_CSEL5_SHIFT) & ADC_ETC_TRIG_CHAIN45_CSEL5_MASK)
-#define ADC_ETC_TRIG_CHAIN45_HWTS5_SHIFT    (20)        /* Bits 20-27: ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN45_HTWS5_MASK     (0xff << ADC_ETC_TRIG_CHAIN45_HWTS5_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_HWTS5(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_HWTS5_SHIFT) & ADC_ETC_TRIG_CHAIN45_HTWS5_MASK)
-#define ADC_ETC_TRIG_CHAIN45_B2B5           (1 << 28)   /* Bit  28:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN45_IE5_SHIFT      (29)        /* Bits 29-30: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN45_IE5_MASK       (0x3 << ADC_ETC_TRIG_CHAIN45_IE5_SHIFT)
-#define ADC_ETC_TRIG_CHAIN45_IE5(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN45_IE5_SHIFT) & ADC_ETC_TRIG_CHAIN45_IE5_MASK)
-                                                        /* Bit  31:    Reserved */
-
-/* ADC_ETC TRIG chain 6 and 7 register */
-
-#define ADC_ETC_TRIG_CHAIN67_CSEL6_SHIFT    (0)         /* Bits 0-3:   ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN67_CSEL6_MASK     (0xf << ADC_ETC_TRIG_CHAIN67_CSEL6_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_CSEL0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_CSEL6_SHIFT) & ADC_ETC_TRIG_CHAIN67_CSEL6_MASK)
-#define ADC_ETC_TRIG_CHAIN67_HWTS6_SHIFT    (4)         /* Bits 4-11:  ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN67_HTWS6_MASK     (0xff << ADC_ETC_TRIG_CHAIN67_HWTS6_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_HWTS0(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_HWTS6_SHIFT) & ADC_ETC_TRIG_CHAIN67_HTWS6_MASK)
-#define ADC_ETC_TRIG_CHAIN67_B2B0           (1 << 12)   /* Bit  12:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN67_IE6_SHIFT      (13)        /* Bits 13-14: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN67_IE6_MASK       (0x3 << ADC_ETC_TRIG_CHAIN67_IE6_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_IE0(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_IE6_SHIFT) & ADC_ETC_TRIG_CHAIN67_IE6_MASK)
-                                                        /* Bit  15:    Reserved */
-#define ADC_ETC_TRIG_CHAIN67_CSEL7_SHIFT    (16)        /* Bits 16-19: ADC channel selection */
-#define ADC_ETC_TRIG_CHAIN67_CSEL7_MASK     (0xf << ADC_ETC_TRIG_CHAIN67_CSEL7_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_CSEL7(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_CSEL7_SHIFT) & ADC_ETC_TRIG_CHAIN67_CSEL7_MASK)
-#define ADC_ETC_TRIG_CHAIN67_HWTS7_SHIFT    (20)        /* Bits 20-27: ADC HW trigger selection */
-#define ADC_ETC_TRIG_CHAIN67_HTWS7_MASK     (0xff << ADC_ETC_TRIG_CHAIN67_HWTS7_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_HWTS6(n)       (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_HWTS7_SHIFT) & ADC_ETC_TRIG_CHAIN67_HTWS7_MASK)
-#define ADC_ETC_TRIG_CHAIN67_B2B7           (1 << 28)   /* Bit  28:    Enable B2B */
-#define ADC_ETC_TRIG_CHAIN67_IE7_SHIFT      (29)        /* Bits 29-30: Chain0 IE */
-#define ADC_ETC_TRIG_CHAIN67_IE7_MASK       (0x3 << ADC_ETC_TRIG_CHAIN67_IE7_SHIFT)
-#define ADC_ETC_TRIG_CHAIN67_IE7(n)         (((uint32_t)(n) << ADC_ETC_TRIG_CHAIN67_IE7_SHIFT) & ADC_ETC_TRIG_CHAIN67_IE7_MASK)
-                                                        /* Bit  31:    Reserved */
-
-/* ADC_ETC TRIG result data 0 and 1 register */
-
-#define ADC_ETC_TRIG_RESULT01_DATA0_SHIFT   (0)         /* Bits 0-11:  Result DATA 0 */
-#define ADC_ETC_TRIG_RESULT01_DATA0_MASK    (0xfff << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT)
-#define ADC_ETC_TRIG_RESULT01_DATA0(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT) & ADC_ETC_TRIG_RESULT01_DATA0_MASK)
-                                                        /* Bits 12-15: Reserved */
-#define ADC_ETC_TRIG_RESULT01_DATA1_SHIFT   (16)        /* Bits 16-27: Result DATA 1 */
-#define ADC_ETC_TRIG_RESULT01_DATA1_MASK    (0xfff << ADC_ETC_TRIG_RESULT01_DATA1_SHIFT)
-#define ADC_ETC_TRIG_RESULT01_DATA1(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT01_DATA1_SHIFT) & ADC_ETC_TRIG_RESULT01_DATA1_MASK)
-                                                        /* Bits 28-31: Reserved */
-
-/* ADC_ETC TRIG result data 2 and 3 register */
-
-#define ADC_ETC_TRIG_RESULT23_DATA2_SHIFT   (0)         /* Bits 0-11:  Result DATA 2 */
-#define ADC_ETC_TRIG_RESULT23_DATA2_MASK    (0xfff << ADC_ETC_TRIG_RESULT23_DATA2_SHIFT)
-#define ADC_ETC_TRIG_RESULT23_DATA2(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT23_DATA2_SHIFT) & ADC_ETC_TRIG_RESULT23_DATA2_MASK)
-                                                        /* Bits 12-15: Reserved */
-#define ADC_ETC_TRIG_RESULT23_DATA3_SHIFT   (16)        /* Bits 16-27: Result DATA 3 */
-#define ADC_ETC_TRIG_RESULT23_DATA3_MASK    (0xfff << ADC_ETC_TRIG_RESULT23_DATA3_SHIFT)
-#define ADC_ETC_TRIG_RESULT23_DATA3(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT23_DATA3_SHIFT) & ADC_ETC_TRIG_RESULT23_DATA3_MASK)
-                                                        /* Bits 28-31: Reserved */
-
-/* ADC_ETC TRIG result data 4 and 5 register */
-
-#define ADC_ETC_TRIG_RESULT45_DATA4_SHIFT   (0)         /* Bits 0-11:  Result DATA 4 */
-#define ADC_ETC_TRIG_RESULT45_DATA4_MASK    (0xfff << ADC_ETC_TRIG_RESULT45_DATA4_SHIFT)
-#define ADC_ETC_TRIG_RESULT45_DATA4(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT45_DATA4_SHIFT) & ADC_ETC_TRIG_RESULT45_DATA4_MASK)
-                                                        /* Bits 12-15: Reserved */
-#define ADC_ETC_TRIG_RESULT45_DATA5_SHIFT   (16)        /* Bits 16-27: Result DATA 5 */
-#define ADC_ETC_TRIG_RESULT45_DATA5_MASK    (0xfff << ADC_ETC_TRIG_RESULT45_DATA5_SHIFT)
-#define ADC_ETC_TRIG_RESULT45_DATA5(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT45_DATA5_SHIFT) & ADC_ETC_TRIG_RESULT45_DATA5_MASK)
-                                                        /* Bits 28-31: Reserved */
-
-/* ADC_ETC TRIG result data 6 and 7 register */
-
-#define ADC_ETC_TRIG_RESULT67_DATA6_SHIFT   (0)         /* Bits 0-11:  Result DATA 6 */
-#define ADC_ETC_TRIG_RESULT67_DATA6_MASK    (0xfff << ADC_ETC_TRIG_RESULT67_DATA6_SHIFT)
-#define ADC_ETC_TRIG_RESULT67_DATA6(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT67_DATA6_SHIFT) & ADC_ETC_TRIG_RESULT67_DATA6_MASK)
-                                                        /* Bits 12-15: Reserved */
-#define ADC_ETC_TRIG_RESULT67_DATA7_SHIFT   (16)        /* Bits 16-27: Result DATA 7 */
-#define ADC_ETC_TRIG_RESULT67_DATA7_MASK    (0xfff << ADC_ETC_TRIG_RESULT67_DATA7_SHIFT)
-#define ADC_ETC_TRIG_RESULT67_DATA7(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT67_DATA7_SHIFT) & ADC_ETC_TRIG_RESULT67_DATA7_MASK)
-                                                        /* Bits 28-31: Reserved */
+#define ADC_ETC_TRIG_RESULT_DATA0_SHIFT   (0)         /* Bits 0-11:  Result DATA 0 */
+#define ADC_ETC_TRIG_RESULT_DATA0_MASK    (0xfff << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT)
+#define ADC_ETC_TRIG_RESULT_DATA0(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT01_DATA0_SHIFT) & ADC_ETC_TRIG_RESULT01_DATA0_MASK)
+                                                      /* Bits 12-15: Reserved */
+#define ADC_ETC_TRIG_RESULT_DATA1_SHIFT   (16)        /* Bits 16-27: Result DATA 1 */
+#define ADC_ETC_TRIG_RESULT_DATA1_MASK    (0xfff << ADC_ETC_TRIG_RESULT01_DATA1_SHIFT)
+#define ADC_ETC_TRIG_RESULT_DATA1(n)      (((uint32_t)(n) << ADC_ETC_TRIG_RESULT01_DATA1_SHIFT) & ADC_ETC_TRIG_RESULT01_DATA1_MASK)
+                                                      /* Bits 28-31: Reserved */
 
 #endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT_ADC_ETC_H */
