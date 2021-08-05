@@ -377,7 +377,7 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
 
   int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_ADC_ETC_XBAR1_TRIG0_SEL_OFFSET,
-                           IMXRT_XBARA1_IN_FLEXPWM2_PWM1_OUT_TRIG01);
+                           IMXRT_XBARA1_IN_FLEXPWM2_PWM3_OUT_TRIG01);
   if (ret < 0)
     {
       printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);

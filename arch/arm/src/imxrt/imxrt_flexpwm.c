@@ -43,6 +43,7 @@
 #include "hardware/imxrt_flexpwm.h"
 #include "hardware/imxrt_pinmux.h"
 #include "hardware/imxrt_ccm.h"
+#include "imxrt_xbar.h"
 
 #include <arch/board/board.h>
 
@@ -134,7 +135,7 @@ static struct imxrt_flexpwm_module_s g_pwm1_modules[] =
   {
     .module = 1,
     .used = true,
-#ifdef IMXRT_FLEXPWM1_MOD1_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -160,7 +161,7 @@ static struct imxrt_flexpwm_module_s g_pwm1_modules[] =
   {
     .module = 2,
     .used = true,
-#ifdef IMXRT_FLEXPWM1_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -186,7 +187,7 @@ static struct imxrt_flexpwm_module_s g_pwm1_modules[] =
   {
     .module = 3,
     .used = true,
-#ifdef IMXRT_FLEXPWM1_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -212,7 +213,7 @@ static struct imxrt_flexpwm_module_s g_pwm1_modules[] =
   {
     .module = 4,
     .used = true,
-#ifdef IMXRT_FLEXPWM1_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -308,7 +309,7 @@ static struct imxrt_flexpwm_module_s g_pwm2_modules[] =
   {
     .module = 3,
     .used = true,
-#ifdef IMXRT_FLEXPWM2_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -334,7 +335,7 @@ static struct imxrt_flexpwm_module_s g_pwm2_modules[] =
   {
     .module = 4,
     .used = true,
-#ifdef IMXRT_FLEXPWM2_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -404,7 +405,7 @@ static struct imxrt_flexpwm_module_s g_pwm3_modules[] =
   {
     .module = 2,
     .used = true,
-#ifdef IMXRT_FLEXPWM3_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -697,10 +698,6 @@ static int pwm_change_freq(FAR struct pwm_lowerhalf_s *dev,
   putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0VAL5_OFFSET
                               + MODULE_OFFSET * shift);
 
-  regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
-  regval |= MCTRL_LDOK(1 << shift);
-  putreg16(regval, priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
-
   return OK;
 }
 
@@ -763,10 +760,6 @@ static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
       regval |= OUTEN_PWMB_EN(1 << shift);
       putreg16(regval, priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
     }
-
-  regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
-  regval |= MCTRL_LDOK(1 << shift);
-  putreg16(regval, priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
 
   return OK;
 }
@@ -847,6 +840,17 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
                                     + MODULE_OFFSET * shift);
         }
 
+      /* PMSM specific configuration */
+      
+      if (priv->base != IMXRT_FLEXPWM2_BASE)
+        {
+          regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                        + MODULE_OFFSET * shift);
+          regval |= SMCTRL2_FORCE_SEL_EXT_FORCE;
+          putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                      + MODULE_OFFSET * shift);
+        }
+
       regval = SMCTRL_FULL;     /* Enable full read cycle reload */
       putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL_OFFSET
                                   + MODULE_OFFSET * shift);
@@ -886,11 +890,40 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
 
       if (priv->modules[i].ext_trig)
         {
-          regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
-                                       + MODULE_OFFSET * shift);
-          regval |= SMT_OUT_TRIG_EN_VAL3 | SMT_PWBOT0_OUT_TRIG0;
-          putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
-                                      + MODULE_OFFSET * shift);
+          if ((priv->base == IMXRT_FLEXPWM2_BASE) && (priv->modules[i].module == 4))
+            {
+              regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                          + MODULE_OFFSET * shift);
+              regval |= SMT_OUT_TRIG_EN_VAL2;
+              putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                          + MODULE_OFFSET * shift);
+                int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_FORCE_SEL_OFFSET,
+                           IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+                if (ret < 0)
+                  {
+                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                  }
+                ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_FORCE_SEL_OFFSET,
+                IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+                if (ret < 0)
+                  {
+                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                  }
+                ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_FORCE_SEL_OFFSET,
+                IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+                if (ret < 0)
+                  {
+                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                  }
+            }
+          else if ((priv->base == IMXRT_FLEXPWM2_BASE) && (priv->modules[i].module == 3))
+            {
+              regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                          + MODULE_OFFSET * shift);
+              regval |= SMT_OUT_TRIG_EN_VAL3;
+              putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                          + MODULE_OFFSET * shift);
+            }
         }
 
       regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
@@ -980,6 +1013,7 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
 {
   FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
   int ret = OK;
+  uint8_t ldok_map = 0;
 
   /* Change frequency only if it is needed */
 
@@ -1033,6 +1067,7 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
         {
           ret = pwm_set_output(dev, info->channels[i].channel,
                                     info->channels[i].duty);
+          ldok_map |= 1 << (info->channels[i].channel - 1);
         }
     }
 
@@ -1041,7 +1076,12 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
   /* Enable PWM output just for first channel */
 
   ret = pwm_set_output(dev, priv->modules[0].module, info->duty);
+  ldok_map = 1 << (priv->modules[0].module - 1);
 #endif /* CONFIG_PWM_MULTICHAN */
+
+  uint16_t regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
+  regval |= MCTRL_LDOK(ldok_map);
+  putreg16(regval, priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
 
   return ret;
 }
