@@ -1638,6 +1638,13 @@ config ARCH_BOARD_SAM4S_XPLAINED_PRO
 	---help---
 		The port of NuttX to the Atmel SAM4S-Xplained Pro development board.
 
+config ARCH_BOARD_PAN2C
+	bool "P-AN2C board"
+	depends on ARCH_CHIP_SAME70J21
+	select ARCH_HAVE_LEDS
+	---help---
+		The port of NuttX to the P-AN2C evaluation board.
+
 config ARCH_BOARD_SAME70_XPLAINED
 	bool "Atmel SAME70 Xplained evaluation board"
 	depends on ARCH_CHIP_SAME70Q21
@@ -2484,6 +2491,7 @@ config ARCH_BOARD
 	default "sam4l-xplained"           if ARCH_BOARD_SAM4L_XPLAINED
 	default "sam4s-xplained"           if ARCH_BOARD_SAM4S_XPLAINED
 	default "sam4s-xplained-pro"       if ARCH_BOARD_SAM4S_XPLAINED_PRO
+	default "p-an2c"				           if ARCH_BOARD_PAN2C
 	default "same70-xplained"          if ARCH_BOARD_SAME70_XPLAINED
 	default "samv71-xult"              if ARCH_BOARD_SAMV71_XULT
 	default "shenzhou"                 if ARCH_BOARD_SHENZHOU
@@ -2841,6 +2849,9 @@ source "boards/arm/samd2l2/saml21-xplained/Kconfig"
 endif
 if ARCH_BOARD_METRO_M4
 source "boards/arm/samd5e5/metro-m4/Kconfig"
+endif
+if ARCH_BOARD_SAME70_PAN2C
+source "boards/arm/samv7/p-an2c/Kconfig"
 endif
 if ARCH_BOARD_SAME70_XPLAINED
 source "boards/arm/samv7/same70-xplained/Kconfig"
