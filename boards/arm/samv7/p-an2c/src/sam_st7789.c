@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/samv7/sam_mcan.h
+ * boards/arm/imxrt/teensy-4.x/src/imxrt_st7789.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,78 +18,108 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAMV7_SAM_MCAN_H
-#define __ARCH_ARM_SRC_SAMV7_SAM_MCAN_H
-
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
 
-#include "chip.h"
-#include "hardware/sam_mcan.h"
+#include <stdio.h>
+#include <stdbool.h>
+#include <debug.h>
+#include <errno.h>
 
-#include <nuttx/can/can.h>
+#include <nuttx/arch.h>
+#include <nuttx/board.h>
+#include <nuttx/spi/spi.h>
+#include <nuttx/lcd/lcd.h>
+#include <nuttx/lcd/st7789.h>
 
-#if defined(CONFIG_CAN) && (defined(CONFIG_SAMV7_MCAN0) || \
-    defined(CONFIG_SAMV7_MCAN1))
+#include "imxrt_lpspi.h"
+#include "teensy-4.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Port numbers for use with sam_mcan_initialize() */
-
-#define MCAN0 0
-#define MCAN1 1
+#define LCD_SPI_PORTNO 4
 
 /****************************************************************************
- * Public Types
+ * Private Data
  ****************************************************************************/
 
-#ifndef __ASSEMBLY__
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-#undef EXTERN
-#if defined(__cplusplus)
-#define EXTERN extern "C"
-extern "C"
-{
-#else
-#define EXTERN extern
-#endif
+static struct spi_dev_s *g_spidev;
+static struct lcd_dev_s *g_lcd = NULL;
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: sam_mcan_initialize
+ * Name:  board_lcd_initialize
  *
  * Description:
- *   Initialize the selected MCAN port
- *
- * Input Parameters:
- *   port - Port number (for hardware that has multiple CAN interfaces),
- *          0=MCAN0, 1=NCAN1
- *
- * Returned Value:
- *   Valid CAN device structure reference on success; a NULL on failure
+ *   Initialize the LCD video hardware.  The initial state of the LCD is
+ *   fully initialized, display memory cleared, and the LCD ready to use, but
+ *   with the power setting at 0 (full off).
  *
  ****************************************************************************/
 
-struct can_dev_s;
-FAR struct can_dev_s *sam_mcan_initialize(int port);
+int board_lcd_initialize(void)
+{
+  imxrt_config_gpio(GPIO_LCD_RST);
 
-#undef EXTERN
-#if defined(__cplusplus)
+  g_spidev = imxrt_lpspibus_initialize(LCD_SPI_PORTNO);
+  if (!g_spidev)
+    {
+      lcderr("ERROR: Failed to initialize SPI port %d\n", LCD_SPI_PORTNO);
+      return -ENODEV;
+    }
+
+  imxrt_gpio_write(GPIO_LCD_RST, 0);
+  up_mdelay(1);
+  imxrt_gpio_write(GPIO_LCD_RST, 1);
+  up_mdelay(120);
+
+  return OK;
 }
-#endif
 
-#endif /* __ASSEMBLY__ */
-#endif /* CONFIG_CAN && (CONFIG_SAMV7_MCAN0 || CONFIG_SAMV7_MCAN1) */
-#endif /* __ARCH_ARM_SRC_SAMV7_SAM_MCAN_H */
+/****************************************************************************
+ * Name:  board_lcd_getdev
+ *
+ * Description:
+ *   Return a a reference to the LCD object for the specified LCD.  This
+ *   allows support for multiple LCD devices.
+ *
+ ****************************************************************************/
+
+FAR struct lcd_dev_s *board_lcd_getdev(int devno)
+{
+  g_lcd = st7789_lcdinitialize(g_spidev);
+  if (!g_lcd)
+    {
+      lcderr("ERROR: Failed to bind SPI port 4 to LCD %d\n", devno);
+    }
+  else
+    {
+      lcdinfo("SPI port 4 bound to LCD %d\n", devno);
+      return g_lcd;
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
+ * Name:  board_lcd_uninitialize
+ *
+ * Description:
+ *   Uninitialize the LCD support
+ *
+ ****************************************************************************/
+
+void board_lcd_uninitialize(void)
+{
+  /* Turn the display off */
+
+  g_lcd->setpower(g_lcd, 0);
+}

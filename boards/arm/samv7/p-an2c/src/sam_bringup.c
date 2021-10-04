@@ -67,63 +67,6 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: sam_i2c_register
- *
- * Description:
- *   Register one I2C drivers for the I2C tool.
- *
- ****************************************************************************/
-
-#ifdef HAVE_I2CTOOL
-static void sam_i2c_register(int bus)
-{
-  FAR struct i2c_master_s *i2c;
-  int ret;
-
-  i2c = sam_i2cbus_initialize(bus);
-  if (i2c == NULL)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to get I2C%d interface\n", bus);
-    }
-  else
-    {
-      ret = i2c_register(i2c, bus);
-      if (ret < 0)
-        {
-          syslog(LOG_ERR,
-                 "ERROR: Failed to register I2C%d driver: %d\n", bus, ret);
-          sam_i2cbus_uninitialize(i2c);
-        }
-    }
-}
-#endif
-
-/****************************************************************************
- * Name: sam_i2ctool
- *
- * Description:
- *   Register I2C drivers for the I2C tool.
- *
- ****************************************************************************/
-
-#ifdef HAVE_I2CTOOL
-static void sam_i2ctool(void)
-{
-#ifdef CONFIG_SAMV7_TWIHS0
-  sam_i2c_register(0);
-#endif
-#ifdef CONFIG_SAMV7_TWIHS1
-  sam_i2c_register(1);
-#endif
-#ifdef CONFIG_SAMV7_TWIHS2
-  sam_i2c_register(2);
-#endif
-}
-#else
-#  define sam_i2ctool()
-#endif
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -145,10 +88,6 @@ int sam_bringup(void)
 #endif /* defined(CONFIG_BCH) */
 #endif
   int ret;
-
-  /* Register I2C drivers on behalf of the I2C tool */
-
-  sam_i2ctool();
 
 #ifdef HAVE_MACADDR
   /* Read the Ethernet MAC address from the AT24 FLASH and configure the
@@ -290,28 +229,6 @@ int sam_bringup(void)
 #endif /* defined(CONFIG_BCH) */
 #endif
 
-#ifdef HAVE_USBHOST
-  /* Initialize USB host operation.  sam_usbhost_initialize() starts a thread
-   * will monitor for USB connection and disconnection events.
-   */
-
-  ret = sam_usbhost_initialize();
-  if (ret != OK)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize USB host: %d\n", ret);
-    }
-#endif
-
-#ifdef HAVE_USBMONITOR
-  /* Start the USB Monitor */
-
-  ret = usbmonitor_start();
-  if (ret != OK)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to start the USB monitor: %d\n", ret);
-    }
-#endif
-
 #ifdef CONFIG_SAMV7_MCAN
   /* Initialize CAN and register the CAN driver. */
 
@@ -319,26 +236,6 @@ int sam_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: sam_can_setup failed: %d\n", ret);
-    }
-#endif
-
-#ifdef HAVE_MRF24J40
-  /* Configure MRF24J40 wireless */
-
-  ret = sam_mrf24j40_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: sam_mrf24j40_initialize() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef HAVE_XBEE
-  /* Configure XBee  */
-
-  ret = sam_xbee_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: sam_xbee_initialize() failed: %d\n", ret);
     }
 #endif
 

@@ -215,6 +215,14 @@
 #define GPIO_LED0     (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                        GPIO_PORT_PIOA | GPIO_PIN24)
 
+/* LCD dispay */
+
+#define GPIO_LCD_RST   (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                        GPIO_PORT_PIOD | GPIO_PIN22)    /* PD_22 */
+
+#define GPIO_LCD_CD    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                        GPIO_PORT_PIOD | GPIO_PIN21)    /* PD_21 */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/

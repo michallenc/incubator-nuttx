@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/samv7/same70-xplained/src/sam_appinit.c
+ * boards/arm/samv7/p-an2c/src/sam_appinit.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with

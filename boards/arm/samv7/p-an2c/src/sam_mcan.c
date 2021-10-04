@@ -40,18 +40,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Configuration ************************************************************/
-
-#if defined(CONFIG_SAMV7_MCAN0) && defined(CONFIG_SAMV7_MCAN1)
-#  warning "Both MCAN0 and MCAN1 are enabled.  Assuming only CAN1."
-#  undef CONFIG_SAMV7_MCAN0
-#endif
-
-#ifdef CONFIG_SAMV7_MCAN0
-#  define CAN_PORT 0
-#else
-#  define CAN_PORT 1
-#endif
+#define CAN_PORT 0
 
 /****************************************************************************
  * Public Functions
@@ -67,11 +56,11 @@
 
 int sam_can_setup(void)
 {
-#if defined(CONFIG_SAMV7_MCAN0) || defined(CONFIG_SAMV7_MCAN1)
+#ifdef CONFIG_SAMV7_MCAN0
   struct can_dev_s *can;
   int ret;
 
-  /* Call stm32_caninitialize() to get an instance of the CAN interface */
+  /* Call sam_mcan_caninitialize() to get an instance of the CAN interface */
 
   can = sam_mcan_initialize(CAN_PORT);
   if (can == NULL)
