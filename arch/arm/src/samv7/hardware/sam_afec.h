@@ -368,10 +368,10 @@
 /* Compare Window Register */
 
 #define AFEC_CWR_LOWTHRES_SHIFT      (0)       /* Bits 0-11: Low Threshold */
-#define AFEC_CWR_LOWTHRES_MASK       (0xfff << AFEC_CWR_LOWTHRES_SHIFT)
+#define AFEC_CWR_LOWTHRES_MASK       (0xffff << AFEC_CWR_LOWTHRES_SHIFT)
 #  define AFEC_CWR_LOWTHRES(n)       ((uint32_t)(n) << AFEC_CWR_LOWTHRES_SHIFT)
 #define AFEC_CWR_HIGHTHRES_SHIFT     (16)      /* Bits 16-27: High Threshold */
-#define AFEC_CWR_HIGHTHRES_MASK      (0xfff << AFEC_CWR_LOWTHRES_SHIFT)
+#define AFEC_CWR_HIGHTHRES_MASK      (0xffff << AFEC_CWR_LOWTHRES_SHIFT)
 #  define AFEC_CWR_HIGHTHRES(n)K     ((uint32_t)(n) << AFEC_CWR_LOWTHRES_SHIFT)
 
 /* Channel Gain Register */
@@ -462,7 +462,7 @@
 
 /* Channel Offset Compensation Register */
 
-#define AFEC_COCR_MASK               (0x00000fff) /* Bits 0-12: Analog Offset */
+#define AFEC_COCR_MASK               (0x000003ff) /* Bits 0-9: Analog Offset */
 
 /* Temperature Sensor Mode Register */
 
@@ -487,7 +487,7 @@
 
 #define AFEC_ACR_PGA0EN              (1 << 2)  /* Bit 2: PGA0 Enable */
 #define AFEC_ACR_PGA1EN              (1 << 3)  /* Bit 3: PGA1 Enable */
-#define AFEC_ACR_IBCTL_SHIFT         (9)       /* Bits 8-9: AFEC Bias Current Control */
+#define AFEC_ACR_IBCTL_SHIFT         (8)       /* Bits 8-9: AFEC Bias Current Control */
 #define AFEC_ACR_IBCTL_MASK          (3 << AFEC_ACR_IBCTL_SHIFT)
 #  define AFEC_ACR_IBCTL(n)          ((uint32_t)(n) << AFEC_ACR_IBCTL_SHIFT)
 
