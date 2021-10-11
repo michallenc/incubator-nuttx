@@ -225,8 +225,6 @@ static void adc_reset(FAR struct adc_dev_s *dev)
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   irqstate_t flags;
 
-  printf("in adc_reset 1\n");
-
   flags = enter_critical_section();
 
   /* Do nothing if ADC instance is currently in use */
@@ -257,9 +255,6 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   leave_critical_section(flags);
 
-
-  printf("in adc_reset 2\n");
-
   /* Configure ADC */
 
   uint32_t afec_acr = AFEC_ACR_PGA0EN | AFEC_ACR_PGA1EN;
@@ -271,12 +266,12 @@ static void adc_reset(FAR struct adc_dev_s *dev)
   switch (priv->intf)
     {
 #ifdef CONFIG_SAMV7_AFEC0
-      case 1:
+      case 0:
         pinlist = g_adcpinlist0;
         break;
 #endif
 #ifdef CONFIG_SAMV7_AFEC1
-      case 2:
+      case 1:
         pinlist = g_adcpinlist1;
         break;
 #endif
@@ -288,28 +283,32 @@ static void adc_reset(FAR struct adc_dev_s *dev)
         return;
     }
 
+  /* Desible write protection (should already be disabled by default) */
+
+  afec_putreg(priv, SAM_AFEC_WPMR_OFFSET, AFEC_WPMR_WPKEY);
+
   /* Disable all channels */
 
   afec_putreg(priv, SAM_AFEC_CHDR_OFFSET, AFEC_CHALL);
 
   gpio_pinset_t pinset = 0;
-  uint32_t afec_cher;
-  uint32_t afec_ier;
+  uint32_t afec_cher = 0;
+  uint32_t afec_ier = 0;
   for (int i = 0; i < priv->nchannels; i++)
     {
       DEBUGASSERT(priv->chanlist[i] < ADC_MAX_CHANNELS);
       pinset = pinlist[priv->chanlist[i]];
       sam_configgpio(pinset);
 
-      /* Enable the corresponding channel */
+      /* Enable the corresponding channel and interrupt */
 
-      afec_cher = AFEC_CH(priv->chanlist[i]);
-      afec_modifyreg(priv, SAM_AFEC_CHER_OFFSET, AFEC_CHALL, afec_cher);
+      afec_cher |= AFEC_CH(priv->chanlist[i]);
 
-      afec_ier = AFEC_INT_EOC(priv->chanlist[i]);
-      afec_modifyreg(priv, SAM_AFEC_IER_OFFSET, AFEC_INT_EOCALL, afec_ier);
-
+      afec_ier |= AFEC_INT_EOC(priv->chanlist[i]);
     }
+
+  afec_putreg(priv, SAM_AFEC_CHER_OFFSET, afec_cher);
+  afec_putreg(priv, SAM_AFEC_IER_OFFSET, afec_ier);
 
   return;
 
@@ -351,14 +350,11 @@ static int adc_setup(FAR struct adc_dev_s *dev)
   up_enable_irq(priv->irq);
 
   /* Start the first conversion */
-  printf("conv started\n");
+
   priv->current = 0;
 
   uint32_t afec_cselr = AFEC_CSELR_CSEL(priv->chanlist[priv->current]);
   afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, afec_cselr);
-
-  uint32_t afec_cr = AFEC_CR_START;
-  afec_putreg(priv, SAM_AFEC_CR_OFFSET, afec_cr);
 
   return ret;
 }
@@ -413,10 +409,15 @@ static void adc_shutdown(FAR struct adc_dev_s *dev)
 static int adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
-  int ret = -ENOTTY;
+  int ret = OK;
 
   switch (cmd)
     {
+      case ANIOC_TRIGGER:
+        {
+          afec_putreg(priv, SAM_AFEC_CR_OFFSET, AFEC_CR_START);
+        }
+        break;
       case ANIOC_GET_NCHANNELS:
         {
           /* Return the number of configured channels */
