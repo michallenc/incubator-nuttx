@@ -61,6 +61,11 @@ ifeq ($(CONFIG_SAMV7_MCAN),y)
 CSRCS += sam_mcan.c
 endif
 
+ifeq ($(CONFIG_SAMV7_AFEC),y)
+CSRCS += sam_afec.c
+endif
+
+
 ifeq ($(CONFIG_MTD_CONFIG),y)
 ifeq ($(CONFIG_SAMV7_TWIHS0),y)
 ifeq ($(CONFIG_MTD_AT24XX),y)

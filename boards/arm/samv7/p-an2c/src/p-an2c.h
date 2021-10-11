@@ -337,6 +337,18 @@ int sam_can_setup(void);
 #endif
 
 /****************************************************************************
+ * Name: sam_afec_initialize
+ *
+ * Description:
+ *   Initialize and register the ADC driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SAMV7_AFEC
+int sam_afec_setup(void);
+#endif
+
+/****************************************************************************
  * Name: sam_netinitialize
  *
  * Description:

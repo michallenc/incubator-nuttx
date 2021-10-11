@@ -453,7 +453,7 @@
 /* Channel Selection Register */
 
 #define AFEC_CSELR_CSEL_SHIFT        (0)       /* Bits 0-3: Channel Selection */
-#define AFEC_CSELR_CSEL_MASK         (15 << AFEC_CSELR_CSEL_SHIFT)
+#define AFEC_CSELR_CSEL_MASK         (0xf << AFEC_CSELR_CSEL_SHIFT)
 #  define AFEC_CSELR_CSEL(n)         ((uint32_t)(n) << AFEC_CSELR_CSEL_SHIFT)
 
 /* Channel Data Register */
