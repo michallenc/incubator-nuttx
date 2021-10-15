@@ -44,6 +44,7 @@
 
 #include "hardware/sam_matrix.h"
 #include "hardware/sam_pinmap.h"
+#include "hardware/sam_pio.h"
 #include "sam_periphclks.h"
 #include "sam_gpio.h"
 #include "sam_afec.h"
@@ -255,9 +256,28 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   leave_critical_section(flags);
 
-  /* Configure ADC */
+  /* Software reser */
 
-  uint32_t afec_acr = AFEC_ACR_PGA0EN | AFEC_ACR_PGA1EN;
+  afec_putreg(priv, SAM_AFEC_CR_OFFSET, AFEC_CR_SWRST);
+
+	/* Disable PULL UP */
+	putreg32(0x50494F00, SAM_PIOA_WPMR);
+	putreg32(1 << 21, SAM_PIOA_PUDR);
+	putreg32(0x50494F01, SAM_PIOA_WPMR);
+
+  /* Configure Mode Register */
+
+  uint32_t afec_mr = AFEC_MR_STARTUP_64 | AFEC_MR_PRESCAL(2) | AFEC_MR_ONE;
+  afec_putreg(priv, SAM_AFEC_MR_OFFSET, afec_mr);
+
+  /* Configure Extended Mode register */
+
+  uint32_t afec_emr = AFEC_EMR_STM;
+  afec_putreg(priv, SAM_AFEC_EMR_OFFSET, afec_emr);
+
+  /* Configure Analog Control Register */
+
+  uint32_t afec_acr = AFEC_ACR_PGA0EN | AFEC_ACR_PGA1EN | AFEC_ACR_IBCTL(2);
   afec_putreg(priv, SAM_AFEC_ACR_OFFSET, afec_acr);
 
   /* Pad configuration */
@@ -300,11 +320,15 @@ static void adc_reset(FAR struct adc_dev_s *dev)
       pinset = pinlist[priv->chanlist[i]];
       sam_configgpio(pinset);
 
+      afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, AFEC_CSELR_CSEL(priv->chanlist[i]));
+      afec_putreg(priv, SAM_AFEC_COCR_OFFSET, 0x200);
+
       /* Enable the corresponding channel and interrupt */
 
       afec_cher |= AFEC_CH(priv->chanlist[i]);
 
       afec_ier |= AFEC_INT_EOC(priv->chanlist[i]);
+
     }
 
   afec_putreg(priv, SAM_AFEC_CHER_OFFSET, afec_cher);
@@ -451,9 +475,9 @@ static int adc_interrupt(int irq, void *context, FAR void *arg)
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   int32_t data;
   printf("interrupt\n");
-  if ((afec_getreg(priv, SAM_AFEC_ISR_OFFSET) & AFEC_INT_EOC(priv->chanlist[priv->current])) != 0)
+  if ((afec_getreg(priv, SAM_AFEC_ISR_OFFSET) & AFEC_CH(priv->chanlist[priv->current])) != 0)
     {
-      /* Read data. This also clears the COCO bit. */
+      /* Read data */
 
       data = (int32_t)afec_getreg(priv, SAM_AFEC_CDR_OFFSET);
 
