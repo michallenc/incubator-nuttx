@@ -62,6 +62,10 @@
 #  include "esp32_board_wdt.h"
 #endif
 
+#ifdef CONFIG_ESP32_BLE
+#  include "esp32_ble.h"
+#endif
+
 #ifdef CONFIG_ESP32_WIRELESS
 #  include "esp32_board_wlan.h"
 #endif
@@ -161,11 +165,6 @@ int esp32_bringup(void)
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-
-#ifdef CONFIG_ESP32_SPIFLASH_ENCRYPTION_TEST
-  esp32_spiflash_encrypt_test();
-#endif
-
   ret = esp32_spiflash_init();
   if (ret)
     {
@@ -189,6 +188,14 @@ int esp32_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "Failed to initialize RT timer: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_ESP32_BLE
+  ret = esp32_ble_initialize();
+  if (ret)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d \n", ret);
     }
 #endif
 
