@@ -39,18 +39,26 @@
 
 #ifdef CONFIG_SAMV7_AFEC
 
-/* channels 1 and 2 have the same number of pins on Teensy */
-
-#define ADC_NCHANNELS 1
+#define ADC0_NCHANNELS 2
+#define ADC1_NCHANNELS 1
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static const uint8_t g_chanlist[ADC_NCHANNELS] =
+#ifdef CONFIG_SAMV7_AFEC0
+static const uint8_t g_chanlist0[ADC0_NCHANNELS] =
   {
-    1
+    1, 10
   };
+#endif
+
+#ifdef CONFIG_SAMV7_AFEC1
+static const uint8_t g_chanlist1[ADC1_NCHANNELS] =
+  {
+    0
+  };
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -72,14 +80,14 @@ int sam_afec_setup(void)
   /* Call sam_adc_initialize() to get an instance of the ADC interface */
 
   #ifdef CONFIG_SAMV7_AFEC0
-      adc = sam_afec_initialize(0, g_chanlist, ADC_NCHANNELS);
+      adc = sam_afec_initialize(0, g_chanlist0, ADC0_NCHANNELS);
       if (adc == NULL)
         {
           aerr("ERROR: Failed to get ADC1 interface\n");
           return -ENODEV;
         }
 
-      /* Register the ADC driver at "/dev/adc1" */
+      /* Register the ADC driver at "/dev/adc0" */
 
       ret = adc_register("/dev/adc0", adc);
       if (ret < 0)
@@ -90,14 +98,14 @@ int sam_afec_setup(void)
 
   #endif
   #ifdef CONFIG_SAMV7_AFEC1
-      adc = imxrt_adcinitialize(1, g_chanlist, ADC_NCHANNELS);
+      adc = sam_afec_initialize(1, g_chanlist1, ADC1_NCHANNELS);
       if (adc == NULL)
         {
           aerr("ERROR: Failed to get ADC2 interface\n");
           return -ENODEV;
         }
 
-      /* Register the ADC driver at "/dev/adc2" */
+      /* Register the ADC driver at "/dev/adc1" */
 
       ret = adc_register("/dev/adc1", adc);
       if (ret < 0)

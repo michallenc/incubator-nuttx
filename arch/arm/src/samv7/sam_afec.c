@@ -156,7 +156,7 @@ static struct adc_dev_s g_adcdev1 =
   .ad_priv     = &g_adcpriv0,
 };
 
-gpio_pinset_t g_adcpinlist0[ADC_MAX_CHANNELS] =
+gpio_pinset_t g_adcpinlist1[ADC_MAX_CHANNELS] =
 {
     GPIO_AFE1_AD0,
     GPIO_AFE1_AD1,
@@ -256,14 +256,9 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   leave_critical_section(flags);
 
-  /* Software reser */
+  /* Software reset */
 
   afec_putreg(priv, SAM_AFEC_CR_OFFSET, AFEC_CR_SWRST);
-
-	/* Disable PULL UP */
-	putreg32(0x50494F00, SAM_PIOA_WPMR);
-	putreg32(1 << 21, SAM_PIOA_PUDR);
-	putreg32(0x50494F01, SAM_PIOA_WPMR);
 
   /* Configure Mode Register */
 
@@ -272,7 +267,7 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   /* Configure Extended Mode register */
 
-  uint32_t afec_emr = AFEC_EMR_STM;
+  uint32_t afec_emr = AFEC_EMR_TAG | AFEC_EMR_RES_OSR256 | AFEC_EMR_STM;
   afec_putreg(priv, SAM_AFEC_EMR_OFFSET, afec_emr);
 
   /* Configure Analog Control Register */
@@ -408,6 +403,17 @@ static void adc_shutdown(FAR struct adc_dev_s *dev)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
 
+  /* Shutdown the ADC device only when not in use */
+
+  priv->initialized--;
+
+  if (priv->initialized > 0)
+    {
+      return;
+    }
+
+  /* Disable ADC interrupts */
+
   up_disable_irq(priv->irq);
 
   /* Then detach the ADC interrupt handler. */
@@ -474,7 +480,7 @@ static int adc_interrupt(int irq, void *context, FAR void *arg)
   FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   int32_t data;
-  printf("interrupt\n");
+
   if ((afec_getreg(priv, SAM_AFEC_ISR_OFFSET) & AFEC_CH(priv->chanlist[priv->current])) != 0)
     {
       /* Read data */
@@ -578,4 +584,4 @@ FAR struct adc_dev_s *sam_afec_initialize(int intf,
 
 #endif /* CONFIG_SAMV7_AFEC0 || CONFIG_SAMV7_AFEC1 */
 
-#endif /* CONFIG_SAMV7_ADC */
+#endif /* CONFIG_ADC */
