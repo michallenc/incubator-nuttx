@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/samv7/p-an2c/src/sam_spi.c
+ * boards/arm/samv7/p-an2c/src/sam_qspi_spi.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -32,14 +32,15 @@
 
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
+#include <nuttx/board.h>
 
 #include "arm_arch.h"
 #include "chip.h"
 #include "sam_gpio.h"
-#include "sam_spi.h"
+#include "sam_qspi_spi.h"
 #include "p-an2c.h"
 
-#ifdef CONFIG_SAMV7_SPI
+#ifdef CONFIG_SAMV7_QSPI_SPI_MODE
 
 /****************************************************************************
  * Public Functions
@@ -55,57 +56,12 @@
 
 void sam_spidev_initialize(void)
 {
-#ifdef CONFIG_SAMV7_SPI0_MASTER
-#endif
-
-#ifdef CONFIG_SAMV7_SPI0_SLAVE
-#endif
-
-#ifdef CONFIG_SAMV7_SPI1_MASTER
-#endif
-
-#ifdef CONFIG_SAMV7_SPI1_SLAVE
-#endif
+  sam_configgpio(GPIO_LCD_CD);
+  sam_configgpio(GPIO_LCD_CS);
 }
 
 /****************************************************************************
- * Name:  sam_spi[0|1]select, sam_spi[0|1]status, and sam_spi[0|1]cmddata
- *
- * Description:
- *   These external functions must be provided by board-specific logic.
- *   They include:
- *
- *   o sam_spi[0|1]select is a functions tomanage the board-specific chip
- *                selects
- *   o sam_spi[0|1]status and sam_spi[0|1]cmddata:  Implementations of the
- *     status and cmddata methods of the SPI interface defined by struct
- *     spi_ops_ (see include/nuttx/spi/spi.h).
- *     All other methods including sam_spibus_initialize()) are provided by
- *     common SAM3/4 logic.
- *
- *  To use this common SPI logic on your board:
- *
- *   1. Provide logic in sam_boardinitialize() to configure SPI chip select
- *      pins.
- *   2. Provide sam_spi[0|1]select() and sam_spi[0|1]status() functions in
- *      your board-specific logic.
- *      These functions will perform chip selection and status operations
- *      using PIOs in the way your board is configured.
- *   2. If CONFIG_SPI_CMDDATA is defined in the NuttX configuration, provide
- *      sam_spi[0|1]cmddata() functions in your board-specific logic.  This
- *      function will perform cmd/data selection operations using PIOs in
- *      the way your board is configured.
- *   3. Add a call to sam_spibus_initialize() in your low level application
- *      initialization logic
- *   4. The handle returned by sam_spibus_initialize() may then be used to
- *      bind the SPI driver to higher level logic (e.g., calling
- *      mmcsd_spislotinitialize(), for example, will bind the SPI driver to
- *      the SPI MMC/SD driver).
- *
- ****************************************************************************/
-
-/****************************************************************************
- * Name: sam_spi[0|1]select
+ * Name: sam_qspi_select
  *
  * Description:
  *   PIO chip select pins may be programmed by the board specific logic in
@@ -129,56 +85,19 @@ void sam_spidev_initialize(void)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SAMV7_SPI0_MASTER
-void sam_spi0select(uint32_t devid, bool selected)
+void sam_qspi_select(uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
 
-  switch (devid)
+  if (devid == SPIDEV_DISPLAY(0))
     {
-#ifdef CONFIG_IEEE802154_MRF24J40
-      case SPIDEV_IEEE802154(0):
-
-        /* Set the GPIO low to select and high to de-select */
-
-#if defined(CONFIG_SAME70XPLAINED_MB1_BEE)
-        sam_gpiowrite(CLICK_MB1_CS, !selected);
-#elif defined(CONFIG_SAME70XPLAINED_MB2_BEE)
-        sam_gpiowrite(CLICK_MB2_CS, !selected);
-#endif
-        break;
-#endif
-
-#ifdef CONFIG_IEEE802154_XBEE
-      case SPIDEV_IEEE802154(0):
-
-        /* Set the GPIO low to select and high to de-select */
-
-#if defined(CONFIG_SAME70XPLAINED_MB1_XBEE)
-        sam_gpiowrite(CLICK_MB1_CS, !selected);
-#elif defined(CONFIG_SAME70XPLAINED_MB2_XBEE)
-        sam_gpiowrite(CLICK_MB2_CS, !selected);
-#endif
-        break;
-#endif
-
-      default:
-        break;
+      sam_gpiowrite(GPIO_LCD_CS, !selected);
     }
 }
-#endif
-
-#ifdef CONFIG_SAMV7_SPI1_MASTER
-void sam_spi1select(uint32_t devid, bool selected)
-{
-  spiinfo("devid: %d CS: %s\n", (int)devid,
-          selected ? "assert" : "de-assert");
-}
-#endif
 
 /****************************************************************************
- * Name: sam_spi[0|1]status
+ * Name: sam_qspi_status
  *
  * Description:
  *   Return status information associated with the SPI device.
@@ -191,18 +110,47 @@ void sam_spi1select(uint32_t devid, bool selected)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SAMV7_SPI0_MASTER
-uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_qspi_status(FAR struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
-#endif
 
-#ifdef CONFIG_SAMV7_SPI1_MASTER
-uint8_t sam_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+/****************************************************************************
+ * Name: sam_qspi_cmddata
+ *
+ * Description:
+ *   Set or clear the SH1101A A0 or SD1306 D/C n bit to select data (true)
+ *   or command (false). This function must be provided by platform-specific
+ *   logic. This is an implementation of the cmddata method of the SPI
+ *   interface defined by struct spi_ops_s (see include/nuttx/spi/spi.h).
+ *
+ * Input Parameters:
+ *
+ *   spi - SPI device that controls the bus the device that requires the CMD/
+ *         DATA selection.
+ *   devid - If there are multiple devices on the bus, this selects which one
+ *         to select cmd or data.  NOTE:  This design restricts, for example,
+ *         one one SPI display per SPI bus.
+ *   cmd - true: select command; false: select data
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPI_CMDDATA
+int sam_qspi_cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
-  return 0;
+  if (devid == SPIDEV_DISPLAY(0))
+    {
+      sam_gpiowrite(GPIO_LCD_CD, !cmd);
+      return OK;
+    }
+  else
+    {
+      return -ENODEV;
+    }
 }
-#endif
+#endif /* CONFIG_SPI_CMDDATA */
 
 #endif /* CONFIG_SAMV7_SPI */

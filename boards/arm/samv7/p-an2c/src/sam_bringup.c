@@ -36,6 +36,10 @@
 #  include <nuttx/usb/usbmonitor.h>
 #endif
 
+#ifdef CONFIG_VIDEO_FB
+#  include <nuttx/video/fb.h>
+#endif
+
 #include <nuttx/drivers/drivers.h>
 #include <nuttx/drivers/ramdisk.h>
 #include <nuttx/fs/fs.h>
@@ -236,6 +240,14 @@ int sam_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: sam_can_setup failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_VIDEO_FB
+  ret = fb_register(0, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
     }
 #endif
 

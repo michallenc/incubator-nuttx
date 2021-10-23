@@ -94,7 +94,7 @@ void sam_boardinitialize(void)
   sam_sdram_config();
 #endif
 
-#ifdef CONFIG_SAMV7_SPI
+#ifdef CONFIG_SAMV7_QSPI_SPI_MODE
   /* Configure SPI chip selects if SPI has been enabled */
 
   sam_spidev_initialize();

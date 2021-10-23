@@ -33,6 +33,9 @@
 #include <arch/irq.h>
 #include <nuttx/irq.h>
 
+#include "sam_gpio.h"
+#include "hardware/sam_pinmap.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -222,6 +225,10 @@
 
 #define GPIO_LCD_CD    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                         GPIO_PORT_PIOD | GPIO_PIN21)    /* PD_21 */
+#define GPIO_LCD_CS    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                        GPIO_PORT_PIOA | GPIO_PIN11) 
+#define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                        GPIO_PORT_PIOD | GPIO_PIN25) 
 
 /****************************************************************************
  * Public Types
@@ -293,7 +300,7 @@ int sam_dacdev_initialize(void);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SAMV7_SPI
+#ifdef CONFIG_SAMV7_QSPI_SPI_MODE
 void sam_spidev_initialize(void);
 #endif
 
