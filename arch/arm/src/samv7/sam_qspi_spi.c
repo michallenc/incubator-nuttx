@@ -77,8 +77,6 @@ struct sam_spics_s
   uint32_t actual;             /* Actual clock frequency */
   uint8_t mode;                /* Mode 0,1,2,3 */
   uint8_t nbits;               /* Width of word in bits (8 to 16) */
-  uint8_t spino;               /* SPI controller number (0) */
-  uint8_t cs;                  /* Chip select number (0) */
 };
 
 /* Type of board-specific SPI status function */
@@ -101,9 +99,9 @@ struct sam_spidev_s
  ****************************************************************************/
 
 static inline uint32_t qspi_getreg(struct sam_spidev_s *spi,
-                  unsigned int offset);
+                                   unsigned int offset);
 static inline void qspi_putreg(struct sam_spidev_s *spi, uint32_t value,
-                  unsigned int offset);
+                               unsigned int offset);
 
 static inline void qspi_flush(struct sam_spidev_s *spi);
 
@@ -111,18 +109,19 @@ static inline void qspi_flush(struct sam_spidev_s *spi);
 
 static int  qspi_spi_lock(struct spi_dev_s *dev, bool lock);
 static void qspi_spi_select(struct spi_dev_s *dev, uint32_t devid,
-                  bool selected);
-static uint32_t qspi_spi_setfrequency(struct spi_dev_s *dev, uint32_t frequency);
+                            bool selected);
+static uint32_t qspi_spi_setfrequency(struct spi_dev_s *dev,
+                                      uint32_t frequency);
 static void qspi_spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode);
 static void qspi_spi_setbits(struct spi_dev_s *dev, int nbits);
 static uint32_t qspi_spi_send(struct spi_dev_s *dev, uint32_t wd);
 static void qspi_spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
-                   void *rxbuffer, size_t nwords);
+                              void *rxbuffer, size_t nwords);
 #ifndef CONFIG_SPI_EXCHANGE
-static void     qspi_spi_sndblock(struct spi_dev_s *dev,
-                   const void *buffer, size_t nwords);
+static void     qspi_spi_sndblock(struct spi_dev_s *dev, const void *buffer,
+                                  size_t nwords);
 static void     qspi_spi_recvblock(struct spi_dev_s *dev, void *buffer,
-                   size_t nwords);
+                                   size_t nwords);
 #endif
 
 /****************************************************************************
@@ -312,7 +311,8 @@ static void qspi_spi_select(struct spi_dev_s *dev, uint32_t devid,
  *
  ****************************************************************************/
 
-static uint32_t qspi_spi_setfrequency(struct spi_dev_s *dev, uint32_t frequency)
+static uint32_t qspi_spi_setfrequency(struct spi_dev_s *dev,
+                                      uint32_t frequency)
 {
   struct sam_spics_s *spics = (struct sam_spics_s *)dev;
   struct sam_spidev_s *spi = &g_spidev;
@@ -377,7 +377,6 @@ static uint32_t qspi_spi_setfrequency(struct spi_dev_s *dev, uint32_t frequency)
    *  DLYBCT = SPI_CLK * 0.000005 / 32 = SPI_CLK / 200000 / 32
    */
 
-
   dlybct  = SAM_QSPI_CLOCK / 200000 / 32;
   regval  = qspi_getreg(spi, SAM_QSPI_MR_OFFSET);
   regval &= ~(QSPI_MR_DLYBCT_MASK);
@@ -419,7 +418,7 @@ static void qspi_spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
   struct sam_spidev_s *spi = &g_spidev;
   uint32_t regval;
 
-  spiinfo("cs=%d mode=%d\n", spics->cs, mode);
+  spiinfo("mode=%d\n", mode);
 
   /* Has the mode changed? */
 
@@ -489,7 +488,7 @@ static void qspi_spi_setbits(struct spi_dev_s *dev, int nbits)
   struct sam_spidev_s *spi = &g_spidev;
   uint32_t regval;
 
-  spiinfo("cs=%d nbits=%d\n", spics->cs, nbits);
+  spiinfo("nbits=%d\n", nbits);
   DEBUGASSERT(nbits > 7 && nbits < 17);
 
   /* Has the number of bits changed? */
@@ -539,7 +538,7 @@ static uint32_t qspi_spi_send(struct spi_dev_s *dev, uint32_t wd)
       rxbyte = (uint8_t)0;
       qspi_spi_exchange(dev, &txbyte, &rxbyte, 1);
 
-      //spiinfo("Sent %02x received %02x\n", txbyte, rxbyte);
+      spiinfo("Sent %02x received %02x\n", txbyte, rxbyte);
       return (uint32_t)rxbyte;
     }
   else
@@ -551,7 +550,7 @@ static uint32_t qspi_spi_send(struct spi_dev_s *dev, uint32_t wd)
       rxword = (uint16_t)0;
       qspi_spi_exchange(dev, &txword, &rxword, 1);
 
-      //spiinfo("Sent %02x received %02x\n", txword, rxword);
+      spiinfo("Sent %02x received %02x\n", txword, rxword);
       return (uint32_t)rxword;
     }
 }
@@ -588,7 +587,7 @@ static void qspi_spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
   uint8_t *rxptr8;
   uint8_t *txptr8;
 
-  //spiinfo("txbuffer=%p rxbuffer=%p nwords=%d\n", txbuffer, rxbuffer, nwords);
+  spiinfo("txbuffer=%p rxbuffer=%p nwords=%d\n", txbuffer, rxbuffer, nwords);
 
   /* Set up working pointers */
 
@@ -736,7 +735,8 @@ static void qspi_spi_sndblock(struct spi_dev_s *dev, const void *buffer,
  *
  ****************************************************************************/
 
-static void qspi_spi_recvblock(struct spi_dev_s *dev, void *buffer, size_t nwords)
+static void qspi_spi_recvblock(struct spi_dev_s *dev, void *buffer,
+                               size_t nwords)
 {
   /* spi_exchange can do this. */
 
@@ -787,11 +787,6 @@ FAR struct spi_dev_s *sam_qspi_spi_initialize(int intf)
 
   spics->spidev.ops = &g_spiops;
 
-  /* Save the chip select and SPI controller numbers */
-
-  spics->cs    = 0;
-  spics->spino = 0;
-
   /* Get the SPI device structure associated with the chip select */
 
   spi = &g_spidev;
@@ -807,13 +802,12 @@ FAR struct spi_dev_s *sam_qspi_spi_initialize(int intf)
        * select pins must be selected by board-specific logic.
        */
 
-      //sam_configgpio(GPIO_QSPI_CS);
       sam_configgpio(GPIO_QSPI_IO0);    /* MOSI */
       sam_configgpio(GPIO_QSPI_IO1);    /* MISO */
       sam_configgpio(GPIO_QSPI_SCK);
 
       /* Disable write protection */
-      
+
       qspi_putreg(spi, SAM_QSPI_WPCR_OFFSET, QSPI_WPCR_WPKEY);
 
       /* Disable QSPI before configuring it */
@@ -853,19 +847,17 @@ FAR struct spi_dev_s *sam_qspi_spi_initialize(int intf)
    * be reconfigured if there is a change.
    */
 
-  /* Set mode = 0 */
-
   regval = qspi_getreg(spi, SAM_QSPI_SCR_OFFSET);
   regval &= ~(QSPI_SCR_CPOL | QSPI_SCR_CPHA);
   qspi_putreg(spi, regval, SAM_QSPI_SCR_OFFSET);
   spics->mode = 0;
 
-  /* Set nbits = 8 */
-
   regval = qspi_getreg(spi, SAM_QSPI_MR_OFFSET);
   regval |= QSPI_MR_NBBITS_8BIT;
   qspi_putreg(spi, regval, SAM_QSPI_MR_OFFSET);
   spics->nbits = 8;
+
+  spics->frequency = 0;
 
   return &spics->spidev;
 }
