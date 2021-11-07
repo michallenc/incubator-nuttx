@@ -290,6 +290,16 @@ int sam_bringup(void)
 #endif /* defined(CONFIG_BCH) */
 #endif
 
+#ifdef CONFIG_SAMV7_AFEC
+  /* Initialize AFEC and register the ADC driver. */
+
+  ret = sam_afec_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sam_afec_initialize failed: %d\n", ret);
+    }
+#endif
+
 #ifdef HAVE_USBHOST
   /* Initialize USB host operation.  sam_usbhost_initialize() starts a thread
    * will monitor for USB connection and disconnection events.

@@ -61,6 +61,10 @@ ifeq ($(CONFIG_SAMV7_USBDEVHS),y)
 CSRCS += sam_usbdev.c
 endif
 
+ifeq ($(CONFIG_SAMV7_AFEC),y)
+CSRCS += sam_afec.c
+endif
+
 ifeq ($(CONFIG_SAMV7_SPI),y)
 CSRCS += sam_spi.c
 endif
