@@ -72,6 +72,18 @@ SECTIONS
     *(.iram1 .iram1.*)
     *librtc.a:(.literal .text .literal.* .text.*)
     *libarch.a:esp32_spiflash.*(.literal .text .literal.* .text.*)
+    *libarch.a:xtensa_cpupause.*(.literal .text .literal.* .text.*)
+    *libarch.a:xtensa_copystate.*(.literal .text .literal.* .text.*)
+    *libarch.a:xtensa_interruptcontext.*(.literal .text .literal.* .text.*)
+    *libarch.a:xtensa_testset.*(.literal .text .literal.* .text.*)
+
+    *libsched.a:sched_suspendscheduler.*(.literal .text .literal.* .text.*)
+    *libsched.a:sched_note.*(.literal .text .literal.* .text.*)
+    *libsched.a:sched_thistask.*(.literal .text .literal.* .text.*)
+    *libsched.a:spinlock.*(.literal .text .literal.* .text.*)
+    *libsched.a:irq_csection.*(.literal .text .literal.* .text.*)
+    *libsched.a:irq_dispatch.*(.literal .text .literal.* .text.*)
+
     *(.wifirxiram .wifirxiram.*)
     *(.wifi0iram  .wifi0iram.*)
     *(.wifislpiram .wifislpiram.*)
@@ -119,6 +131,18 @@ SECTIONS
     *(.gnu.linkonce.b.*)
     *(COMMON)
     *libarch.a:esp32_spiflash.*(.bss  .bss.*  COMMON)
+    *libarch.a:xtensa_cpupause.*(.bss  .bss.*  COMMON)
+    *libarch.a:xtensa_copystate.*(.bss  .bss.*  COMMON)
+    *libarch.a:xtensa_interruptcontext.*(.bss  .bss.*  COMMON)
+    *libarch.a:xtensa_testset.*(.bss  .bss.*  COMMON)
+
+    *libsched.a:sched_suspendscheduler.*(.bss  .bss.*  COMMON)
+    *libsched.a:sched_thistask.*(.bss  .bss.*  COMMON)
+    *libsched.a:sched_note.*(.bss  .bss.*  COMMON)
+    *libsched.a:spinlock.*(.bss  .bss.*  COMMON)
+    *libsched.a:irq_csection.*(.bss  .bss.*  COMMON)
+    *libsched.a:irq_dispatch.*(.bss  .bss.*  COMMON)
+
     . = ALIGN(8);
     _bss_end = ABSOLUTE(.);
     _ebss = ABSOLUTE(.);
@@ -160,6 +184,18 @@ SECTIONS
     *(.dram1 .dram1.*)
     *libphy.a:(.rodata  .rodata.*)
     *libarch.a:esp32_spiflash.*(.rodata  .rodata.*)
+    *libarch.a:xtensa_cpupause.*(.rodata  .rodata.*)
+    *libarch.a:xtensa_copystate.*(.rodata  .rodata.*)
+    *libarch.a:xtensa_interruptcontext.*(.rodata  .rodata.*)
+    *libarch.a:xtensa_testset.*(.rodata  .rodata.*)
+
+    *libsched.a:sched_suspendscheduler.*(.rodata  .rodata.*)
+    *libsched.a:sched_thistask.*(.rodata  .rodata.*)
+    *libsched.a:sched_note.*(.rodata  .rodata.*)
+    *libsched.a:spinlock.*(.rodata  .rodata.*)
+    *libsched.a:irq_csection.*(.rodata  .rodata.*)
+    *libsched.a:irq_dispatch.*(.rodata  .rodata.*)
+
     . = ALIGN(4);
     _edata = ABSOLUTE(.);
 
