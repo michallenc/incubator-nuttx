@@ -326,12 +326,12 @@ config SAMV7_AFEC0_RES
 	default 0
 	range 0 5
 	---help---
-					0		no average
-					1		low resolution
-					2		OSR4
-					3		OSR16
-					4		OSR64
-					5		OSR256
+		0		no average
+		1		low resolution
+		2		OSR4
+		3		OSR16
+		4		OSR64
+		5		OSR256
 endif
 
 config SAMV7_AFEC1
@@ -346,12 +346,12 @@ config SAMV7_AFEC1_RES
 	default 0
 	range 0 5
 	---help---
-					0		no average
-					1		low resolution
-					2		OSR4
-					3		OSR16
-					4		OSR64
-					5		OSR256
+		0		no average
+		1		low resolution
+		2		OSR4
+		3		OSR16
+		4		OSR64
+		5		OSR256
 endif
 
 config SAMV7_MCAN0
