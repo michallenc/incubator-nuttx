@@ -49,7 +49,7 @@
 #ifndef __ASSEMBLY__
 
 /****************************************************************************
- * Public Data
+ * Public Function Prototypes
  ****************************************************************************/
 
 #undef EXTERN
@@ -60,10 +60,6 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
-
-/****************************************************************************
- * Public Functions
- ****************************************************************************/
 
 /****************************************************************************
  * Name: sam_afec_initialize
@@ -91,5 +87,5 @@ FAR struct adc_dev_s *sam_afec_initialize(int intf,
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* CONFIG_CAN && (CONFIG_SAMV7_MCAN0 || CONFIG_SAMV7_MCAN1) */
-#endif /* __ARCH_ARM_SRC_SAMV7_SAM_MCAN_H */
+#endif /* CONFIG_ADC && (CONFIG_SAMV7_AFEC0 || CONFIG_SAMV7_AFEC1) */
+#endif /* __ARCH_ARM_SRC_SAMV7_SAM_AFEC_H */

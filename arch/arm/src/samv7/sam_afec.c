@@ -18,7 +18,7 @@
  *
  ****************************************************************************/
 
- /****************************************************************************
+/****************************************************************************
  * Included Files
  ****************************************************************************/
 
@@ -69,8 +69,9 @@ struct samv7_dev_s
   uint8_t  intf;                        /* ADC number (i.e. ADC1, ADC2) */
   uint32_t base;                        /* ADC register base */
   uint8_t  initialized;                 /* ADC initialization counter */
+  uint8_t  resolution;                  /* ADC resolution (SAMV7_AFECn_RES) */
   int      irq;                         /* ADC IRQ number */
-  int      nchannels;                   /* Number of configured ADC channels */
+  int      nchannels;                   /* Number of configured channels */
   uint8_t  chanlist[ADC_MAX_CHANNELS];  /* ADC channel list */
   uint8_t  current;                     /* Current channel being converted */
 };
@@ -82,32 +83,31 @@ struct samv7_dev_s
 static void afec_putreg(FAR struct samv7_dev_s *priv, uint32_t offset,
                        uint32_t value);
 static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset);
-static void afec_modifyreg(FAR struct samv7_dev_s *priv, uint32_t offset,
-                          uint32_t clearbits, uint32_t setbits);
 
 /* ADC methods */
 
-static int  adc_bind(FAR struct adc_dev_s *dev,
+static int  afec_bind(FAR struct adc_dev_s *dev,
                      FAR const struct adc_callback_s *callback);
-static void adc_reset(FAR struct adc_dev_s *dev);
-static int  adc_setup(FAR struct adc_dev_s *dev);
-static void adc_shutdown(FAR struct adc_dev_s *dev);
-static void adc_rxint(FAR struct adc_dev_s *dev, bool enable);
-static int  adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg);
-static int  adc_interrupt(int irq, void *context, FAR void *arg);
+static void afec_reset(FAR struct adc_dev_s *dev);
+static int  afec_setup(FAR struct adc_dev_s *dev);
+static void afec_shutdown(FAR struct adc_dev_s *dev);
+static void afec_rxint(FAR struct adc_dev_s *dev, bool enable);
+static int  afec_ioctl(FAR struct adc_dev_s *dev,
+                       int cmd, unsigned long arg);
+static int  afec_interrupt(int irq, void *context, FAR void *arg);
 
- /****************************************************************************
+/****************************************************************************
  * Private Data
  ****************************************************************************/
 
- static const struct adc_ops_s g_adcops =
+static const struct adc_ops_s g_adcops =
 {
-  .ao_bind     = adc_bind,
-  .ao_reset    = adc_reset,
-  .ao_setup    = adc_setup,
-  .ao_shutdown = adc_shutdown,
-  .ao_rxint    = adc_rxint,
-  .ao_ioctl    = adc_ioctl,
+  .ao_bind     = afec_bind,
+  .ao_reset    = afec_reset,
+  .ao_setup    = afec_setup,
+  .ao_shutdown = afec_shutdown,
+  .ao_rxint    = afec_rxint,
+  .ao_ioctl    = afec_ioctl,
 };
 
 #ifdef CONFIG_SAMV7_AFEC0
@@ -116,6 +116,7 @@ static struct samv7_dev_s g_adcpriv0 =
   .irq         = SAM_IRQ_AFEC0,
   .intf        = 0,
   .initialized = 0,
+  .resolution  = CONFIG_SAMV7_AFEC0_RES,
   .base        = SAM_AFEC0_BASE,
 };
 
@@ -147,6 +148,7 @@ static struct samv7_dev_s g_adcpriv1 =
   .irq         = SAM_IRQ_AFEC1,
   .intf        = 1,
   .initialized = 0,
+  .resolution  = CONFIG_SAMV7_AFEC1_RES,
   .base        = SAM_AFEC1_BASE,
 };
 
@@ -187,14 +189,8 @@ static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset)
   return getreg32(priv->base + offset);
 }
 
-static void afec_modifyreg(FAR struct samv7_dev_s *priv, uint32_t offset,
-                          uint32_t clearbits, uint32_t setbits)
-{
-  modifyreg32(priv->base + offset, clearbits, setbits);
-}
-
 /****************************************************************************
- * Name: adc_bind
+ * Name: afec_bind
  *
  * Description:
  *   Bind the upper-half driver callbacks to the lower-half implementation.
@@ -202,7 +198,7 @@ static void afec_modifyreg(FAR struct samv7_dev_s *priv, uint32_t offset,
  *
  ****************************************************************************/
 
-static int adc_bind(FAR struct adc_dev_s *dev,
+static int afec_bind(FAR struct adc_dev_s *dev,
                     FAR const struct adc_callback_s *callback)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
@@ -213,15 +209,15 @@ static int adc_bind(FAR struct adc_dev_s *dev,
 }
 
 /****************************************************************************
- * Name: adc_reset
+ * Name: afec_reset
  *
  * Description:
  *   Reset the ADC device.  Called early to initialize the hardware. This
- *   is called, before adc_setup() and on error conditions.
+ *   is called, before afec_setup() and on error conditions.
  *
  ****************************************************************************/
 
-static void adc_reset(FAR struct adc_dev_s *dev)
+static void afec_reset(FAR struct adc_dev_s *dev)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   irqstate_t flags;
@@ -267,7 +263,8 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   /* Configure Extended Mode register */
 
-  uint32_t afec_emr = AFEC_EMR_TAG | AFEC_EMR_RES_OSR256 | AFEC_EMR_STM;
+  uint32_t afec_emr = AFEC_EMR_TAG | AFEC_EMR_STM | \
+                      AFEC_EMR_RES(priv->resolution);
   afec_putreg(priv, SAM_AFEC_EMR_OFFSET, afec_emr);
 
   /* Configure Analog Control Register */
@@ -308,26 +305,22 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 
   gpio_pinset_t pinset = 0;
   uint32_t afec_cher = 0;
-  uint32_t afec_ier = 0;
   for (int i = 0; i < priv->nchannels; i++)
     {
       DEBUGASSERT(priv->chanlist[i] < ADC_MAX_CHANNELS);
       pinset = pinlist[priv->chanlist[i]];
       sam_configgpio(pinset);
 
-      afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, AFEC_CSELR_CSEL(priv->chanlist[i]));
+      afec_putreg(priv, SAM_AFEC_CSELR_OFFSET,
+                  AFEC_CSELR_CSEL(priv->chanlist[i]));
       afec_putreg(priv, SAM_AFEC_COCR_OFFSET, 0x200);
 
-      /* Enable the corresponding channel and interrupt */
-
       afec_cher |= AFEC_CH(priv->chanlist[i]);
-
-      afec_ier |= AFEC_INT_EOC(priv->chanlist[i]);
-
     }
 
+  /* Enable channels */
+
   afec_putreg(priv, SAM_AFEC_CHER_OFFSET, afec_cher);
-  afec_putreg(priv, SAM_AFEC_IER_OFFSET, afec_ier);
 
   return;
 
@@ -336,7 +329,7 @@ exit_leave_critical:
 }
 
 /****************************************************************************
- * Name: adc_setup
+ * Name: afec_setup
  *
  * Description:
  *   Configure the ADC. This method is called the first time that the ADC
@@ -346,7 +339,7 @@ exit_leave_critical:
  *
  ****************************************************************************/
 
-static int adc_setup(FAR struct adc_dev_s *dev)
+static int afec_setup(FAR struct adc_dev_s *dev)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
 
@@ -359,7 +352,7 @@ static int adc_setup(FAR struct adc_dev_s *dev)
 
   priv->initialized++;
 
-  int ret = irq_attach(priv->irq, adc_interrupt, dev);
+  int ret = irq_attach(priv->irq, afec_interrupt, dev);
   if (ret < 0)
     {
       ainfo("irq_attach failed: %d\n", ret);
@@ -379,19 +372,37 @@ static int adc_setup(FAR struct adc_dev_s *dev)
 }
 
 /****************************************************************************
- * Name: adc_rxint
+ * Name: afec_rxint
  *
  * Description:
  *   Call to enable or disable RX interrupts
  *
  ****************************************************************************/
 
-static void adc_rxint(FAR struct adc_dev_s *dev, bool enable)
+static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
 {
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+  uint32_t afec_ixr = 0;
+
+  for (int i = 0; i < priv->nchannels; i++)
+    {
+      afec_ixr |= AFEC_INT_EOC(priv->chanlist[i]);
+    }
+
+  /* Enable interrupts */
+
+  if (enable)
+    {
+      afec_putreg(priv, SAM_AFEC_IER_OFFSET, afec_ixr);
+    }
+  else
+    {
+      afec_putreg(priv, SAM_AFEC_IDR_OFFSET, afec_ixr);
+    }
 }
 
 /****************************************************************************
- * Name: adc_shutdown
+ * Name: afec_shutdown
  *
  * Description:
  *   Disable the ADC.  This method is called when the ADC device is closed.
@@ -399,7 +410,7 @@ static void adc_rxint(FAR struct adc_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
-static void adc_shutdown(FAR struct adc_dev_s *dev)
+static void afec_shutdown(FAR struct adc_dev_s *dev)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
 
@@ -422,7 +433,7 @@ static void adc_shutdown(FAR struct adc_dev_s *dev)
 }
 
 /****************************************************************************
- * Name: adc_ioctl
+ * Name: afec_ioctl
  *
  * Description:
  *   All ioctl calls will be routed through this method.
@@ -433,10 +444,11 @@ static void adc_shutdown(FAR struct adc_dev_s *dev)
  *   arg - arguments passed with command
  *
  * Returned Value:
+ *   OK in success or error value
  *
  ****************************************************************************/
 
-static int adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg)
+static int afec_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   int ret = OK;
@@ -468,20 +480,21 @@ static int adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg)
 }
 
 /****************************************************************************
- * Name: adc_interrupt
+ * Name: afec_interrupt
  *
  * Description:
  *   ADC interrupt handler
  *
  ****************************************************************************/
 
-static int adc_interrupt(int irq, void *context, FAR void *arg)
+static int afec_interrupt(int irq, void *context, FAR void *arg)
 {
   FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   int32_t data;
 
-  if ((afec_getreg(priv, SAM_AFEC_ISR_OFFSET) & AFEC_CH(priv->chanlist[priv->current])) != 0)
+  if ((afec_getreg(priv, SAM_AFEC_ISR_OFFSET) & \
+                   AFEC_CH(priv->chanlist[priv->current])) != 0)
     {
       /* Read data */
 
@@ -510,7 +523,6 @@ static int adc_interrupt(int irq, void *context, FAR void *arg)
 
       uint32_t afec_cselr = AFEC_CSELR_CSEL(priv->chanlist[priv->current]);
       afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, afec_cselr);
-
     }
 
   /* There are no interrupt flags left to clear */
@@ -518,18 +530,18 @@ static int adc_interrupt(int irq, void *context, FAR void *arg)
   return OK;
 }
 
- /****************************************************************************
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
- /****************************************************************************
+/****************************************************************************
  * Name: sam_afec_initialize
  *
  * Description:
  *   Initialize the adc
  *
  * Input Parameters:
- *   intf      - ADC number (1 or 2)
+ *   intf      - ADC number (0 or 1)
  *   chanlist  - The list of channels
  *   nchannels - Number of channels
  *
