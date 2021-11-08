@@ -36,6 +36,7 @@
 #include <arch/board/board.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/wqueue.h>
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/ioctl.h>
 
@@ -48,6 +49,7 @@
 #include "sam_periphclks.h"
 #include "sam_gpio.h"
 #include "sam_afec.h"
+#include "sam_xdmac.h"
 
 #ifdef CONFIG_ADC
 
@@ -58,6 +60,17 @@
  ****************************************************************************/
 
 #define ADC_MAX_CHANNELS 11
+
+#if !defined(CONFIG_SAMV7_AFEC_DMA)
+#  undef  CONFIG_SAMV7_AFEC_DMASAMPLES
+#  define CONFIG_SAMV7_AFEC_DMASAMPLES 1
+#elif !defined(CONFIG_SAMV7_AFEC_DMA)
+#  error CONFIG_SAMV7_AFEC_DMASAMPLES must be defined
+#elif CONFIG_SAMV7_AFEC_DMA < 2
+#  warning Values of CONFIG_SAMV7_AFEC_DMASAMPLES < 2 are inefficient
+#endif
+
+#define SAMV7_AFEC_SAMPLES (CONFIG_SAMV7_AFEC_DMASAMPLES * ADC_MAX_CHANNELS)
 
 /****************************************************************************
  * Private Types
@@ -74,11 +87,34 @@ struct samv7_dev_s
   int      nchannels;                   /* Number of configured channels */
   uint8_t  chanlist[ADC_MAX_CHANNELS];  /* ADC channel list */
   uint8_t  current;                     /* Current channel being converted */
+
+#ifdef CONFIG_SAMV7_AFEC_DMA
+  volatile bool odd;     /* Odd buffer is in use */
+  volatile bool ready;   /* Worker has completed the last set of samples */
+  volatile bool enabled; /* DMA data transfer is enabled */
+  int nsamples;
+  DMA_HANDLE dma;        /* Handle for DMA channel */
+  struct work_s work;    /* Supports the interrupt handling "bottom half" */
+
+  /* DMA sample data buffer */
+
+  uint16_t evenbuf[SAMV7_AFEC_SAMPLES];
+  uint16_t oddbuf[SAMV7_AFEC_SAMPLES];
+#endif
 };
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
+
+#ifdef CONFIG_SAMV7_AFEC_DMA
+static void sam_afec_dmadone(void *arg);
+static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result);
+static int  sam_afec_dmasetup(struct adc_dev_s *dev, FAR uint8_t *buffer,
+                             size_t buflen);
+static void sam_afec_dmastart(struct adc_dev_s *dev);
+#endif
+
 
 static void afec_putreg(FAR struct samv7_dev_s *priv, uint32_t offset,
                        uint32_t value);
@@ -189,6 +225,264 @@ static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset)
   return getreg32(priv->base + offset);
 }
 
+
+/****************************************************************************
+ * DMA Helpers
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: sam_afec_dmadone
+ *
+ * Description:
+ *   This function executes on the worker thread.  It is scheduled by
+ *   sam_adc_dmacallback at the complete of each DMA sequenece.  There is
+ *   and interlock using ping-pong buffers and boolean values to prevent
+ *   overrunning the worker thread:
+ *
+ *     oddbuf[]/evenbuf[] - Ping pong buffers are used.  The DMA collects
+ *       data in one buffer while the worker thread processes data in the
+ *       other.
+ *     odd - If true, then DMA is active in the oddbuf[]; evenbuf[] holds
+ *       completed DMA data.
+ *     ready - Ping ponging is halted while ready is false;  If data overrun
+ *       occurs, then sample data will be lost on one sequence.  The worker
+ *       thread sets ready when it has completed processing the last sample
+ *       data.
+ *
+ * Input Parameters:
+ *   arg - The ADC private data structure cast to (void *)
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SAMV7_AFEC_DMA
+static void sam_afec_dmadone(void *arg)
+{
+  FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+  uint16_t *buffer;
+  uint16_t *next;
+  uint16_t sample;
+  int chan;
+  int i;
+
+  ainfo("ready=%d enabled=%d\n", priv->enabled, priv->ready);
+  DEBUGASSERT(priv != NULL && !priv->ready);
+
+  /* If the DMA transfer is not enabled, just ignore the data (and do not
+   * start the next DMA transfer).
+   */
+
+  if (priv->enabled)
+    {
+      /* Toggle to the next buffer.
+       *
+       *   buffer - The buffer on which the DMA has just completed
+       *   next   - The buffer in which to start the next DMA
+       */
+
+      if (priv->odd)
+        {
+          buffer    = priv->oddbuf;
+          next      = priv->evenbuf;
+          priv->odd = false;
+        }
+      else
+        {
+          buffer    = priv->evenbuf;
+          next      = priv->oddbuf;
+          priv->odd = true;
+        }
+
+      /* Restart the DMA conversion as quickly as possible using the next
+       * buffer.
+       *
+       * REVISIT: In the original design, toggling the ping-pong buffers and
+       * restarting the DMA was done in the interrupt handler so that the
+       * next buffer could be filling while the current buffer is being
+       * processed here on the worker thread.  But, unfortunately,
+       * sam_adcm_dmasetup() cannot be called from an interrupt handler.
+       *
+       * A consequence of this is that there is a small window from the time
+       * that the last set of samples was taken, the worker thread runs, and
+       * the follow logic restarts the DMA in which samples could be lost!
+       *
+       * Without the interrupt level DMA restart logic, there is not really
+       * any good reason to support the ping-poing buffers at all.
+       */
+
+      sam_afec_dmasetup(dev, (FAR uint8_t *)next,
+                       priv->nsamples * sizeof(uint16_t));
+
+      /* Invalidate the DMA buffer so that we are guaranteed to reload the
+       * newly DMAed data from RAM.
+       */
+
+      up_invalidate_dcache((uintptr_t)buffer,
+                           (uintptr_t)buffer +
+                           priv->nsamples * sizeof(uint16_t));
+
+      /* Process each sample */
+
+      for (i = 0; i < priv->nsamples; i++, buffer++)
+        {
+          /* Get the sample and the channel number */
+
+          chan   = (int)((*buffer & AFEC_LCDR_CHANB_MASK) >>
+                    AFEC_LCDR_CHANB_SHIFT);
+          sample = ((*buffer & AFEC_LCDR_LDATA_MASK) >> AFEC_LCDR_LDATA_SHIFT);
+
+          /* Verify the upper-half driver has bound its callback functions */
+
+          if (priv->cb != NULL)
+            {
+              /* Give the sample data to the ADC upper half */
+
+              DEBUGASSERT(priv->cb->au_receive != NULL);
+              priv->cb->au_receive(dev, chan, sample);
+            }
+        }
+    }
+
+  /* We are ready to handle the next sample sequence */
+
+  priv->ready = true;
+}
+
+/****************************************************************************
+ * Name: sam_afec_dmastart
+ *
+ * Description:
+ *   Initiate DMA sampling.
+ *
+ ****************************************************************************/
+
+static void sam_afec_dmastart(struct adc_dev_s *dev)
+{
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+
+  /* Make sure that the worker is available and that DMA is not disabled */
+
+  if (priv->ready && priv->enabled)
+    {
+      priv->odd = false;  /* Start with the even buffer */
+      sam_afec_dmasetup(dev, (FAR uint8_t *)priv->evenbuf,
+                       priv->nsamples * sizeof(uint16_t));
+    }
+}
+
+/****************************************************************************
+ * Name: sam_afec_dmacallback
+ *
+ * Description:
+ *   Called when one ADC DMA sequence completes.  This function defers
+ *   processing of the samples to sam_adc_dmadone which runs on the worker
+ *   thread.
+ *
+ ****************************************************************************/
+
+static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result)
+{
+  FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+  int ret;
+
+  ainfo("ready=%d enabled=%d\n", priv->enabled, priv->ready);
+  DEBUGASSERT(priv->ready);
+
+  /* Check of the bottom half is keeping up with us.
+   *
+   * ready == false:  Would mean that the worker thready has not ran since
+   *   the last DMA callback.
+   * enabled == false: Means that the upper half has asked us nicely to stop
+   *   transferring DMA data.
+   */
+
+  if (priv->ready && priv->enabled)
+    {
+      /* Verify that the worker is available */
+
+      DEBUGASSERT(priv->work.worker == NULL);
+
+      /* Mark the work as busy and schedule the DMA done processing to
+       * occur on the worker thread.
+       */
+
+      priv->ready = false;
+
+      ret = work_queue(HPWORK, &priv->work, sam_afec_dmadone, dev, 0);
+      if (ret != 0)
+        {
+          aerr("ERROR: Failed to queue work: %d\n", ret);
+        }
+    }
+
+  /* REVISIT: There used to be logic here to toggle the ping-pong buffers and
+   * to restart the DMA conversion.  This would allow refilling one buffer
+   * while the worker processes the other buffer that was just filled. But,
+   * unfortunately, sam_adcm_dmasetup() and dma_rxsetup cannot be called
+   * from an interrupt handler.
+   *
+   * A consequence of this is that there is a small window from the time
+   * that the last set of samples was taken, the worker thread runs, and the
+   * logic on the worker thread restarts the DMA.  Samples trigger during
+   * this window will be be lost!
+   *
+   * Without this logic, there is not really any strong reason to support
+   * the ping-poing buffers at all.
+   */
+}
+
+/****************************************************************************
+ * Name: sam_afec_dmasetup
+ *
+ * Description:
+ *   Setup to perform a read DMA.  If the processor supports a data cache,
+ *   then this method will also make sure that the contents of the DMA memory
+ *   and the data cache are coherent.  For read transfers this may mean
+ *   invalidating the data cache.
+ *
+ * Input Parameters:
+ *   priv   - An instance of the ADC device interface
+ *   buffer - The memory to DMA from
+ *   buflen - The size of the DMA transfer in bytes
+ *
+ * Returned Value:
+ *   OK on success; a negated errno on failure
+ *
+ ****************************************************************************/
+
+static int sam_afec_dmasetup(FAR struct adc_dev_s *dev, FAR uint8_t *buffer,
+                            size_t buflen)
+{
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+  uint32_t paddr;
+  uint32_t maddr;
+
+  ainfo("buffer=%p buflen=%d\n", buffer, (int)buflen);
+  DEBUGASSERT(priv != NULL && buffer != NULL && buflen > 0);
+  DEBUGASSERT(((uint32_t)buffer & 3) == 0);
+
+  /* Physical address of the ADC LCDR register and of the buffer location in
+   * RAM.
+   */
+
+  paddr = priv->base + SAM_AFEC_LCDR_OFFSET;
+  maddr = (uintptr_t)buffer;
+
+  /* Configure the RX DMA */
+
+  sam_dmarxsetup(priv->dma, paddr, maddr, buflen);
+
+  /* Start the DMA */
+
+  sam_dmastart(priv->dma, sam_afec_dmacallback, dev);
+  return OK;
+}
+#endif
+
 /****************************************************************************
  * Name: afec_bind
  *
@@ -230,6 +524,15 @@ static void afec_reset(FAR struct adc_dev_s *dev)
     {
       goto exit_leave_critical;
     }
+
+  /* Stop any ongoing DMA */
+
+#ifdef CONFIG_SAMV7_AFEC_DMA
+  if (priv->dma)
+    {
+      sam_dmastop(priv->dma);
+    }
+#endif
 
   /* Configure clock gating */
 
@@ -368,6 +671,15 @@ static int afec_setup(FAR struct adc_dev_s *dev)
   uint32_t afec_cselr = AFEC_CSELR_CSEL(priv->chanlist[priv->current]);
   afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, afec_cselr);
 
+  #ifdef CONFIG_SAMV7_AFEC_DMA
+  /* Initiate DMA transfers */
+
+  priv->ready   = true;   /* Worker is available */
+  priv->enabled = true;   /* Transfers are enabled */
+
+  sam_afec_dmastart(dev);
+#endif
+
   return ret;
 }
 
@@ -384,6 +696,24 @@ static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   uint32_t afec_ixr = 0;
 
+#ifdef CONFIG_SAMV7_AFEC_DMA
+  /* Ignore redundant requests */
+
+  if (priv->enabled != enable)
+    {
+      /* Set a flag.  If disabling, the DMA sequence will terminate at the
+       * completion of the next DMA.
+       */
+
+      priv->enabled = enable;
+
+      /* If enabling, then we need to restart the DMA transfer */
+
+      sam_afec_dmastart(dev);
+    }
+
+#else
+
   for (int i = 0; i < priv->nchannels; i++)
     {
       afec_ixr |= AFEC_INT_EOC(priv->chanlist[i]);
@@ -399,6 +729,7 @@ static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
     {
       afec_putreg(priv, SAM_AFEC_IDR_OFFSET, afec_ixr);
     }
+#endif
 }
 
 /****************************************************************************
@@ -588,6 +919,10 @@ FAR struct adc_dev_s *sam_afec_initialize(int intf,
 
   priv->nchannels = nchannels;
   memcpy(priv->chanlist, chanlist, nchannels);
+
+#ifdef CONFIG_SAMV7_AFEC_DMA
+  priv->nsamples = priv->nchannels * CONFIG_SAMV7_AFEC_DMASAMPLES;
+#endif
 
   ainfo("intf: %d nchannels: %d\n", priv->intf, priv->nchannels);
 
