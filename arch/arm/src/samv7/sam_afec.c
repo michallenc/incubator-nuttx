@@ -61,16 +61,26 @@
 
 #define ADC_MAX_CHANNELS 11
 
+#ifdef CONFIG_SAMV7_AFEC_DMA
+#define DMA_FLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
+     DMACH_FLAG_PERIPHPID(29) | \
+     DMACH_FLAG_PERIPHH2SEL | DMACH_FLAG_PERIPHISPERIPH |  \
+     DMACH_FLAG_PERIPHWIDTH_16BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
+     DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
+     DMACH_FLAG_MEMWIDTH_16BITS | DMACH_FLAG_MEMINCREMENT | \
+     DMACH_FLAG_MEMCHUNKSIZE_1 | DMACH_FLAG_MEMBURST_4)
+#endif
+
 #if !defined(CONFIG_SAMV7_AFEC_DMA)
 #  undef  CONFIG_SAMV7_AFEC_DMASAMPLES
 #  define CONFIG_SAMV7_AFEC_DMASAMPLES 1
-#elif !defined(CONFIG_SAMV7_AFEC_DMA)
+#elif !defined(CONFIG_SAMV7_AFEC_DMASAMPLES)
 #  error CONFIG_SAMV7_AFEC_DMASAMPLES must be defined
-#elif CONFIG_SAMV7_AFEC_DMA < 2
+#elif CONFIG_SAMV7_AFEC_DMASAMPLES < 2
 #  warning Values of CONFIG_SAMV7_AFEC_DMASAMPLES < 2 are inefficient
 #endif
 
-#define SAMV7_AFEC_SAMPLES (CONFIG_SAMV7_AFEC_DMASAMPLES * ADC_MAX_CHANNELS)
+#define SAMV7_AFEC_SAMPLES (CONFIG_SAMV7_AFEC_DMASAMPLES * 1)
 
 /****************************************************************************
  * Private Types
@@ -114,7 +124,6 @@ static int  sam_afec_dmasetup(struct adc_dev_s *dev, FAR uint8_t *buffer,
                              size_t buflen);
 static void sam_afec_dmastart(struct adc_dev_s *dev);
 #endif
-
 
 static void afec_putreg(FAR struct samv7_dev_s *priv, uint32_t offset,
                        uint32_t value);
@@ -191,7 +200,7 @@ static struct samv7_dev_s g_adcpriv1 =
 static struct adc_dev_s g_adcdev1 =
 {
   .ad_ops      = &g_adcops,
-  .ad_priv     = &g_adcpriv0,
+  .ad_priv     = &g_adcpriv1,
 };
 
 gpio_pinset_t g_adcpinlist1[ADC_MAX_CHANNELS] =
@@ -260,6 +269,7 @@ static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset)
 #ifdef CONFIG_SAMV7_AFEC_DMA
 static void sam_afec_dmadone(void *arg)
 {
+  printf("in dmadone\n");
   FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   uint16_t *buffer;
@@ -326,6 +336,8 @@ static void sam_afec_dmadone(void *arg)
 
       /* Process each sample */
 
+      printf("processing samples\n");
+
       for (i = 0; i < priv->nsamples; i++, buffer++)
         {
           /* Get the sample and the channel number */
@@ -385,6 +397,7 @@ static void sam_afec_dmastart(struct adc_dev_s *dev)
 
 static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result)
 {
+  printf("beggining of the callbck\n");
   FAR struct adc_dev_s *dev = (FAR struct adc_dev_s *)arg;
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
   int ret;
@@ -411,7 +424,7 @@ static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result)
        */
 
       priv->ready = false;
-
+      printf("in dmacalbac getting work queue\n");
       ret = work_queue(HPWORK, &priv->work, sam_afec_dmadone, dev, 0);
       if (ret != 0)
         {
@@ -623,6 +636,7 @@ static void afec_reset(FAR struct adc_dev_s *dev)
 
   /* Enable channels */
 
+  //afec_putreg(priv, SAM_AFEC_IER_OFFSET, AFEC_INT_DRDY);
   afec_putreg(priv, SAM_AFEC_CHER_OFFSET, afec_cher);
 
   return;
@@ -662,7 +676,7 @@ static int afec_setup(FAR struct adc_dev_s *dev)
       return ret;
     }
 
-  up_enable_irq(priv->irq);
+  //up_enable_irq(priv->irq);
 
   /* Start the first conversion */
 
@@ -671,7 +685,7 @@ static int afec_setup(FAR struct adc_dev_s *dev)
   uint32_t afec_cselr = AFEC_CSELR_CSEL(priv->chanlist[priv->current]);
   afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, afec_cselr);
 
-  #ifdef CONFIG_SAMV7_AFEC_DMA
+#ifdef CONFIG_SAMV7_AFEC_DMA
   /* Initiate DMA transfers */
 
   priv->ready   = true;   /* Worker is available */
@@ -699,18 +713,18 @@ static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
 #ifdef CONFIG_SAMV7_AFEC_DMA
   /* Ignore redundant requests */
 
-  if (priv->enabled != enable)
-    {
-      /* Set a flag.  If disabling, the DMA sequence will terminate at the
-       * completion of the next DMA.
-       */
+  // if (priv->enabled != enable)
+  //   {
+  //     /* Set a flag.  If disabling, the DMA sequence will terminate at the
+  //      * completion of the next DMA.
+  //      */
 
-      priv->enabled = enable;
+  //     priv->enabled = enable;
 
-      /* If enabling, then we need to restart the DMA transfer */
+  //     /* If enabling, then we need to restart the DMA transfer */
 
-      sam_afec_dmastart(dev);
-    }
+  //     sam_afec_dmastart(dev);
+  //   }
 
 #else
 
@@ -922,6 +936,7 @@ FAR struct adc_dev_s *sam_afec_initialize(int intf,
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
   priv->nsamples = priv->nchannels * CONFIG_SAMV7_AFEC_DMASAMPLES;
+  priv->dma = sam_dmachannel(1, DMA_FLAGS);
 #endif
 
   ainfo("intf: %d nchannels: %d\n", priv->intf, priv->nchannels);
