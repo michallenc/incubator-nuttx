@@ -39,7 +39,7 @@
 
 #ifdef CONFIG_SAMV7_AFEC
 
-#define ADC0_NCHANNELS 1
+#define ADC0_NCHANNELS 2
 #define ADC1_NCHANNELS 4
 
 /****************************************************************************
@@ -49,7 +49,7 @@
 #ifdef CONFIG_SAMV7_AFEC0
 static const uint8_t g_chanlist0[ADC0_NCHANNELS] =
   {
-    0 //6, 8
+    0, 6 // 8
   };
 #endif
 

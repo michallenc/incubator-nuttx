@@ -1241,6 +1241,8 @@ static inline int sam_single(struct sam_xdmach_s *xdmach)
    *    Register.
    */
 
+  //printf("start address is 0x%lx, des is 0x%lx\n", llhead->csa, llhead->cda);
+
   DEBUGASSERT(llhead != NULL && llhead->csa != 0);
   sam_putdmach(xdmach, llhead->csa, SAM_XDMACH_CSA_OFFSET);
 
@@ -1254,9 +1256,13 @@ static inline int sam_single(struct sam_xdmach_s *xdmach)
    *    Register with the number of data.
    */
 
+  //printf("cubs is 0x%lx\n", llhead->cubc);
+
   sam_putdmach(xdmach, llhead->cubc, SAM_XDMACH_CUBC_OFFSET);
 
   /* 6. Program the Channel Control (CC) Register */
+
+  //printf("channel control is 0x%lx\n", xdmach->cc);
 
   sam_putdmach(xdmach, xdmach->cc, SAM_XDMACH_CC_OFFSET);
 
