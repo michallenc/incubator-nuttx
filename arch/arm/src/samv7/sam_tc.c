@@ -176,7 +176,7 @@ static bool sam_checkreg(struct sam_tc_s *tc, bool wr, uint32_t regaddr,
 static inline uint32_t sam_tc_getreg(struct sam_chan_s *chan,
                                      unsigned int offset);
 static inline void sam_tc_putreg(struct sam_chan_s *chan,
-                                 unsigned int offset, uint32_t regval);
+                                 uint32_t regval, unsigned int offset);
 
 static inline uint32_t sam_chan_getreg(struct sam_chan_s *chan,
                                        unsigned int offset);
@@ -1746,7 +1746,7 @@ int sam_tc_clockselect(uint32_t frequency, uint32_t *tcclks,
 
           if (actual)
             {
-              tmrinfo("return actual=%lu\n", (unsigned long)fselect);
+              //tmrinfo("return actual=%lu\n", (unsigned long)fselect);
               *actual = pck6_actual;
             }
 

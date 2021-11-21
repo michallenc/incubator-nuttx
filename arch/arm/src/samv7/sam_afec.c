@@ -48,6 +48,7 @@
 #include "hardware/sam_pio.h"
 #include "sam_periphclks.h"
 #include "sam_gpio.h"
+#include "sam_tc.h"
 #include "sam_afec.h"
 #include "sam_xdmac.h"
 
@@ -94,10 +95,16 @@ struct samv7_dev_s
   uint32_t base;                        /* ADC register base */
   uint8_t  initialized;                 /* ADC initialization counter */
   uint8_t  resolution;                  /* ADC resolution (SAMV7_AFECn_RES) */
+  uint8_t  trigger;                     /* ADC trigger (software, timer...) */
+  uint8_t  timer_channel;               /* Timer channel to trigger ADC */
+  uint32_t frequency;                   /* Frequency of the timer */
   int      irq;                         /* ADC IRQ number */
   int      nchannels;                   /* Number of configured channels */
   uint8_t  chanlist[ADC_MAX_CHANNELS];  /* ADC channel list */
   uint8_t  current;                     /* Current channel being converted */
+#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
+  TC_HANDLE tc;          /* Handle for the timer channel */
+#endif
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
   volatile bool odd;     /* Odd buffer is in use */
@@ -118,6 +125,10 @@ struct samv7_dev_s
  * Private Function Prototypes
  ****************************************************************************/
 
+static void afec_putreg(FAR struct samv7_dev_s *priv, uint32_t offset,
+                       uint32_t value);
+static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset);
+
 #ifdef CONFIG_SAMV7_AFEC_DMA
 static void sam_afec_dmadone(void *arg);
 static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result);
@@ -126,9 +137,13 @@ static int  sam_afec_dmasetup(struct adc_dev_s *dev, FAR uint8_t *buffer,
 static void sam_afec_dmastart(struct adc_dev_s *dev);
 #endif
 
-static void afec_putreg(FAR struct samv7_dev_s *priv, uint32_t offset,
-                       uint32_t value);
-static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset);
+#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
+static int  sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
+                             int channel);
+static void sam_afec_freetimer(struct samv7_dev_s *priv);
+#endif
+
+static int sam_afec_trigger(struct samv7_dev_s *priv);
 
 /* ADC methods */
 
@@ -163,6 +178,13 @@ static struct samv7_dev_s g_adcpriv0 =
   .intf        = 0,
   .initialized = 0,
   .resolution  = CONFIG_SAMV7_AFEC0_RES,
+#ifdef CONFIG_SAMV7_AFEC0_SWTRIG
+  .trigger     = 0,
+#else
+  .trigger     = 1,
+  .timer_channel = CONFIG_SAMV7_AFEC0_TIOACHAN,
+  .frequency   = CONFIG_SAMV7_AFEC0_TIOAFREQ,
+#endif
   .base        = SAM_AFEC0_BASE,
 };
 
@@ -195,6 +217,13 @@ static struct samv7_dev_s g_adcpriv1 =
   .intf        = 1,
   .initialized = 0,
   .resolution  = CONFIG_SAMV7_AFEC1_RES,
+#ifdef CONFIG_SAMV7_AFEC1_SWTRIG
+  .trigger     = 0,
+#else
+  .trigger     = 1,
+  .timer_channel = CONFIG_SAMV7_AFEC1_TIOACHAN,
+  .frequency   = CONFIG_SAMV7_AFEC1_TIOAFREQ,
+#endif
   .base        = SAM_AFEC1_BASE,
 };
 
@@ -496,6 +525,176 @@ static int sam_afec_dmasetup(FAR struct adc_dev_s *dev, FAR uint8_t *buffer,
 #endif
 
 /****************************************************************************
+ * Name: sam_adc_settimer
+ *
+ * Description:
+ *   Configure a timer to trigger the sampling periodically
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
+static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
+                            int channel)
+{
+  uint32_t div;
+  uint32_t tcclks;
+  uint32_t mode;
+  uint32_t fdiv;
+  uint32_t regval;
+  int ret;
+
+  ainfo("frequency=%ld channel=%d\n", (long)frequency, channel);
+  DEBUGASSERT(priv && frequency > 0);
+
+  /* Configure TC for a 1Hz frequency and trigger on RC compare. */
+
+  ret = sam_tc_clockselect(frequency, &div, &tcclks);
+  if (ret < 0)
+    {
+      aerr("ERROR: sam_tc_divisor failed: %d\n", ret);
+      return ret;
+    }
+
+  /* Set the timer/counter waveform mode the clock input selected by
+   * sam_tc_clockselect()
+   */
+
+  mode = ((div << TC_CMR_TCCLKS_SHIFT) |  /* Use selected TCCLKS value */
+          TC_CMR_WAVSEL_UPRC |               /* UP mode w/ trigger on RC Compare */
+          TC_CMR_WAVE |                      /* Wave mode */
+          TC_CMR_ACPA_CLEAR |                /* RA Compare Effect on TIOA: Clear */
+          TC_CMR_ACPC_SET);                  /* RC effect on TIOA: Set */
+
+  /* Now allocate and configure the channel */
+
+  priv->tc = sam_tc_allocate(channel, mode);
+  if (!priv->tc)
+    {
+      aerr("ERROR: Failed to allocate channel %d mode %08x\n",
+            channel, mode);
+      return -EINVAL;
+    }
+
+  /* The divider returned by sam_tc_divisor() is the reload value that will
+   * achieve a 1Hz rate.  We need to multiply this to get the desired
+   * frequency.  sam_tc_divisor() should have already assure that we can
+   * do this without overflowing a 32-bit unsigned integer.
+   */
+
+  fdiv = div * frequency;
+  DEBUGASSERT(div > 0 && div <= fdiv); /* Will check for integer overflow */
+
+  /* Calculate the actual counter value from this divider and the tc input
+   * frequency.
+   */
+
+  printf("fdif is %d, frequency is %d\n", fdiv, frequency);
+  printf("TC freq = %d\n", sam_tc_divfreq(priv->tc));
+
+  regval = sam_tc_divfreq(priv->tc);
+
+  /* Set up TC_RA and TC_RC.  The frequency is determined by RA and RC:
+   * TIOA is cleared on RA match; TIOA is set on RC match.
+   */
+
+  sam_tc_setregister(priv->tc, TC_REGA, regval >> 1);
+  sam_tc_setregister(priv->tc, TC_REGC, regval);
+
+  printf("cmr = 0x%x\n", getreg32(SAM_TC0_BASE + SAM_TC_CMR_OFFSET));
+
+  /* And start the timer */
+
+  sam_tc_start(priv->tc);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_afec_freetimer
+ *
+ * Description:
+ *   Configure a timer to trigger the sampling periodically
+ *
+ ****************************************************************************/
+
+static void sam_afec_freetimer(struct samv7_dev_s *priv)
+{
+  /* Is a timer allocated? */
+
+  ainfo("tc=%p\n", priv->tc);
+
+  if (priv->tc)
+    {
+      /* Yes.. stop it and free it */
+
+      sam_tc_stop(priv->tc);
+      sam_tc_free(priv->tc);
+      priv->tc = NULL;
+    }
+}
+#endif
+
+/****************************************************************************
+ * Name: sam_afec_trigger
+ *
+ * Description:
+ *   Configure trigger mode and start conversion.
+ *
+ ****************************************************************************/
+
+static int sam_afec_trigger(struct samv7_dev_s *priv)
+{
+  uint32_t regval;
+  int ret = OK;
+
+  if (priv->trigger == 0)
+    {
+      ainfo("Setup software trigger\n");
+
+      /* Configure the software trigger */
+
+      regval  = afec_getreg(priv, SAM_AFEC_MR_OFFSET);
+      regval &= ~AFEC_MR_TRGSEL_MASK;
+      afec_putreg(priv, SAM_AFEC_MR_OFFSET, regval);
+    }
+#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
+  else if (priv->trigger == 1)
+    {
+      ainfo("Setup timer/counter trigger\n");
+
+      /* Start the timer */
+
+      ret = sam_afec_settimer(priv, priv->frequency, priv->timer_channel);
+      if (ret < 0)
+        {
+          aerr("ERROR: sam_afec_settimer failed: %d\n", ret);
+          return ret;
+        }
+
+      /* Configure to trigger using Timer/counter 0, channel 1, 2, or 3.
+      * NOTE: This trigger option depends on having properly configuer
+      * timer/counter 0 to provide this output.  That is done independently
+      * the timer/counter driver.
+      */
+
+      /* Set TIOAn trigger where n=0, 1, or 2 */
+
+      regval  = afec_getreg(priv, SAM_AFEC_MR_OFFSET);
+      regval &= ~AFEC_MR_TRGSEL_MASK;
+
+      printf("channel is %d\n", priv->timer_channel);
+
+      regval |= ((priv->timer_channel + 1) << AFEC_MR_TRGSEL_SHIFT) | AFEC_MR_TRGEN;
+
+      printf("regval is 0x%x\n", regval);
+
+      afec_putreg(priv, SAM_AFEC_MR_OFFSET, regval);
+    }
+#endif
+
+  return ret;
+}
+
+/****************************************************************************
  * Name: afec_bind
  *
  * Description:
@@ -546,6 +745,13 @@ static void afec_reset(FAR struct adc_dev_s *dev)
     }
 #endif
 
+#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
+  if (priv->trigger == 1)
+    {
+      sam_afec_freetimer(priv);
+    }
+#endif
+
   /* Configure clock gating */
 
   switch (priv->intf)
@@ -573,7 +779,7 @@ static void afec_reset(FAR struct adc_dev_s *dev)
 
   /* Configure Mode Register */
 
-  uint32_t afec_mr = AFEC_MR_STARTUP_64 | AFEC_MR_PRESCAL(2) | AFEC_MR_ONE;
+  uint32_t afec_mr = AFEC_MR_STARTUP_64 | AFEC_MR_PRESCAL(100) | AFEC_MR_ONE;
   afec_putreg(priv, SAM_AFEC_MR_OFFSET, afec_mr);
 
   /* Configure Extended Mode register */
@@ -692,6 +898,8 @@ static int afec_setup(FAR struct adc_dev_s *dev)
   sam_afec_dmastart(dev);
 #endif
 
+  ret = sam_afec_trigger(priv);
+
   return ret;
 }
 
@@ -706,7 +914,6 @@ static int afec_setup(FAR struct adc_dev_s *dev)
 static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
 {
   FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
-  uint32_t afec_ixr = 0;
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
   /* Ignore redundant requests */
@@ -725,6 +932,8 @@ static void afec_rxint(FAR struct adc_dev_s *dev, bool enable)
     }
 
 #else
+
+  uint32_t afec_ixr = 0;
 
   for (int i = 0; i < priv->nchannels; i++)
     {
@@ -798,11 +1007,13 @@ static int afec_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg)
 
   switch (cmd)
     {
+#ifndef CONFIG_SAMV7_AFEC_TIOATRIG
       case ANIOC_TRIGGER:
         {
           afec_putreg(priv, SAM_AFEC_CR_OFFSET, AFEC_CR_START);
         }
         break;
+#endif
       case ANIOC_GET_NCHANNELS:
         {
           /* Return the number of configured channels */

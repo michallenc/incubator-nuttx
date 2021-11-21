@@ -1262,8 +1262,6 @@ static inline int sam_single(struct sam_xdmach_s *xdmach)
 
   /* 6. Program the Channel Control (CC) Register */
 
-  //printf("channel control is 0x%lx\n", xdmach->cc);
-
   sam_putdmach(xdmach, xdmach->cc, SAM_XDMACH_CC_OFFSET);
 
   /* 7. Clear the following five registers:
