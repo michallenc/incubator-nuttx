@@ -314,8 +314,6 @@ static void sam_afec_dmadone(void *arg)
    * start the next DMA transfer).
    */
 
-  printf("getting data 1\n");
-
   if (priv->enabled)
     {
       /* Toggle to the next buffer.
@@ -369,7 +367,6 @@ static void sam_afec_dmadone(void *arg)
 
       for (i = 0; i < priv->nsamples; i++, buffer++)
         {
-          printf("getting data 2\n");
           /* Get the sample and the channel number */
 
           chan   = (int)((*buffer & AFEC_LCDR_CHANB_MASK) >>
@@ -538,6 +535,7 @@ static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
 {
   uint32_t div;
   uint32_t tcclks;
+  uint32_t actual;
   uint32_t mode;
   uint32_t fdiv;
   uint32_t regval;
@@ -548,18 +546,20 @@ static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
 
   /* Configure TC for a 1Hz frequency and trigger on RC compare. */
 
-  ret = sam_tc_clockselect(frequency, &div, &tcclks);
+  ret = sam_tc_clockselect(frequency, &tcclks, &actual);
   if (ret < 0)
     {
       aerr("ERROR: sam_tc_divisor failed: %d\n", ret);
       return ret;
     }
 
+  div = BOARD_MCK_FREQUENCY / actual;
+
   /* Set the timer/counter waveform mode the clock input selected by
    * sam_tc_clockselect()
    */
 
-  mode = ((div << TC_CMR_TCCLKS_SHIFT) |  /* Use selected TCCLKS value */
+  mode = ((tcclks << TC_CMR_TCCLKS_SHIFT) |  /* Use selected TCCLKS value */
           TC_CMR_WAVSEL_UPRC |               /* UP mode w/ trigger on RC Compare */
           TC_CMR_WAVE |                      /* Wave mode */
           TC_CMR_ACPA_CLEAR |                /* RA Compare Effect on TIOA: Clear */
@@ -588,10 +588,7 @@ static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
    * frequency.
    */
 
-  printf("fdif is %d, frequency is %d\n", fdiv, frequency);
-  printf("TC freq = %d\n", sam_tc_divfreq(priv->tc));
-
-  regval = sam_tc_divfreq(priv->tc);
+  regval = BOARD_MCK_FREQUENCY / fdiv;
 
   /* Set up TC_RA and TC_RC.  The frequency is determined by RA and RC:
    * TIOA is cleared on RA match; TIOA is set on RC match.
@@ -599,8 +596,6 @@ static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
 
   sam_tc_setregister(priv->tc, TC_REGA, regval >> 1);
   sam_tc_setregister(priv->tc, TC_REGC, regval);
-
-  printf("cmr = 0x%x\n", getreg32(SAM_TC0_BASE + SAM_TC_CMR_OFFSET));
 
   /* And start the timer */
 
@@ -744,6 +739,7 @@ static void afec_reset(FAR struct adc_dev_s *dev)
       sam_dmastop(priv->dma);
     }
 #endif
+
 
 #ifdef CONFIG_SAMV7_AFEC_TIOATRIG
   if (priv->trigger == 1)
@@ -974,6 +970,10 @@ static void afec_shutdown(FAR struct adc_dev_s *dev)
     {
       return;
     }
+
+  /* Reset ADC driver */
+
+  afec_reset(dev);
 
   /* Disable ADC interrupts */
 
