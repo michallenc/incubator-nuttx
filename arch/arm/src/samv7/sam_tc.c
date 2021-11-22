@@ -1066,7 +1066,7 @@ static int sam_tc_mcksrc(uint32_t frequency, uint32_t *tcclks,
   uint32_t fnext;
   int ndx = 0;
 
-  tmrinfo("frequency=%d\n", frequency);
+  tmrinfo("frequency=%ld\n", frequency);
 
   /* Satisfy lower bound.  That is, the value of the divider such that:
    *
@@ -1693,8 +1693,8 @@ uint32_t sam_tc_divfreq(TC_HANDLE handle)
 int sam_tc_clockselect(uint32_t frequency, uint32_t *tcclks,
                        uint32_t *actual)
 {
-  uint32_t mck_actual;
-  uint32_t mck_tcclks;
+  uint32_t mck_actual = 0;
+  uint32_t mck_tcclks = 0;
   uint32_t mck_error;
   int ret;
 
@@ -1746,7 +1746,7 @@ int sam_tc_clockselect(uint32_t frequency, uint32_t *tcclks,
 
           if (actual)
             {
-              //tmrinfo("return actual=%lu\n", (unsigned long)fselect);
+              tmrinfo("return actual=%lu\n", (unsigned long)pck6_actual);
               *actual = pck6_actual;
             }
 
