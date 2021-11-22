@@ -64,7 +64,6 @@
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
 #define DMA_FLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
-     DMACH_FLAG_PERIPHPID(SAM_PID_AFEC0) | \
      DMACH_FLAG_PERIPHH2SEL | DMACH_FLAG_PERIPHISPERIPH |  \
      DMACH_FLAG_PERIPHWIDTH_32BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
      DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
@@ -99,6 +98,7 @@ struct samv7_dev_s
   uint8_t  timer_channel;               /* Timer channel to trigger ADC */
   uint32_t frequency;                   /* Frequency of the timer */
   int      irq;                         /* ADC IRQ number */
+  int      pid;                         /* ADC PID number */
   int      nchannels;                   /* Number of configured channels */
   uint8_t  chanlist[ADC_MAX_CHANNELS];  /* ADC channel list */
   uint8_t  current;                     /* Current channel being converted */
@@ -175,6 +175,7 @@ static const struct adc_ops_s g_adcops =
 static struct samv7_dev_s g_adcpriv0 =
 {
   .irq         = SAM_IRQ_AFEC0,
+  .pid         = SAM_PID_AFEC0,
   .intf        = 0,
   .initialized = 0,
   .resolution  = CONFIG_SAMV7_AFEC0_RES,
@@ -214,6 +215,7 @@ gpio_pinset_t g_adcpinlist0[ADC_MAX_CHANNELS] =
 static struct samv7_dev_s g_adcpriv1 =
 {
   .irq         = SAM_IRQ_AFEC1,
+  .pid         = SAM_PID_AFEC1,
   .intf        = 1,
   .initialized = 0,
   .resolution  = CONFIG_SAMV7_AFEC1_RES,
@@ -263,7 +265,6 @@ static uint32_t afec_getreg(FAR struct samv7_dev_s *priv, uint32_t offset)
 {
   return getreg32(priv->base + offset);
 }
-
 
 /****************************************************************************
  * DMA Helpers
@@ -337,19 +338,6 @@ static void sam_afec_dmadone(void *arg)
 
       /* Restart the DMA conversion as quickly as possible using the next
        * buffer.
-       *
-       * REVISIT: In the original design, toggling the ping-pong buffers and
-       * restarting the DMA was done in the interrupt handler so that the
-       * next buffer could be filling while the current buffer is being
-       * processed here on the worker thread.  But, unfortunately,
-       * sam_adcm_dmasetup() cannot be called from an interrupt handler.
-       *
-       * A consequence of this is that there is a small window from the time
-       * that the last set of samples was taken, the worker thread runs, and
-       * the follow logic restarts the DMA in which samples could be lost!
-       *
-       * Without the interrupt level DMA restart logic, there is not really
-       * any good reason to support the ping-poing buffers at all.
        */
 
       sam_afec_dmasetup(dev, (FAR uint8_t *)next,
@@ -371,7 +359,8 @@ static void sam_afec_dmadone(void *arg)
 
           chan   = (int)((*buffer & AFEC_LCDR_CHANB_MASK) >>
                     AFEC_LCDR_CHANB_SHIFT);
-          sample = ((*buffer & AFEC_LCDR_LDATA_MASK) >> AFEC_LCDR_LDATA_SHIFT);
+          sample = ((*buffer & AFEC_LCDR_LDATA_MASK) >>
+                    AFEC_LCDR_LDATA_SHIFT);
 
           /* Verify the upper-half driver has bound its callback functions */
 
@@ -388,28 +377,6 @@ static void sam_afec_dmadone(void *arg)
   /* We are ready to handle the next sample sequence */
 
   priv->ready = true;
-}
-
-/****************************************************************************
- * Name: sam_afec_dmastart
- *
- * Description:
- *   Initiate DMA sampling.
- *
- ****************************************************************************/
-
-static void sam_afec_dmastart(struct adc_dev_s *dev)
-{
-  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
-
-  /* Make sure that the worker is available and that DMA is not disabled */
-
-  if (priv->ready && priv->enabled)
-    {
-      priv->odd = false;  /* Start with the even buffer */
-      sam_afec_dmasetup(dev, (FAR uint8_t *)priv->evenbuf,
-                       priv->nsamples * sizeof(uint32_t));
-    }
 }
 
 /****************************************************************************
@@ -456,21 +423,6 @@ static void sam_afec_dmacallback(DMA_HANDLE handle, void *arg, int result)
           aerr("ERROR: Failed to queue work: %d\n", ret);
         }
     }
-
-  /* REVISIT: There used to be logic here to toggle the ping-pong buffers and
-   * to restart the DMA conversion.  This would allow refilling one buffer
-   * while the worker processes the other buffer that was just filled. But,
-   * unfortunately, sam_adcm_dmasetup() and dma_rxsetup cannot be called
-   * from an interrupt handler.
-   *
-   * A consequence of this is that there is a small window from the time
-   * that the last set of samples was taken, the worker thread runs, and the
-   * logic on the worker thread restarts the DMA.  Samples trigger during
-   * this window will be be lost!
-   *
-   * Without this logic, there is not really any strong reason to support
-   * the ping-poing buffers at all.
-   */
 }
 
 /****************************************************************************
@@ -518,6 +470,28 @@ static int sam_afec_dmasetup(FAR struct adc_dev_s *dev, FAR uint8_t *buffer,
 
   sam_dmastart(priv->dma, sam_afec_dmacallback, dev);
   return OK;
+}
+
+/****************************************************************************
+ * Name: sam_afec_dmastart
+ *
+ * Description:
+ *   Initiate DMA sampling.
+ *
+ ****************************************************************************/
+
+static void sam_afec_dmastart(struct adc_dev_s *dev)
+{
+  FAR struct samv7_dev_s *priv = (FAR struct samv7_dev_s *)dev->ad_priv;
+
+  /* Make sure that the worker is available and that DMA is not disabled */
+
+  if (priv->ready && priv->enabled)
+    {
+      priv->odd = false;  /* Start with the even buffer */
+      sam_afec_dmasetup(dev, (FAR uint8_t *)priv->evenbuf,
+                       priv->nsamples * sizeof(uint32_t));
+    }
 }
 #endif
 
@@ -570,15 +544,15 @@ static int sam_afec_settimer(struct samv7_dev_s *priv, uint32_t frequency,
   priv->tc = sam_tc_allocate(channel, mode);
   if (!priv->tc)
     {
-      aerr("ERROR: Failed to allocate channel %d mode %08x\n",
+      aerr("ERROR: Failed to allocate channel %d mode %08lx\n",
             channel, mode);
       return -EINVAL;
     }
 
-  /* The divider returned by sam_tc_divisor() is the reload value that will
-   * achieve a 1Hz rate.  We need to multiply this to get the desired
-   * frequency.  sam_tc_divisor() should have already assure that we can
-   * do this without overflowing a 32-bit unsigned integer.
+  /* The divider returned by sam_tc_clockselect() is the reload value
+   * that will achieve a 1Hz rate.  We need to multiply this to get the
+   * desired frequency.  sam_tc_divisor() should have already assure
+   * that we can do this without overflowing a 32-bit unsigned integer.
    */
 
   fdiv = div * frequency;
@@ -641,6 +615,7 @@ static int sam_afec_trigger(struct samv7_dev_s *priv)
   uint32_t regval;
   int ret = OK;
 
+#ifdef CONFIG_SAMV7_AFEC_SWTRIG
   if (priv->trigger == 0)
     {
       ainfo("Setup software trigger\n");
@@ -651,8 +626,8 @@ static int sam_afec_trigger(struct samv7_dev_s *priv)
       regval &= ~AFEC_MR_TRGSEL_MASK;
       afec_putreg(priv, SAM_AFEC_MR_OFFSET, regval);
     }
-#ifdef CONFIG_SAMV7_AFEC_TIOATRIG
-  else if (priv->trigger == 1)
+#elif CONFIG_SAMV7_AFEC_TIOATRIG
+  if (priv->trigger == 1)
     {
       ainfo("Setup timer/counter trigger\n");
 
@@ -665,22 +640,23 @@ static int sam_afec_trigger(struct samv7_dev_s *priv)
           return ret;
         }
 
-      /* Configure to trigger using Timer/counter 0, channel 1, 2, or 3.
-      * NOTE: This trigger option depends on having properly configuer
-      * timer/counter 0 to provide this output.  That is done independently
-      * the timer/counter driver.
-      */
+      /* AFEC_MR registr still needs to select corresponding channels with
+       * 1, 2, 3 values (see TRGSEL bitfield description) even if channels
+       * 3, 4 and 5 are selected for AFEC1
+       */
 
-      /* Set TIOAn trigger where n=0, 1, or 2 */
+      if (priv->intf == 1)
+        {
+          priv->timer_channel -= 3;
+        }
+
+      /* Set trigger for AFECn driver */
 
       regval  = afec_getreg(priv, SAM_AFEC_MR_OFFSET);
       regval &= ~AFEC_MR_TRGSEL_MASK;
 
-      printf("channel is %d\n", priv->timer_channel);
-
-      regval |= ((priv->timer_channel + 1) << AFEC_MR_TRGSEL_SHIFT) | AFEC_MR_TRGEN;
-
-      printf("regval is 0x%x\n", regval);
+      regval |= ((priv->timer_channel + 1) << AFEC_MR_TRGSEL_SHIFT) | \
+                AFEC_MR_TRGEN;
 
       afec_putreg(priv, SAM_AFEC_MR_OFFSET, regval);
     }
@@ -739,7 +715,6 @@ static void afec_reset(FAR struct adc_dev_s *dev)
       sam_dmastop(priv->dma);
     }
 #endif
-
 
 #ifdef CONFIG_SAMV7_AFEC_TIOATRIG
   if (priv->trigger == 1)
@@ -893,6 +868,8 @@ static int afec_setup(FAR struct adc_dev_s *dev)
 
   sam_afec_dmastart(dev);
 #endif
+
+  /* Setup AFEC trigger */
 
   ret = sam_afec_trigger(priv);
 
@@ -1073,7 +1050,7 @@ static int afec_interrupt(int irq, void *context, FAR void *arg)
           priv->current = 0;
         }
 
-      /* Start the next conversion */
+      /* Setup the next conversion */
 
       uint32_t afec_cselr = AFEC_CSELR_CSEL(priv->chanlist[priv->current]);
       afec_putreg(priv, SAM_AFEC_CSELR_OFFSET, afec_cselr);
@@ -1145,7 +1122,8 @@ FAR struct adc_dev_s *sam_afec_initialize(int intf,
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
   priv->nsamples = priv->nchannels * CONFIG_SAMV7_AFEC_DMASAMPLES;
-  priv->dma = sam_dmachannel(0, DMA_FLAGS);
+  priv->dma = sam_dmachannel(0, DMA_FLAGS | \
+                             DMACH_FLAG_PERIPHPID(priv->pid));
 #endif
 
   ainfo("intf: %d nchannels: %d\n", priv->intf, priv->nchannels);
