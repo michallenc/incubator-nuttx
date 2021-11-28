@@ -232,7 +232,16 @@
 
 #define GPIO_SW0      (GPIO_INPUT | GPIO_CFG_DEFAULT | \
                        GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN9)
-#define IRQ_SW0       SAM_IRQ_PD9
+#define GPIO_ENC_SW   (GPIO_INPUT | GPIO_CFG_DEFAULT | \
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN6)
+#define GPIO_ENC_A    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN7)
+#define GPIO_ENC_B    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN8)
+#define GPIO_SW0_INT      SAM_IRQ_PD9
+#define GPIO_ENC_SW_INT   SAM_IRQ_PD6
+#define GPIO_ENC_A_INT    SAM_IRQ_PD7
+#define GPIO_ENC_B_INT    SAM_IRQ_PD8
 
 /* LCD dispay */
 

@@ -47,10 +47,25 @@
 
 #ifdef CONFIG_ARCH_IRQBUTTONS
 #  define HAVE_IRQBUTTONS 1
-#  ifndef CONFIG_SAMV7_GPIOA_IRQ
+#  ifndef CONFIG_SAMV7_GPIOD_IRQ
 #    undef HAVE_IRQBUTTONS
 #  endif
 #endif
+
+const uint32_t gpio_pins[NUM_BUTTONS]     =
+                                            {
+                                              GPIO_SW0,
+                                              GPIO_ENC_SW,
+                                              GPIO_ENC_A,
+                                              GPIO_ENC_B
+                                            };
+const uint32_t gpio_pins_int[NUM_BUTTONS] =
+                                            {
+                                              GPIO_SW0_INT,
+                                              GPIO_ENC_SW_INT,
+                                              GPIO_ENC_A_INT,
+                                              GPIO_ENC_B_INT
+                                            };
 
 /****************************************************************************
  * Private Functions
@@ -117,9 +132,15 @@ static int board_button_irqx(gpio_pinset_t pinset, int irq,
 
 uint32_t board_button_initialize(void)
 {
-  /* Configure button PIOs */
+  uint8_t i;
 
-  sam_configgpio(GPIO_SW0);
+  /* Configure the buttons PIOs as input */
+
+  for (i = 0; i < NUM_BUTTONS; i++)
+    {
+      sam_configgpio(gpio_pins[i]);
+    }
+
   return NUM_BUTTONS;
 }
 
@@ -136,7 +157,15 @@ uint32_t board_button_initialize(void)
 
 uint32_t board_buttons(void)
 {
-  return sam_gpioread(GPIO_SW0) ? 0 : BUTTON_SW0_BIT;
+  uint8_t ret = 0;
+  uint8_t i   = 0;
+
+  for (i = 0; i < NUM_BUTTONS; i++)
+    {
+      ret |= ((!sam_gpioread(gpio_pins[i])) << i);
+    }
+
+  return ret;
 }
 
 /****************************************************************************
@@ -160,9 +189,10 @@ uint32_t board_buttons(void)
 int board_button_irq(int id, xcpt_t irqhandler, FAR void *arg)
 {
 #ifdef HAVE_IRQBUTTONS
-  if (id == BUTTON_SW0)
+  if (id < NUM_BUTTONS)
     {
-      return board_button_irqx(GPIO_SW0, IRQ_SW0, irqhandler, arg);
+      return board_button_irqx(gpio_pins[id], gpio_pins_int[id], irqhandler,
+                               arg);
     }
 #endif
 
