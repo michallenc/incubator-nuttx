@@ -50,7 +50,7 @@ endif
 CHIP_CSRCS  = esp32c3_allocateheap.c esp32c3_start.c esp32c3_wdt.c esp32c3_idle.c
 CHIP_CSRCS += esp32c3_irq.c
 CHIP_CSRCS += esp32c3_clockconfig.c esp32c3_gpio.c
-CHIP_CSRCS += esp32c3_lowputc.c
+CHIP_CSRCS += esp32c3_lowputc.c esp32c3_serial.c
 CHIP_CSRCS += esp32c3_systemreset.c esp32c3_resetcause.c
 CHIP_CSRCS += esp32c3_uid.c
 
@@ -60,8 +60,8 @@ else
 CHIP_CSRCS += esp32c3_timerisr.c
 endif
 
-ifeq ($(CONFIG_ESP32C3_UART),y)
-CHIP_CSRCS += esp32c3_serial.c
+ifeq ($(CONFIG_ESP32C3_USBSERIAL),y)
+CHIP_CSRCS += esp32c3_usbserial.c
 endif
 
 ifeq ($(CONFIG_ESP32C3_RNG),y)
@@ -170,6 +170,10 @@ endif
 
 ifeq ($(CONFIG_ESP32C3_RTC_HEAP),y)
 CHIP_CSRCS += esp32c3_rtcheap.c
+endif
+
+ifeq ($(CONFIG_ESP32C3_BROWNOUT_DET),y)
+CHIP_CSRCS += esp32c3_brownout.c
 endif
 
 ifeq ($(CONFIG_ESP32C3_WIRELESS),y)
