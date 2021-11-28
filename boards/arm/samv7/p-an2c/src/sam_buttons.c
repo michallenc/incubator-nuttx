@@ -85,6 +85,7 @@ static int board_button_irqx(gpio_pinset_t pinset, int irq,
       sam_gpioirq(pinset);
       irq_attach(irq, irqhandler, arg);
       sam_gpioirqenable(irq);
+      up_enable_irq(irq);
     }
   else
     {

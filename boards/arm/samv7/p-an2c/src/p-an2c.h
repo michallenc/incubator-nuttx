@@ -218,6 +218,22 @@
 #define GPIO_LED0     (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                        GPIO_PORT_PIOA | GPIO_PIN24)
 
+/* Buttons
+ *
+ * SAM E70 Xplained contains two mechanical buttons. One button is the RESET
+ * button connected to the SAM E70 reset line and the other, PA11, is a
+ * generic user configurable button.
+ * When a button is pressed it will drive the I/O line to GND.
+ *
+ * NOTE: There are no pull-up resistors connected to the generic user buttons
+ * so it is necessary to enable the internal pull-up in the SAM E70 to use
+ * the button.
+ */
+
+#define GPIO_SW0      (GPIO_INPUT | GPIO_CFG_DEFAULT | \
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN9)
+#define IRQ_SW0       SAM_IRQ_PD9
+
 /* LCD dispay */
 
 #define GPIO_LCD_RST   (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \

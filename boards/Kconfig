@@ -1650,6 +1650,8 @@ config ARCH_BOARD_PAN2C
 	bool "P-AN2C board"
 	depends on ARCH_CHIP_SAME70J21
 	select ARCH_HAVE_LEDS
+	select ARCH_HAVE_BUTTONS
+	select ARCH_HAVE_IRQBUTTONS
 	---help---
 		The port of NuttX to the P-AN2C evaluation board.
 
