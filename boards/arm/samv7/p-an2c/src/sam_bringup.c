@@ -247,6 +247,15 @@ int sam_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_SENSORS_QENCODER
+
+  ret = sam_enc_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sam_enc_setup failed: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_VIDEO_FB
   ret = fb_register(0, 0);
   if (ret < 0)

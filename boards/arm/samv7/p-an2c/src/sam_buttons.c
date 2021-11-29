@@ -31,7 +31,6 @@
 #include <nuttx/board.h>
 #include <nuttx/irq.h>
 
-#include <nuttx/irq.h>
 #include <arch/board/board.h>
 
 #include "arm_arch.h"
@@ -55,16 +54,12 @@
 const uint32_t gpio_pins[NUM_BUTTONS]     =
                                             {
                                               GPIO_SW0,
-                                              GPIO_ENC_SW,
-                                              GPIO_ENC_A,
-                                              GPIO_ENC_B
+                                              GPIO_ENC_SW
                                             };
 const uint32_t gpio_pins_int[NUM_BUTTONS] =
                                             {
                                               GPIO_SW0_INT,
                                               GPIO_ENC_SW_INT,
-                                              GPIO_ENC_A_INT,
-                                              GPIO_ENC_B_INT
                                             };
 
 /****************************************************************************
@@ -100,7 +95,7 @@ static int board_button_irqx(gpio_pinset_t pinset, int irq,
       sam_gpioirq(pinset);
       irq_attach(irq, irqhandler, arg);
       sam_gpioirqenable(irq);
-      up_enable_irq(irq);
+      //up_enable_irq(irq);
     }
   else
     {

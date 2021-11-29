@@ -240,7 +240,7 @@
 #define BUTTON_ENC_SW     1
 #define BUTTON_ENC_A      2
 #define BUTTON_ENC_B      3
-#define NUM_BUTTONS       4
+#define NUM_BUTTONS       2
 
 #define BUTTON_SW0_BIT    (1 << BUTTON_SW0)
 #define BUTTON_ENC_SW_BIT (1 << BUTTON_ENC_SW)

@@ -235,9 +235,9 @@
 #define GPIO_ENC_SW   (GPIO_INPUT | GPIO_CFG_DEFAULT | \
                        GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN6)
 #define GPIO_ENC_A    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN7)
+                       GPIO_INT_RISING | GPIO_PORT_PIOD | GPIO_PIN7)
 #define GPIO_ENC_B    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN8)
+                       GPIO_INT_RISING | GPIO_PORT_PIOD | GPIO_PIN8)
 #define GPIO_SW0_INT      SAM_IRQ_PD9
 #define GPIO_ENC_SW_INT   SAM_IRQ_PD6
 #define GPIO_ENC_A_INT    SAM_IRQ_PD7
@@ -429,6 +429,10 @@ bool sam_cardinserted(int slotno);
 
 #ifdef HAVE_HSMCI
 bool sam_writeprotected(int slotno);
+#endif
+
+#ifdef CONFIG_SENSORS_QENCODER
+int sam_enc_setup(void);
 #endif
 
 /****************************************************************************
