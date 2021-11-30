@@ -57,7 +57,7 @@ struct sam_gpio_enc_lowerhalf_s
    * half callback structure:
    */
 
-  FAR const struct qe_ops_s *ops;             /* Lower half callback structure */
+  FAR const struct qe_ops_s *ops;           /* Lower half callback structure */
   FAR const struct sam_qeconfig_s *config;  /* static configuration */
 };
 
@@ -85,16 +85,16 @@ const int irc_phase_increment[16]= {
   /*12*/0,-1,1,0
 };
 
-const uint32_t gpio_enc_pins[NUM_BUTTONS]     =
-                                            {
-                                              GPIO_ENC_A,
-                                              GPIO_ENC_B
-                                            };
-const uint32_t gpio_enc_pins_int[NUM_BUTTONS] =
-                                            {
-                                              GPIO_ENC_A_INT,
-                                              GPIO_ENC_B_INT,
-                                            };
+const uint32_t gpio_enc_pins[2] =
+                                      {
+                                        GPIO_ENC_A,
+                                        GPIO_ENC_B
+                                      };
+const uint32_t gpio_enc_pins_int[2] =
+                                      {
+                                        GPIO_ENC_A_INT,
+                                        GPIO_ENC_B_INT,
+                                      };
 
 
 static const struct qe_ops_s g_qecallbacks =
