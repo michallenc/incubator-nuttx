@@ -51,7 +51,7 @@ struct sam_qeconfig_s
   int32_t  phase;
 };
 
-struct sam_enc_lowerhalf_s
+struct sam_gpio_enc_lowerhalf_s
 {
   /* The first field of this state structure must be a pointer to the lower-
    * half callback structure:
@@ -65,13 +65,14 @@ struct sam_enc_lowerhalf_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int board_enc_irqx(gpio_pinset_t pinset, int irq,
+static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
                              xcpt_t irqhandler, void *arg);
-static int sam_enc_interrupt(int irq, FAR void *context,
+static int sam_gpio_enc_interrupt(int irq, FAR void *context,
                                      FAR void *arg);
 static int sam_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos);
 static int sam_setup(FAR struct qe_lowerhalf_s *lower);
 static int sam_shutdown(FAR struct qe_lowerhalf_s *lower);
+static int sam_reset(FAR struct qe_lowerhalf_s *lower);
 
 /****************************************************************************
  * Private Data
@@ -84,12 +85,12 @@ const int irc_phase_increment[16]= {
   /*12*/0,-1,1,0
 };
 
-const uint32_t enc_pins[NUM_BUTTONS]     =
+const uint32_t gpio_enc_pins[NUM_BUTTONS]     =
                                             {
                                               GPIO_ENC_A,
                                               GPIO_ENC_B
                                             };
-const uint32_t enc_pins_int[NUM_BUTTONS] =
+const uint32_t gpio_enc_pins_int[NUM_BUTTONS] =
                                             {
                                               GPIO_ENC_A_INT,
                                               GPIO_ENC_B_INT,
@@ -102,20 +103,20 @@ static const struct qe_ops_s g_qecallbacks =
   .shutdown  = sam_shutdown,
   .position  = sam_position,
   .setposmax = NULL,
-  .reset     = NULL,
+  .reset     = sam_reset,
   .ioctl     = NULL,
 };
 
-static const struct sam_qeconfig_s sam_enc_config =
+static struct sam_qeconfig_s sam_gpio_enc_config =
 {
   .position = 0,
   .phase = 0,
 };
 
-static struct sam_enc_lowerhalf_s sam_enc_priv =
+static struct sam_gpio_enc_lowerhalf_s sam_gpio_enc_priv =
 {
   .ops = &g_qecallbacks,
-  .config = &sam_enc_config,
+  .config = &sam_gpio_enc_config,
 };
 
 /****************************************************************************
@@ -123,14 +124,14 @@ static struct sam_enc_lowerhalf_s sam_enc_priv =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: board_enc_irqx
+ * Name: board_gpio_enc_irqx
  *
  * Description:
  *   This function implements the core of the board_button_irq() logic.
  *
  ****************************************************************************/
 
-static int board_enc_irqx(gpio_pinset_t pinset, int irq,
+static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
                              xcpt_t irqhandler, void *arg)
 {
   irqstate_t flags;
@@ -165,10 +166,10 @@ static int board_enc_irqx(gpio_pinset_t pinset, int irq,
   return OK;
 }
 
-static int sam_enc_interrupt(int irq, FAR void *context,
+static int sam_gpio_enc_interrupt(int irq, FAR void *context,
                                      FAR void *arg)
 {
-  FAR struct sam_enc_lowerhalf_s *dev = (FAR struct sam_enc_lowerhalf_s *)arg;
+  FAR struct sam_gpio_enc_lowerhalf_s *dev = (FAR struct sam_gpio_enc_lowerhalf_s *)arg;
   FAR struct sam_qeconfig_s *priv = (struct sam_qeconfig_s *)dev->config;
 
   unsigned int stateA;
@@ -176,14 +177,14 @@ static int sam_enc_interrupt(int irq, FAR void *context,
   int32_t incr;
   int32_t phase;
 
-  stateA = sam_gpioread(enc_pins[0]);
-  stateB = sam_gpioread(enc_pins[1]);
+  stateA = sam_gpioread(gpio_enc_pins[0]);
+  stateB = sam_gpioread(gpio_enc_pins[1]);
 
   phase = (stateA << 1) | (stateB << 0);  
 
   incr = irc_phase_increment[priv->phase | (phase*4)];
-  priv->position+=incr;
-  priv->phase=phase;
+  priv->position += incr;
+  priv->phase = phase;
 
   return OK;
 }
@@ -198,8 +199,8 @@ static int sam_enc_interrupt(int irq, FAR void *context,
 
 static int sam_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos)
 {
-  FAR struct sam_enc_lowerhalf_s *priv =
-    (FAR struct sam_enc_lowerhalf_s *)lower;
+  FAR struct sam_gpio_enc_lowerhalf_s *priv =
+    (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
   FAR const struct sam_qeconfig_s *config = priv->config;
 
   *pos = (int32_t)config->position;
@@ -216,6 +217,19 @@ static int sam_shutdown(FAR struct qe_lowerhalf_s *lower)
   return OK;
 }
 
+static int sam_reset(FAR struct qe_lowerhalf_s *lower)
+{
+  FAR struct sam_gpio_enc_lowerhalf_s *priv =
+    (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
+  FAR struct sam_qeconfig_s *config = 
+    (FAR struct sam_qeconfig_s *)priv->config;
+  
+  config->position = 0;
+  config->phase = 0;
+
+  return OK;
+}
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -228,14 +242,14 @@ static int sam_shutdown(FAR struct qe_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-int sam_enc_setup(void)
+int sam_gpio_enc_setup(void)
 {
   int i;
   int ret;
 
-  struct sam_enc_lowerhalf_s * priv = (struct sam_enc_lowerhalf_s *)&sam_enc_priv;
+  struct sam_gpio_enc_lowerhalf_s * priv = (struct sam_gpio_enc_lowerhalf_s *)&sam_gpio_enc_priv;
 
-  ret = qe_register("dev/qe0", (FAR struct qe_lowerhalf_s *)priv);
+  ret = qe_register("dev/gpio_enc", (FAR struct qe_lowerhalf_s *)priv);
   if (ret < 0)
     {
       snerr("ERROR: qe_register failed: %d\n", ret);
@@ -244,8 +258,8 @@ int sam_enc_setup(void)
 
   for (i = 0; i < 2; i++)
     {
-      sam_configgpio(enc_pins[i]);
-      ret = board_enc_irqx(enc_pins[i], enc_pins_int[i], sam_enc_interrupt, priv);
+      sam_configgpio(gpio_enc_pins[i]);
+      ret = board_gpio_enc_irqx(gpio_enc_pins[i], gpio_enc_pins_int[i], sam_gpio_enc_interrupt, priv);
     }
 
   return OK;
