@@ -47,8 +47,10 @@
 
 struct sam_qeconfig_s
 {
-  int32_t  position;
-  int32_t  phase;
+  uint32_t  position;
+  uint32_t  position_base;
+  uint32_t  phase;
+  uint32_t  error;
 };
 
 struct sam_gpio_enc_lowerhalf_s
@@ -69,21 +71,14 @@ static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
                              xcpt_t irqhandler, void *arg);
 static int sam_gpio_enc_interrupt(int irq, FAR void *context,
                                      FAR void *arg);
-static int sam_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos);
-static int sam_setup(FAR struct qe_lowerhalf_s *lower);
-static int sam_shutdown(FAR struct qe_lowerhalf_s *lower);
-static int sam_reset(FAR struct qe_lowerhalf_s *lower);
+static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos);
+static int sam_gpio_enc_setup(FAR struct qe_lowerhalf_s *lower);
+static int sam_gpio_enc_shutdown(FAR struct qe_lowerhalf_s *lower);
+static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-const int irc_phase_increment[16]= {
-  /*0*/0,1,-1,0,
-  /*4*/-1,0,0,1,
-  /*8*/1,0,0,-1,
-  /*12*/0,-1,1,0
-};
 
 const uint32_t gpio_enc_pins[2] =
                                       {
@@ -99,18 +94,19 @@ const uint32_t gpio_enc_pins_int[2] =
 
 static const struct qe_ops_s g_qecallbacks =
 {
-  .setup     = sam_setup,
-  .shutdown  = sam_shutdown,
-  .position  = sam_position,
+  .setup     = sam_gpio_enc_setup,
+  .shutdown  = sam_gpio_enc_shutdown,
+  .position  = sam_gpio_enc_position,
   .setposmax = NULL,
-  .reset     = sam_reset,
+  .reset     = sam_gpio_enc_reset,
   .ioctl     = NULL,
 };
 
 static struct sam_qeconfig_s sam_gpio_enc_config =
 {
   .position = 0,
-  .phase = 0,
+  .position_base = 0,
+  .error = 0,
 };
 
 static struct sam_gpio_enc_lowerhalf_s sam_gpio_enc_priv =
@@ -175,16 +171,24 @@ static int sam_gpio_enc_interrupt(int irq, FAR void *context,
   unsigned int stateA;
   unsigned int stateB;
   int32_t incr;
-  int32_t phase;
+  uint32_t new;
+  uint32_t incr_mask;
+
+  /* Read the status of encoder pins */
 
   stateA = sam_gpioread(gpio_enc_pins[0]);
   stateB = sam_gpioread(gpio_enc_pins[1]);
 
-  phase = (stateA << 1) | (stateB << 0);  
+  new = (stateB << 1 | (stateA^stateB));
+  incr = ((new - priv->position + 1) & 3) - 1;
+  incr_mask = (int32_t)((1 - incr) >> 2);
 
-  incr = irc_phase_increment[priv->phase | (phase*4)];
-  priv->position += incr;
-  priv->phase = phase;
+  /* Increment position */
+  priv->position += incr & ~incr_mask;
+
+  /* Count error */
+
+  priv->error -= incr_mask;
 
   return OK;
 }
@@ -197,35 +201,34 @@ static int sam_gpio_enc_interrupt(int irq, FAR void *context,
  *
  ****************************************************************************/
 
-static int sam_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos)
+static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos)
 {
   FAR struct sam_gpio_enc_lowerhalf_s *priv =
     (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
   FAR const struct sam_qeconfig_s *config = priv->config;
 
-  *pos = (int32_t)config->position;
+  *pos = config->position - config->position_base;
   return OK;
 }
 
-static int sam_setup(FAR struct qe_lowerhalf_s *lower)
+static int sam_gpio_enc_setup(FAR struct qe_lowerhalf_s *lower)
 {
   return OK;
 }
 
-static int sam_shutdown(FAR struct qe_lowerhalf_s *lower)
+static int sam_gpio_enc_shutdown(FAR struct qe_lowerhalf_s *lower)
 {
   return OK;
 }
 
-static int sam_reset(FAR struct qe_lowerhalf_s *lower)
+static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower)
 {
   FAR struct sam_gpio_enc_lowerhalf_s *priv =
     (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
   FAR struct sam_qeconfig_s *config = 
     (FAR struct sam_qeconfig_s *)priv->config;
   
-  config->position = 0;
-  config->phase = 0;
+  config->position = config->position_base;
 
   return OK;
 }
@@ -242,7 +245,7 @@ static int sam_reset(FAR struct qe_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-int sam_gpio_enc_setup(void)
+int sam_gpio_enc_init(void)
 {
   int i;
   int ret;

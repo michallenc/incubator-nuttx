@@ -432,7 +432,7 @@ bool sam_writeprotected(int slotno);
 #endif
 
 #ifdef CONFIG_SENSORS_QENCODER
-int sam_gpio_enc_setup(void);
+int sam_gpio_enc_init(void);
 #endif
 
 /****************************************************************************

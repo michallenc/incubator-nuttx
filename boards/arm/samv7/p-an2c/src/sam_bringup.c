@@ -249,10 +249,10 @@ int sam_bringup(void)
 
 #ifdef CONFIG_SENSORS_QENCODER
 
-  ret = sam_gpio_enc_setup();
+  ret = sam_gpio_enc_init();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: sam_enc_setup failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: sam_gpio_enc_init failed: %d\n", ret);
     }
 #endif
 
