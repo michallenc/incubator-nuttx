@@ -1033,7 +1033,7 @@ static struct sam_config_s g_mcan0const =
   .dbtp             = MCAN_DBTP_DBRP(MCAN0_DBRP) |
                       MCAN_DBTP_DTSEG1(MCAN0_DTSEG1) |
                       MCAN_DBTP_DTSEG2(MCAN0_DTSEG2) |
-                      MCAN_DBTP_DSJW(MCAN0_DSJW), 
+                      MCAN_DBTP_DSJW(MCAN0_DSJW),
   .port             = 0,
   .pid              = SAM_PID_MCAN00,
   .irq0             = SAM_IRQ_MCAN00,
@@ -1121,7 +1121,7 @@ static struct sam_config_s g_mcan1const =
   .dbtp             = MCAN_DBTP_DBRP(MCAN1_DBRP) |
                       MCAN_DBTP_DTSEG1(MCAN1_DTSEG1) |
                       MCAN_DBTP_DTSEG2(MCAN1_DTSEG2) |
-                      MCAN_DBTP_DSJW(MCAN1_DSJW), 
+                      MCAN_DBTP_DSJW(MCAN1_DSJW),
   .port             = 1,
   .pid              = SAM_PID_MCAN10,
   .irq0             = SAM_IRQ_MCAN10,
@@ -2714,7 +2714,6 @@ static int mcan_ioctl(FAR struct can_dev_s *dev, int cmd, unsigned long arg)
                               MCAN_BTP_TSEG1_SHIFT) + 1;
               bt->bt_tseg2 = ((regval & MCAN_BTP_TSEG2_MASK) >>
                               MCAN_BTP_TSEG2_SHIFT) + 1;
-
               brp          = ((regval & MCAN_BTP_BRP_MASK) >>
                               MCAN_BTP_BRP_SHIFT) + 1;
             }
@@ -2728,14 +2727,12 @@ static int mcan_ioctl(FAR struct can_dev_s *dev, int cmd, unsigned long arg)
                               MCAN_NBTP_NTSEG1_SHIFT) + 1;
               bt->bt_tseg2 = ((regval & MCAN_NBTP_NTSEG2_MASK) >>
                               MCAN_NBTP_NTSEG2_SHIFT) + 1;
-
               brp          = ((regval & MCAN_NBTP_NBRP_MASK) >>
-                              MCAN_NBTP_NBRP_SHIFT) + 1;            
+                              MCAN_NBTP_NBRP_SHIFT) + 1;
             }
 
           bt->bt_baud  = SAMV7_MCANCLK_FREQUENCY / brp /
-                        (bt->bt_tseg1 + bt->bt_tseg2 + 1); 
-          ret = OK;
+                        (bt->bt_tseg1 + bt->bt_tseg2 + 1);          ret = OK;
         }
         break;
 
@@ -3413,25 +3410,28 @@ static void mcan_error(FAR struct can_dev_s *dev, uint32_t status)
       data[1] |= CAN_ERROR1_UNSPEC;
     }
 
-  if ((status & ( MCAN_INT_PEA | MCAN_INT_CRCE)) != 0)
+  if ((status & (MCAN_INT_PEA | MCAN_INT_CRCE)) != 0)
     {
-	  lec = psr & MCAN_PSR_LEC_MASK;
-	  dlec = (psr & MCAN_PSR_DLEC_MASK) >> MCAN_PSR_DLEC_SHIFT;
+      lec = psr & MCAN_PSR_LEC_MASK;
+      dlec = (psr & MCAN_PSR_DLEC_MASK) >> MCAN_PSR_DLEC_SHIFT;
 
-      if((lec == MCAN_PSR_EC_CRC_ERROR) || (dlec == MCAN_PSR_EC_CRC_ERROR))
+      if ((lec == MCAN_PSR_EC_CRC_ERROR) || (dlec == MCAN_PSR_EC_CRC_ERROR))
         {
-           /* Receive CRC Error */
+          /* Receive CRC Error */
 
-           errbits |= CAN_ERROR_PROTOCOL;
-           data[3] |= (CAN_ERROR3_CRCSEQ | CAN_ERROR3_CRCDEL);
+          errbits |= CAN_ERROR_PROTOCOL;
+          data[3] |= (CAN_ERROR3_CRCSEQ | CAN_ERROR3_CRCDEL);
         }
-      if ((lec == MCAN_PSR_EC_BIT0_ERROR) || (lec == MCAN_PSR_EC_BIT1_ERROR) || \
-	         (dlec == MCAN_PSR_EC_BIT0_ERROR) || (dlec == MCAN_PSR_EC_BIT1_ERROR))
-        {
-           /* Bit Error */
 
-           errbits |= CAN_ERROR_PROTOCOL;
-           data[2] |= CAN_ERROR2_BIT;
+      if ((lec == MCAN_PSR_EC_BIT0_ERROR) || \
+          (lec == MCAN_PSR_EC_BIT1_ERROR) || \
+          (dlec == MCAN_PSR_EC_BIT0_ERROR) || \
+          (dlec == MCAN_PSR_EC_BIT1_ERROR))
+        {
+          /* Bit Error */
+
+          errbits |= CAN_ERROR_PROTOCOL;
+          data[2] |= CAN_ERROR2_BIT;
         }
 
       if ((lec == MCAN_PSR_EC_ACK_ERROR) || (dlec == MCAN_PSR_EC_ACK_ERROR))
@@ -3441,7 +3441,8 @@ static void mcan_error(FAR struct can_dev_s *dev, uint32_t status)
           errbits |= CAN_ERROR_NOACK;
         }
 
-      if ((lec == MCAN_PSR_EC_FORM_ERROR) || (dlec == MCAN_PSR_EC_FORM_ERROR))
+      if ((lec == MCAN_PSR_EC_FORM_ERROR) || \
+         (dlec == MCAN_PSR_EC_FORM_ERROR))
         {
           /* Format Error */
 
@@ -3449,7 +3450,8 @@ static void mcan_error(FAR struct can_dev_s *dev, uint32_t status)
           data[2] |= CAN_ERROR2_FORM;
         }
 
-      if ((lec == MCAN_PSR_EC_STUFF_ERROR) || (dlec == MCAN_PSR_EC_STUFF_ERROR))
+      if ((lec == MCAN_PSR_EC_STUFF_ERROR) || \
+         (dlec == MCAN_PSR_EC_STUFF_ERROR))
         {
           /* Stuff Error */
 
@@ -3612,7 +3614,6 @@ static int mcan_interrupt(int irq, void *context, FAR void *arg)
   bool handled;
   uint32_t psr;
 
-
   DEBUGASSERT(dev != NULL);
   priv = dev->cd_priv;
   DEBUGASSERT(priv && priv->config);
@@ -3652,7 +3653,8 @@ static int mcan_interrupt(int irq, void *context, FAR void *arg)
           if ((pending & MCAN_TXERR_INTS) != 0)
             {
               psr = mcan_getreg(priv, SAM_MCAN_PSR_OFFSET);
-              canerr("ERROR: TX %08"PRIx32", PSR %08"PRIx32"\n", pending & MCAN_TXERR_INTS, psr);
+              canerr("ERROR: TX %08"PRIx32", PSR %08"PRIx32"\n",
+                     pending & MCAN_TXERR_INTS, psr);
 
               /* An Acknowledge-Error will occur if for example the device
                * is not connected to the bus.
@@ -3672,6 +3674,7 @@ static int mcan_interrupt(int irq, void *context, FAR void *arg)
                 {
                   ie &= ~(MCAN_INT_PEA | MCAN_INT_PED);
                 }
+
               mcan_putreg(priv, SAM_MCAN_IE_OFFSET, ie);
 
               /* Clear the error indications */
@@ -3694,7 +3697,8 @@ static int mcan_interrupt(int irq, void *context, FAR void *arg)
           if ((pending & MCAN_RXERR_INTS) != 0)
             {
               psr = mcan_getreg(priv, SAM_MCAN_PSR_OFFSET);
-              canerr("ERROR: RX %08"PRIx32", PSR %08"PRIx32"\n", pending & MCAN_RXERR_INTS, psr);
+              canerr("ERROR: RX %08"PRIx32", PSR %08"PRIx32"\n",
+                     pending & MCAN_RXERR_INTS, psr);
 
               /* To prevent Interrupt-Flooding the current active
                * RX error interrupts are disabled. After successfully
@@ -3736,7 +3740,8 @@ static int mcan_interrupt(int irq, void *context, FAR void *arg)
                 ie |= MCAN_INT_ACKE;
                 mcan_putreg(priv, SAM_MCAN_IE_OFFSET, ie);
             }
-          else if ((priv->rev == 1) && ((ie & (MCAN_INT_PEA | MCAN_INT_PED)) == 0))
+          else if ((priv->rev == 1) && \
+                  ((ie & (MCAN_INT_PEA | MCAN_INT_PED)) == 0))
             {
                 ie |= MCAN_INT_PEA | MCAN_INT_PED;
                 mcan_putreg(priv, SAM_MCAN_IE_OFFSET, ie);
@@ -4143,7 +4148,7 @@ static int mcan_hw_initialize(struct sam_mcan_s *priv)
       if (priv->rev == 0)
         {
           regval |= MCAN_CCCR_CME_FD_BSW;
-          cmr     = MCAN_CCCR_CMR_FD_BSW;          
+          cmr     = MCAN_CCCR_CMR_FD_BSW;
         }
       else
         {
@@ -4338,7 +4343,7 @@ FAR struct can_dev_s *sam_mcan_initialize(int port)
 
       memset(priv, 0, sizeof(struct sam_mcan_s));
       priv->config = config;
-      
+
       /* Get the revision of the chip (A or B ) */
 
       regval = getreg32(SAM_CHIPID_CIDR);
@@ -4351,7 +4356,7 @@ FAR struct can_dev_s *sam_mcan_initialize(int port)
       if (priv->rev == 0)
         {
           /* Revision A */
-          
+
           priv->btp    = config->btp;
           priv->fbtp   = config->fbtp;
         }
