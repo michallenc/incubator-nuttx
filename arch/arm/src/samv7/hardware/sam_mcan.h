@@ -38,12 +38,12 @@
 
                                           /* 0x0000-0x0004 Reserved */
 #define SAM_MCAN_CUST_OFFSET       0x0008 /* Customer Register */
-#define SAM_MCAN_FBTP_OFFSET       0x000c /* Fast Bit Timing and Prescaler Register (rev A) */
+#define SAM_MCAN_REVA_FBTP_OFFSET  0x000c /* Fast Bit Timing and Prescaler Register (rev A) */
 #define SAM_MCAN_DBTP_OFFSET       0x000c /* Data Bit Timing and Prescaler Register (rev B) */
 #define SAM_MCAN_TEST_OFFSET       0x0010 /* Test Register */
 #define SAM_MCAN_RWD_OFFSET        0x0014 /* RAM Watchdog Register */
 #define SAM_MCAN_CCCR_OFFSET       0x0018 /* CC Control Register */
-#define SAM_MCAN_BTP_OFFSET        0x001c /* Bit Timing and Prescaler Register (rev A) */
+#define SAM_MCAN_REVA_BTP_OFFSET   0x001c /* Bit Timing and Prescaler Register (rev A) */
 #define SAM_MCAN_NBTP_OFFSET       0x001c /* Nominal Bit Timing and Prescaler Register (rev B) */
 #define SAM_MCAN_TSCC_OFFSET       0x0020 /* Timestamp Counter Configuration Register */
 #define SAM_MCAN_TSCV_OFFSET       0x0024 /* Timestamp Counter Value Register */
@@ -96,22 +96,38 @@
 
 /* Fast Bit Timing and Prescaler Register (rev A) */
 
-#define MCAN_FBTP_FSJW_SHIFT       (0)       /* Bits 0-1: Fast (Re) Synchronization Jump Width */
-#define MCAN_FBTP_FSJW_MASK        (0x3 << MCAN_FBTP_FSJW_SHIFT)
-#  define MCAN_FBTP_FSJW(n)        ((uint32_t)(n) << MCAN_FBTP_FSJW_SHIFT)
-#define MCAN_FBTP_FTSEG2_SHIFT     (4)       /* Bits 4-6: Fast Time Segment After Sample Point */
-#define MCAN_FBTP_FTSEG2_MASK      (0x7 << MCAN_FBTP_FTSEG2_SHIFT)
-#  define MCAN_FBTP_FTSEG2(n)      ((uint32_t)(n) << MCAN_FBTP_FTSEG2_SHIFT)
-#define MCAN_FBTP_FTSEG1_SHIFT     (8)       /* Bits 8-11: Fast Time Segment Before Sample Point */
-#define MCAN_FBTP_FTSEG1_MASK      (0xf << MCAN_FBTP_FTSEG1_SHIFT)
-#  define MCAN_FBTP_FTSEG1(n)      ((uint32_t)(n) << MCAN_FBTP_FTSEG1_SHIFT)
-#define MCAN_FBTP_FBRP_SHIFT       (16)      /* Bits 16-20: Fast Baud Rate Prescaler */
-#define MCAN_FBTP_FBRP_MASK        (0x1f << MCAN_FBTP_FBRP_SHIFT)
-#  define MCAN_FBTP_FBRP(n)        ((uint32_t)(n) << MCAN_FBTP_FBRP_SHIFT)
-#define MCAN_FBTP_TDC              (1 << 23) /* Bit: 23: Transceiver Delay Compensation */
-#define MCAN_FBTP_TDCO_SHIFT       (24)      /* Bits 24-28: Transceiver Delay Compensation Offset */
-#define MCAN_FBTP_TDCO_MASK        (0x1f << MCAN_FBTP_TDC_SHIFT)
-#  define MCAN_FBTP_TDCO(n)        ((uint32_t)(n) << MCAN_FBTP_TDC_SHIFT)
+#define MCAN_REVA_FBTP_FSJW_SHIFT       (0)       /* Bits 0-1: Fast (Re) Synchronization Jump Width */
+#define MCAN_REVA_FBTP_FSJW_MASK        (0x3 << MCAN_REVA_FBTP_FSJW_SHIFT)
+#  define MCAN_REVA_FBTP_FSJW(n)        ((uint32_t)(n) << MCAN_REVA_FBTP_FSJW_SHIFT)
+#define MCAN_REVA_FBTP_FTSEG2_SHIFT     (4)       /* Bits 4-6: Fast Time Segment After Sample Point */
+#define MCAN_REVA_FBTP_FTSEG2_MASK      (0x7 << MCAN_REVA_FBTP_FTSEG2_SHIFT)
+#  define MCAN_REVA_FBTP_FTSEG2(n)      ((uint32_t)(n) << MCAN_REVA_FBTP_FTSEG2_SHIFT)
+#define MCAN_REVA_FBTP_FTSEG1_SHIFT     (8)       /* Bits 8-11: Fast Time Segment Before Sample Point */
+#define MCAN_REVA_FBTP_FTSEG1_MASK      (0xf << MCAN_REVA_FBTP_FTSEG1_SHIFT)
+#  define MCAN_REVA_FBTP_FTSEG1(n)      ((uint32_t)(n) << MCAN_REVA_FBTP_FTSEG1_SHIFT)
+#define MCAN_REVA_FBTP_FBRP_SHIFT       (16)      /* Bits 16-20: Fast Baud Rate Prescaler */
+#define MCAN_REVA_FBTP_FBRP_MASK        (0x1f << MCAN_REVA_FBTP_FBRP_SHIFT)
+#  define MCAN_REVA_FBTP_FBRP(n)        ((uint32_t)(n) << MCAN_REVA_FBTP_FBRP_SHIFT)
+#define MCAN_REVA_FBTP_TDC              (1 << 23) /* Bit: 23: Transceiver Delay Compensation */
+#define MCAN_REVA_FBTP_TDCO_SHIFT       (24)      /* Bits 24-28: Transceiver Delay Compensation Offset */
+#define MCAN_REVA_FBTP_TDCO_MASK        (0x1f << MCAN_REVA_FBTP_TDC_SHIFT)
+#  define MCAN_REVA_FBTP_TDCO(n)        ((uint32_t)(n) << MCAN_REVA_FBTP_TDC_SHIFT)
+
+/* Data Bit Timing and Prescaler Register (rev B) */
+
+#define MCAN_DBTP_DSJW_SHIFT       (0)       /* Bits 0-2: Data (Re) Synchronization Jump Width */
+#define MCAN_DBTP_DSJW_MASK        (0x7 << MCAN_DBTP_DSJW_SHIFT)
+#  define MCAN_DBTP_DSJW(n)        ((uint32_t)(n) << MCAN_DBTP_DSJW_SHIFT)
+#define MCAN_DBTP_DTSEG2_SHIFT     (4)       /* Bits 4-7: Data Time Segment After Sample Point */
+#define MCAN_DBTP_DTSEG2_MASK      (0xf << MCAN_DBTP_DTSEG2_SHIFT)
+#  define MCAN_DBTP_DTSEG2(n)      ((uint32_t)(n) << MCAN_DBTP_DTSEG2_SHIFT)
+#define MCAN_DBTP_DTSEG1_SHIFT     (8)       /* Bits 8-11: Data Time Segment Before Sample Point */
+#define MCAN_DBTP_DTSEG1_MASK      (0x1f << MCAN_DBTP_DTSEG1_SHIFT)
+#  define MCAN_DBTP_DTSEG1(n)      ((uint32_t)(n) << MCAN_DBTP_DTSEG1_SHIFT)
+#define MCAN_DBTP_DBRP_SHIFT       (16)      /* Bits 16-20: Data Baud Rate Prescaler */
+#define MCAN_DBTP_DBRP_MASK        (0x1f << MCAN_DBTP_DBRP_SHIFT)
+#  define MCAN_DBTP_DBRP(n)        ((uint32_t)(n) << MCAN_DBTP_DBRP_SHIFT)
+#define MCAN_DBTP_TDC              (1 << 23) /* Bit: 23: Transceiver Delay Compensation */
 
 /* Data Bit Timing and Prescaler Register (rev B) */
 
@@ -184,18 +200,32 @@
 
 /* Bit Timing and Prescaler Register (rev A) */
 
-#define MCAN_BTP_SJW_SHIFT         (0)       /* Bits 0-3: (Re) Synchronization Jump Width */
-#define MCAN_BTP_SJW_MASK          (0xf << MCAN_BTP_SJW_SHIFT)
-#  define MCAN_BTP_SJW(n)          ((uint32_t)(n) << MCAN_BTP_SJW_SHIFT)
-#define MCAN_BTP_TSEG2_SHIFT       (4)       /* Bits 4-7: Time Segment After Sample Point */
-#define MCAN_BTP_TSEG2_MASK        (0xf << MCAN_BTP_TSEG2_SHIFT)
-#  define MCAN_BTP_TSEG2(n)        ((uint32_t)(n) << MCAN_BTP_TSEG2_SHIFT)
-#define MCAN_BTP_TSEG1_SHIFT       (8)       /* Bits 8-13: Time Segment Before Sample Point */
-#define MCAN_BTP_TSEG1_MASK        (0x3f << MCAN_BTP_TSEG1_SHIFT)
-#  define MCAN_BTP_TSEG1(n)        ((uint32_t)(n) << MCAN_BTP_TSEG1_SHIFT)
-#define MCAN_BTP_BRP_SHIFT         (16)      /* Bits 16-25: Baud Rate Prescaler */
-#define MCAN_BTP_BRP_MASK          (0x3ff << MCAN_BTP_BRP_SHIFT)
-#  define MCAN_BTP_BRP(n)          ((uint32_t)(n) << MCAN_BTP_BRP_SHIFT)
+#define MCAN_REVA_BTP_SJW_SHIFT    (0)       /* Bits 0-3: (Re) Synchronization Jump Width */
+#define MCAN_REVA_BTP_SJW_MASK     (0xf << MCAN_REVA_BTP_SJW_SHIFT)
+#  define MCAN_REVA_BTP_SJW(n)     ((uint32_t)(n) << MCAN_REVA_BTP_SJW_SHIFT)
+#define MCAN_REVA_BTP_TSEG2_SHIFT  (4)       /* Bits 4-7: Time Segment After Sample Point */
+#define MCAN_REVA_BTP_TSEG2_MASK   (0xf << MCAN_REVA_BTP_TSEG2_SHIFT)
+#  define MCAN_REVA_BTP_TSEG2(n)   ((uint32_t)(n) << MCAN_REVA_BTP_TSEG2_SHIFT)
+#define MCAN_REVA_BTP_TSEG1_SHIFT  (8)       /* Bits 8-13: Time Segment Before Sample Point */
+#define MCAN_REVA_BTP_TSEG1_MASK   (0x3f << MCAN_REVA_BTP_TSEG1_SHIFT)
+#  define MCAN_REVA_BTP_TSEG1(n)   ((uint32_t)(n) << MCAN_REVA_BTP_TSEG1_SHIFT)
+#define MCAN_REVA_BTP_BRP_SHIFT    (16)      /* Bits 16-25: Baud Rate Prescaler */
+#define MCAN_REVA_BTP_BRP_MASK     (0x3ff << MCAN_REVA_BTP_BRP_SHIFT)
+#  define MCAN_REVA_BTP_BRP(n)     ((uint32_t)(n) << MCAN_REVA_BTP_BRP_SHIFT)
+
+/* Nominal Bit Timing and Prescaler Register (rev B) */
+#define MCAN_NBTP_NTSEG2_SHIFT       (0)       /* Bits 0-6: Nominal Time Segment After Sample Point */
+#define MCAN_NBTP_NTSEG2_MASK        (0x7f << MCAN_NBTP_NTSEG2_SHIFT)
+#  define MCAN_NBTP_NTSEG2(n)        ((uint32_t)(n) << MCAN_NBTP_NTSEG2_SHIFT)
+#define MCAN_NBTP_NTSEG1_SHIFT       (8)       /* Bits 8-15: Nominal Time Segment Before Sample Point */
+#define MCAN_NBTP_NTSEG1_MASK        (0xff << MCAN_NBTP_NTSEG1_SHIFT)
+#  define MCAN_NBTP_NTSEG1(n)        ((uint32_t)(n) << MCAN_NBTP_NTSEG1_SHIFT)
+#define MCAN_NBTP_NBRP_SHIFT         (16)      /* Bits 16-24: Nominal Bit Rate Prescaler */
+#define MCAN_NBTP_NBRP_MASK          (0x1ff << MCAN_NBTP_NBRP_SHIFT)
+#  define MCAN_NBTP_NBRP(n)          ((uint32_t)(n) << MCAN_NBTP_NBRP_SHIFT)
+#define MCAN_NBTP_NSJW_SHIFT         (25)       /* Bits 25-31: Nominal (Re) Synchronization Jump Width */
+#define MCAN_NBTP_NSJW_MASK          (0x7f << MCAN_NBTP_NSJW_SHIFT)
+#  define MCAN_NBTP_NSJW(n)          ((uint32_t)(n) << MCAN_NBTP_NSJW_SHIFT)
 
 /* Nominal Bit Timing and Prescaler Register (rev B) */
 #define MCAN_NBTP_NTSEG2_SHIFT       (0)       /* Bits 0-6: Nominal Time Segment After Sample Point */
@@ -340,8 +370,8 @@
 #define MCAN_INT_FOE               (1 << 30) /* Bit 30: Format Error (rev A) */
 #define MCAN_INT_STE               (1 << 31) /* Bit 31: Stuff Error (rev A) */
 
-#define MCAN_INT_ALL_REVA          (0xffcfffff)
-#define MCAN_INT_ALL_REVB          (0x3fcfffff)
+#define MCAN_REVA_INT_ALL          (0xffcfffff)
+#define MCAN_REVB_INT_ALL         (0x3fcfffff)
 
 /* Interrupt Line Enable Register */
 

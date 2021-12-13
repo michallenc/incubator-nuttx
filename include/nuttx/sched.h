@@ -33,11 +33,11 @@
 #include <sched.h>
 #include <signal.h>
 #include <semaphore.h>
-#include <pthread.h>
 #include <time.h>
 
 #include <nuttx/clock.h>
 #include <nuttx/irq.h>
+#include <nuttx/tls.h>
 #include <nuttx/wdog.h>
 #include <nuttx/mm/shm.h>
 #include <nuttx/fs/fs.h>
@@ -189,7 +189,9 @@
 #  define TCB_PID_OFF                (offsetof(struct tcb_s, pid))
 #  define TCB_STATE_OFF              (offsetof(struct tcb_s, task_state))
 #  define TCB_PRI_OFF                (offsetof(struct tcb_s, sched_priority))
+#if CONFIG_TASK_NAME_SIZE > 0
 #  define TCB_NAME_OFF               (offsetof(struct tcb_s, name))
+#endif
 #  define TCB_REG_OFF(reg)           (offsetof(struct tcb_s, xcp.regs[reg]))
 #endif
 
@@ -345,18 +347,6 @@ struct child_status_s
 };
 #endif
 
-/* struct pthread_cleanup_s *************************************************/
-
-/* This structure describes one element of the pthread cleanup stack */
-
-#ifdef CONFIG_PTHREAD_CLEANUP
-struct pthread_cleanup_s
-{
-  pthread_cleanup_t pc_cleaner;     /* Cleanup callback address */
-  FAR void *pc_arg;                 /* Argument that accompanies the callback */
-};
-#endif
-
 /* struct dspace_s **********************************************************/
 
 /* This structure describes a reference counted D-Space region.
@@ -417,8 +407,6 @@ struct exitinfo_s
   FAR void *arg;
 #endif
 };
-
-struct task_info_s;
 
 /* struct task_group_s ******************************************************/
 
@@ -740,10 +728,6 @@ struct task_tcb_s
   starthook_t starthook;                 /* Task startup function               */
   FAR void *starthookarg;                /* The argument passed to the function */
 #endif
-
-  /* [Re-]start name + start-up parameters **********************************/
-
-  FAR char **argv;                       /* Name+start-up parameters        */
 };
 
 /* struct pthread_tcb_s *****************************************************/
@@ -833,7 +817,7 @@ EXTERN uint32_t g_crit_max[1];
 #endif /* CONFIG_SCHED_CRITMONITOR */
 
 #ifdef CONFIG_DEBUG_TCBINFO
-EXTERN struct tcbinfo_s g_tcbinfo;
+EXTERN const struct tcbinfo_s g_tcbinfo;
 #endif
 
 /****************************************************************************

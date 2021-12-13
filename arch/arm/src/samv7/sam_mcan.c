@@ -1018,14 +1018,14 @@ static struct sam_config_s g_mcan0const =
   .txpinset         = GPIO_MCAN0_TX,
   .base             = SAM_MCAN0_BASE,
   .baud             = CONFIG_SAMV7_MCAN0_BITRATE,
-  .btp              = MCAN_BTP_BRP(MCAN0_BRP) |
-                      MCAN_BTP_TSEG1(MCAN0_TSEG1) |
-                      MCAN_BTP_TSEG2(MCAN0_TSEG2) |
-                      MCAN_BTP_SJW(MCAN0_SJW),
-  .fbtp             = MCAN_FBTP_FBRP(MCAN0_DBRP) |
-                      MCAN_FBTP_FTSEG1(MCAN0_DTSEG1) |
-                      MCAN_FBTP_FTSEG2(MCAN0_DTSEG2) |
-                      MCAN_FBTP_FSJW(MCAN0_DSJW),
+  .btp              = MCAN_REVA_BTP_BRP(MCAN0_BRP) |
+                      MCAN_REVA_BTP_TSEG1(MCAN0_TSEG1) |
+                      MCAN_REVA_BTP_TSEG2(MCAN0_TSEG2) |
+                      MCAN_REVA_BTP_SJW(MCAN0_SJW),
+  .fbtp             = MCAN_REVA_FBTP_FBRP(MCAN0_DBRP) |
+                      MCAN_REVA_FBTP_FTSEG1(MCAN0_DTSEG1) |
+                      MCAN_REVA_FBTP_FTSEG2(MCAN0_DTSEG2) |
+                      MCAN_REVA_FBTP_FSJW(MCAN0_DSJW),
   .nbtp             = MCAN_NBTP_NBRP(MCAN0_BRP) |
                       MCAN_NBTP_NTSEG1(MCAN0_TSEG1) |
                       MCAN_NBTP_NTSEG2(MCAN0_TSEG2) |
@@ -1106,14 +1106,14 @@ static struct sam_config_s g_mcan1const =
   .txpinset         = GPIO_MCAN1_TX,
   .base             = SAM_MCAN1_BASE,
   .baud             = CONFIG_SAMV7_MCAN1_BITRATE,
-  .btp              = MCAN_BTP_BRP(MCAN1_BRP) |
-                      MCAN_BTP_TSEG1(MCAN1_TSEG1) |
-                      MCAN_BTP_TSEG2(MCAN1_TSEG2) |
-                      MCAN_BTP_SJW(MCAN1_SJW),
-  .fbtp             = MCAN_FBTP_FBRP(MCAN1_DBRP) |
-                      MCAN_FBTP_FTSEG1(MCAN1_DTSEG1) |
-                      MCAN_FBTP_FTSEG2(MCAN1_DTSEG2) |
-                      MCAN_FBTP_FSJW(MCAN1_DSJW),
+  .btp              = MCAN_REVA_BTP_BRP(MCAN1_BRP) |
+                      MCAN_REVA_BTP_TSEG1(MCAN1_TSEG1) |
+                      MCAN_REVA_BTP_TSEG2(MCAN1_TSEG2) |
+                      MCAN_REVA_BTP_SJW(MCAN1_SJW),
+  .fbtp             = MCAN_REVA_FBTP_FBRP(MCAN1_DBRP) |
+                      MCAN_REVA_FBTP_FTSEG1(MCAN1_DTSEG1) |
+                      MCAN_REVA_FBTP_FTSEG2(MCAN1_DTSEG2) |
+                      MCAN_REVA_FBTP_FSJW(MCAN1_DSJW),
   .nbtp             = MCAN_NBTP_NBRP(MCAN1_BRP) |
                       MCAN_NBTP_NTSEG1(MCAN1_TSEG1) |
                       MCAN_NBTP_NTSEG2(MCAN1_TSEG2) |
@@ -2708,14 +2708,14 @@ static int mcan_ioctl(FAR struct can_dev_s *dev, int cmd, unsigned long arg)
             {
               /* Revision A */
 
-              bt->bt_sjw   = ((regval & MCAN_BTP_SJW_MASK) >>
-                              MCAN_BTP_SJW_SHIFT) + 1;
-              bt->bt_tseg1 = ((regval & MCAN_BTP_TSEG1_MASK) >>
-                              MCAN_BTP_TSEG1_SHIFT) + 1;
-              bt->bt_tseg2 = ((regval & MCAN_BTP_TSEG2_MASK) >>
-                              MCAN_BTP_TSEG2_SHIFT) + 1;
-              brp          = ((regval & MCAN_BTP_BRP_MASK) >>
-                              MCAN_BTP_BRP_SHIFT) + 1;
+              bt->bt_sjw   = ((regval & MCAN_REVA_BTP_SJW_MASK) >>
+                              MCAN_REVA_BTP_SJW_SHIFT) + 1;
+              bt->bt_tseg1 = ((regval & MCAN_REVA_BTP_TSEG1_MASK) >>
+                              MCAN_REVA_BTP_TSEG1_SHIFT) + 1;
+              bt->bt_tseg2 = ((regval & MCAN_REVA_BTP_TSEG2_MASK) >>
+                              MCAN_REVA_BTP_TSEG2_SHIFT) + 1;
+              brp          = ((regval & MCAN_REVA_BTP_BRP_MASK) >>
+                              MCAN_REVA_BTP_BRP_SHIFT) + 1;
             }
           else
             {
@@ -2732,7 +2732,8 @@ static int mcan_ioctl(FAR struct can_dev_s *dev, int cmd, unsigned long arg)
             }
 
           bt->bt_baud  = SAMV7_MCANCLK_FREQUENCY / brp /
-                        (bt->bt_tseg1 + bt->bt_tseg2 + 1);          ret = OK;
+                        (bt->bt_tseg1 + bt->bt_tseg2 + 1);
+          ret = OK;
         }
         break;
 
@@ -2786,8 +2787,10 @@ static int mcan_ioctl(FAR struct can_dev_s *dev, int cmd, unsigned long arg)
           flags = enter_critical_section();
           if (priv->rev == 0)
             {
-              priv->btp = MCAN_BTP_BRP(brp) | MCAN_BTP_TSEG1(tseg1) |
-                          MCAN_BTP_TSEG2(tseg2) | MCAN_BTP_SJW(sjw);
+              priv->btp = MCAN_REVA_BTP_BRP(brp) |
+                          MCAN_REVA_BTP_TSEG1(tseg1) |
+                          MCAN_REVA_BTP_TSEG2(tseg2) |
+                          MCAN_REVA_BTP_SJW(sjw);
             }
           else
             {
@@ -4014,19 +4017,19 @@ static int mcan_hw_initialize(struct sam_mcan_s *priv)
 
   if (priv->rev == 0)
     {
-      mcan_putreg(priv, SAM_MCAN_IR_OFFSET, MCAN_INT_ALL_REVA);
+      mcan_putreg(priv, SAM_MCAN_IR_OFFSET, MCAN_REVA_INT_ALL);
     }
   else
     {
-      mcan_putreg(priv, SAM_MCAN_IR_OFFSET, MCAN_INT_ALL_REVB);
+      mcan_putreg(priv, SAM_MCAN_IR_OFFSET, MCAN_REVB_INT_ALL);
     }
 
   /* Configure MCAN bit timing */
 
   if (priv->rev == 0)
     {
-      mcan_putreg(priv, SAM_MCAN_BTP_OFFSET, priv->btp);
-      mcan_putreg(priv, SAM_MCAN_FBTP_OFFSET, priv->fbtp);
+      mcan_putreg(priv, SAM_MCAN_REVA_BTP_OFFSET, priv->btp);
+      mcan_putreg(priv, SAM_MCAN_REVA_FBTP_OFFSET, priv->fbtp);
     }
   else
     {
