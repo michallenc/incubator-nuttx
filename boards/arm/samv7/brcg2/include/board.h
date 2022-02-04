@@ -236,16 +236,10 @@
  * use the button.
  */
 
-#define BUTTON_SW0        0
-#define BUTTON_ENC_SW     1
-#define BUTTON_ENC_A      2
-#define BUTTON_ENC_B      3
-#define NUM_BUTTONS       2
+#define BUTTON_ENC_SW     0
+#define NUM_BUTTONS       1
 
-#define BUTTON_SW0_BIT    (1 << BUTTON_SW0)
 #define BUTTON_ENC_SW_BIT (1 << BUTTON_ENC_SW)
-#define BUTTON_ENC_A_BIT  (1 << BUTTON_ENC_A)
-#define BUTTON_ENC_B_BIT  (1 << BUTTON_ENC_B)
 
 /* PIO Disambiguation *******************************************************/
 

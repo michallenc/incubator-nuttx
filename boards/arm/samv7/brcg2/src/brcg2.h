@@ -203,30 +203,27 @@
  * the button.
  */
 
-#define GPIO_SW0      (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN9)
 #define GPIO_ENC_SW   (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN6)
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOA | GPIO_PIN18) /* PA_18 */
 #define GPIO_ENC_A    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_RISING | GPIO_PORT_PIOD | GPIO_PIN7)
+                       GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN8)  /* PA_8 */
 #define GPIO_ENC_B    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_RISING | GPIO_PORT_PIOD | GPIO_PIN8)
-#define GPIO_SW0_INT      SAM_IRQ_PD9
-#define GPIO_ENC_SW_INT   SAM_IRQ_PD6
-#define GPIO_ENC_A_INT    SAM_IRQ_PD7
-#define GPIO_ENC_B_INT    SAM_IRQ_PD8
+                       GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN7)  /* PA_7 */
+#define GPIO_ENC_SW_INT   SAM_IRQ_PA18
+#define GPIO_ENC_A_INT    SAM_IRQ_PA8
+#define GPIO_ENC_B_INT    SAM_IRQ_PA7
 
 /* LCD dispay */
 
 #define GPIO_LCD_RST   (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                        GPIO_PORT_PIOD | GPIO_PIN22)    /* PD_22 */
+                        GPIO_PORT_PIOD | GPIO_PIN26)    /* PD_26 */
 
 #define GPIO_LCD_CD    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                        GPIO_PORT_PIOD | GPIO_PIN21)    /* PD_21 */
+                        GPIO_PORT_PIOD | GPIO_PIN27)    /* PD_27 */
 #define GPIO_LCD_CS    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                        GPIO_PORT_PIOA | GPIO_PIN11) 
+                        GPIO_PORT_PIOD | GPIO_PIN25)    /* PD_25 */
 #define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                        GPIO_PORT_PIOD | GPIO_PIN25) 
+                        GPIO_PORT_PIOD | GPIO_PIN19)    /* PD_19 */
 
 /****************************************************************************
  * Public Types
@@ -286,7 +283,7 @@ int sam_bringup(void);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SAMV7_QSPI_SPI_MODE
+#ifdef CONFIG_SAMV7_SPI
 void sam_spidev_initialize(void);
 #endif
 

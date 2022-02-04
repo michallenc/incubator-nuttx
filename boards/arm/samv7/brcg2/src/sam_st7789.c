@@ -35,7 +35,7 @@
 #include <nuttx/lcd/lcd.h>
 #include <nuttx/lcd/st7789.h>
 
-#include "sam_qspi_spi.h"
+#include "sam_spi.h"
 #include "brcg2.h"
 
 /****************************************************************************
@@ -69,7 +69,7 @@ int board_lcd_initialize(void)
 {
   sam_configgpio(GPIO_LCD_RST);
 
-  g_spidev = sam_qspi_spi_initialize(LCD_SPI_PORTNO);
+  g_spidev = sam_spibus_initialize(LCD_SPI_PORTNO);
   if (!g_spidev)
     {
       lcderr("ERROR: Failed to initialize SPI port %d\n", LCD_SPI_PORTNO);

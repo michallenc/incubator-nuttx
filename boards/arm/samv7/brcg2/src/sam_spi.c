@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/samv7/brcg2/src/sam_qspi_spi.c
+ * boards/arm/samv7/brcg2/src/sam_spi.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -40,7 +40,7 @@
 #include "sam_qspi_spi.h"
 #include "brcg2.h"
 
-#ifdef CONFIG_SAMV7_QSPI_SPI_MODE
+#ifdef CONFIG_SAMV7_SPI
 
 /****************************************************************************
  * Public Functions
@@ -61,7 +61,7 @@ void sam_spidev_initialize(void)
 }
 
 /****************************************************************************
- * Name: sam_qspi_select
+ * Name: sam_spi0select
  *
  * Description:
  *   PIO chip select pins may be programmed by the board specific logic in
@@ -85,7 +85,7 @@ void sam_spidev_initialize(void)
  *
  ****************************************************************************/
 
-void sam_qspi_select(uint32_t devid, bool selected)
+void sam_spi0select(uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
@@ -97,7 +97,7 @@ void sam_qspi_select(uint32_t devid, bool selected)
 }
 
 /****************************************************************************
- * Name: sam_qspi_status
+ * Name: sam_spi0status
  *
  * Description:
  *   Return status information associated with the SPI device.
@@ -110,13 +110,13 @@ void sam_qspi_select(uint32_t devid, bool selected)
  *
  ****************************************************************************/
 
-uint8_t sam_qspi_status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 
 /****************************************************************************
- * Name: sam_qspi_cmddata
+ * Name: sam_spi0cmddata
  *
  * Description:
  *   Set or clear the SH1101A A0 or SD1306 D/C n bit to select data (true)
@@ -139,7 +139,7 @@ uint8_t sam_qspi_status(FAR struct spi_dev_s *dev, uint32_t devid)
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_CMDDATA
-int sam_qspi_cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   if (devid == SPIDEV_DISPLAY(0))
     {

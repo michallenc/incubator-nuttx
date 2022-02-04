@@ -46,19 +46,17 @@
 
 #ifdef CONFIG_ARCH_IRQBUTTONS
 #  define HAVE_IRQBUTTONS 1
-#  ifndef CONFIG_SAMV7_GPIOD_IRQ
+#  ifndef CONFIG_SAMV7_GPIOA_IRQ
 #    undef HAVE_IRQBUTTONS
 #  endif
 #endif
 
 const uint32_t gpio_pins[NUM_BUTTONS]     =
                                             {
-                                              GPIO_SW0,
                                               GPIO_ENC_SW
                                             };
 const uint32_t gpio_pins_int[NUM_BUTTONS] =
                                             {
-                                              GPIO_SW0_INT,
                                               GPIO_ENC_SW_INT,
                                             };
 

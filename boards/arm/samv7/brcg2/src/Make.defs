@@ -46,8 +46,8 @@ ifeq ($(CONFIG_SAMV7_USBDEVHS),y)
 CSRCS += sam_usbdev.c
 endif
 
-ifeq ($(CONFIG_SAMV7_QSPI_SPI_MODE),y)
-CSRCS += sam_qspi_spi.c
+ifeq ($(CONFIG_SAMV7_SPI),y)
+CSRCS += sam_spi.c
 endif
 
 ifeq ($(CONFIG_SAMV7_MCAN),y)
