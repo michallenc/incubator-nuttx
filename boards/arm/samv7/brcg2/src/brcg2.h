@@ -56,6 +56,11 @@
 #define HAVE_MRF24J40        1
 #define HAVE_XBEE            1*/
 
+#define HAVE_HSMCI           1
+#define HAVE_USB             1
+#define HAVE_USBDEV          1
+//#define HAVE_AUTOMOUNTER     1
+
 /* HSMCI */
 
 /* Can't support MMC/SD if the card interface is not enabled */
@@ -71,10 +76,10 @@
 #  undef HAVE_HSMCI
 #endif
 
-/* We need PIO interrupts on GPIOC to support card detect interrupts */
+/* We need PIO interrupts on GPIOD to support card detect interrupts */
 
-#if defined(HAVE_HSMCI) && !defined(CONFIG_SAMV7_GPIOC_IRQ)
-#  warning PIOC interrupts not enabled.  No MMC/SD support.
+#if defined(HAVE_HSMCI) && !defined(CONFIG_SAMV7_GPIOA_IRQ)
+#  warning PIOA interrupts not enabled.  No MMC/SD support.
 #  undef HAVE_HSMCI
 #endif
 
@@ -107,13 +112,14 @@
 #ifndef CONFIG_SAMV7_HSMCI0_AUTOMOUNT
 #  undef HAVE_AUTOMOUNTER
 #endif
+
 /* USB Device */
 
-/* CONFIG_SAMV7_UDP and CONFIG_USBDEV must be defined, or there is no USB
+/* CONFIG_USBDEV must be defined, or there is no USB
  * device.
  */
 
-#if !defined(CONFIG_SAMV7_UDP) || !defined(CONFIG_USBDEV)
+#if !defined(CONFIG_USBDEV)
 #  undef HAVE_USB
 #  undef HAVE_USBDEV
 #endif
@@ -192,24 +198,22 @@
                        GPIO_PORT_PIOA | GPIO_PIN24)
 
 /* Buttons
- *
- * SAM E70 Xplained contains two mechanical buttons. One button is the RESET
- * button connected to the SAM E70 reset line and the other, PA11, is a
- * generic user configurable button.
- * When a button is pressed it will drive the I/O line to GND.
- *
- * NOTE: There are no pull-up resistors connected to the generic user buttons
- * so it is necessary to enable the internal pull-up in the SAM E70 to use
- * the button.
+ * BRCg2 has one button GPIO_ENC_SW (software button on user encoder) on pin
+ * PA_18
  */
 
 #define GPIO_ENC_SW   (GPIO_INPUT | GPIO_CFG_DEFAULT | \
                        GPIO_INT_BOTHEDGES | GPIO_PORT_PIOA | GPIO_PIN18) /* PA_18 */
+
+#define GPIO_ENC_SW_INT   SAM_IRQ_PA18
+
+/* Encoder */
+
 #define GPIO_ENC_A    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
                        GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN8)  /* PA_8 */
 #define GPIO_ENC_B    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
                        GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN7)  /* PA_7 */
-#define GPIO_ENC_SW_INT   SAM_IRQ_PA18
+
 #define GPIO_ENC_A_INT    SAM_IRQ_PA8
 #define GPIO_ENC_B_INT    SAM_IRQ_PA7
 
@@ -224,6 +228,16 @@
                         GPIO_PORT_PIOD | GPIO_PIN25)    /* PD_25 */
 #define GPIO_LCD_BL    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                         GPIO_PORT_PIOD | GPIO_PIN19)    /* PD_19 */
+
+/* USB device */
+
+#define GPIO_VBUSON (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                     GPIO_PORT_PIOA | GPIO_PIN22)       /* PA_22 */
+
+/* ADM2483 driver */
+
+#define GPIO_ADM2483_EN (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
+                         GPIO_PORT_PIOD | GPIO_PIN18)       /* PD_18 */
 
 /****************************************************************************
  * Public Types
@@ -273,6 +287,18 @@ void sam_sdram_config(void);
 
 #if defined(CONFIG_BOARDCTL) || defined(CONFIG_BOARD_LATE_INITIALIZE)
 int sam_bringup(void);
+#endif
+
+/****************************************************************************
+ * Name:  sam_adm2483_enable
+ *
+ * Description:
+ *   Called from sam_bringup(), enables adm2483 driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_BRCG2_ADM2483_USART
+void sam_adm2483_enable(void);
 #endif
 
 /****************************************************************************

@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/samv7/brcg2/src/sam_usbdev.c
+ * boards/arm/samv7/brcg2/src/sam_adm2483.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -29,12 +29,11 @@
 #include <stdbool.h>
 #include <debug.h>
 
-#include <nuttx/usb/usbdev.h>
-#include <nuttx/usb/usbdev_trace.h>
-
 #include "arm_arch.h"
 #include "sam_gpio.h"
 #include "brcg2.h"
+
+#ifdef CONFIG_BRCG2_ADM2483_USART
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,37 +48,19 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name:  sam_usbinitialize
+ * Name:  sam_adm2483_enable
  *
  * Description:
- *   Called from stm32_boardinitialize very early in initialization to setup
- *   USB-related GPIO pins for the SAME70-XPLD board.
+ *   Called from sam_bringup(), enables adm2483 driver.
  *
  ****************************************************************************/
 
-void sam_usbinitialize(void)
+void sam_adm2483_enable(void)
 {
-  /* Initialize the VBUS enable signal to HI output in any event so that, by
-   * default, VBUS power is not provided at the USB connector.
-   */
+  /* Set on the DE pin (PD_18) and enable the driver */
 
-  sam_configgpio(GPIO_VBUSON);
-  sam_gpiowrite(GPIO_VBUSON, 1);
+  sam_configgpio(GPIO_ADM2483_EN);
+  sam_gpiowrite(GPIO_ADM2483_EN, 1);
 }
 
-/****************************************************************************
- * Name:  sam_usbsuspend
- *
- * Description:
- *   Board logic must provide the sam_usbsuspend logic if the USBDEV driver
- *   is used.
- *   This function is called whenever the USB enters or leaves suspend mode.
- *   This is an opportunity for the board logic to shutdown clocks, power,
- *   etc. while the USB is suspended.
- *
- ****************************************************************************/
-
-void sam_usbsuspend(FAR struct usbdev_s *dev, bool resume)
-{
-  uinfo("resume: %d\n", resume);
-}
+#endif /* CONFIG_BRCG2_ADM2483_USART */

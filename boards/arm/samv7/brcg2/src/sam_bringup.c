@@ -32,6 +32,10 @@
 #include <errno.h>
 #include <debug.h>
 
+#ifdef CONFIG_CDCACM
+#include <nuttx/usb/cdcacm.h>
+#endif
+
 #ifdef CONFIG_USBMONITOR
 #  include <nuttx/usb/usbmonitor.h>
 #endif
@@ -73,6 +77,10 @@
 #define NSECTORS(n) \
   (((n)+CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_SECTSIZE-1) / \
    CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_SECTSIZE)
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -188,6 +196,12 @@ int sam_bringup(void)
     }
 #endif
 
+#if !defined(CONFIG_BOARDCTL_USBDEVCTRL) && !defined(CONFIG_USBDEV_COMPOSITE)
+# ifdef CONFIG_CDCACM
+    cdcacm_initialize(0, NULL);
+# endif
+#endif
+
 #ifdef HAVE_PROGMEM_CHARDEV
   /* Initialize the SAME70 FLASH programming memory library */
 
@@ -228,6 +242,10 @@ int sam_bringup(void)
     }
 #endif /* defined(CONFIG_BCH) */
 #endif
+
+#ifdef CONFIG_BRCG2_ADM2483_USART
+  sam_adm2483_enable();
+#endif 
 
 #ifdef CONFIG_SAMV7_MCAN
   /* Initialize CAN and register the CAN driver. */
