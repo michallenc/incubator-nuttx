@@ -239,6 +239,27 @@
 #define GPIO_ADM2483_EN (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                          GPIO_PORT_PIOD | GPIO_PIN18)       /* PD_18 */
 
+/* ADDR0-7 pins */
+
+#define BOARD_NGPIOIN     8         /* Amount of GPIO Input pins */
+
+#define GPIO_ADDR0    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN11)  /* PD_11 */
+#define GPIO_ADDR1    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN10)  /* PD_10 */
+#define GPIO_ADDR2    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN12)  /* PD_12 */
+#define GPIO_ADDR3    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOA | \
+                       GPIO_PIN3)  /* PA_03 */
+#define GPIO_ADDR4    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOA | \
+                       GPIO_PIN5)  /* PA_05 */
+#define GPIO_ADDR5    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN11)  /* PD_11 */
+#define GPIO_ADDR6    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN14)  /* PD_14 */
+#define GPIO_ADDR7    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN28)  /* PD_28 */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -338,6 +359,21 @@ int sam_hsmci_initialize(int slot, int minor);
 
 #ifdef HAVE_USB
 void sam_usbinitialize(void);
+#endif
+
+/****************************************************************************
+ * Name: sam_gpio_initialize
+ *
+ * Description:
+ *   Initialize GPIO drivers for use with /apps/examples/gpio
+ *
+ * Return Value:
+ *   OK on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_DEV_GPIO
+int sam_gpio_initialize(void);
 #endif
 
 /****************************************************************************

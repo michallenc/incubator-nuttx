@@ -257,6 +257,16 @@ int sam_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_DEV_GPIO
+  /* Initialize GPIO driver */
+
+  ret = sam_gpio_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: imxrt_gpio_initialize() failed: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_SENSORS_QENCODER
 
   ret = sam_gpio_enc_init();
