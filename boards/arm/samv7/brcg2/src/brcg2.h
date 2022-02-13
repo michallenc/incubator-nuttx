@@ -260,6 +260,13 @@
 #define GPIO_ADDR7    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
                        GPIO_PIN28)  /* PD_28 */
 
+/* Warning pin */
+
+#define BOARD_NGPIOOUT  1
+
+#define GPIO_WARN    (GPIO_OUTPUT | GPIO_OUTPUT_CLEAR | GPIO_CFG_DEFAULT | \
+                      GPIO_PORT_PIOA | GPIO_PIN0)  /* PA_00 */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/

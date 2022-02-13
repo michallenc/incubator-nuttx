@@ -58,6 +58,11 @@ struct samgpio_dev_s
 static int gpin_read(FAR struct gpio_dev_s *dev, FAR bool *value);
 #endif
 
+#if BOARD_NGPIOOUT > 0
+static int gpout_read(FAR struct gpio_dev_s *dev, FAR bool *value);
+static int gpout_write(FAR struct gpio_dev_s *dev, bool value);
+#endif
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -67,6 +72,17 @@ static const struct gpio_operations_s gpin_ops =
 {
   .go_read   = gpin_read,
   .go_write  = NULL,
+  .go_attach = NULL,
+  .go_enable = NULL,
+};
+#endif
+
+
+#if BOARD_NGPIOOUT > 0
+static const struct gpio_operations_s gpout_ops =
+{
+  .go_read   = gpout_read,
+  .go_write  = gpout_write,
   .go_attach = NULL,
   .go_enable = NULL,
 };
@@ -90,6 +106,17 @@ static const uint32_t g_gpioinputs[BOARD_NGPIOIN] =
 static struct samgpio_dev_s g_gpin[BOARD_NGPIOIN];
 #endif
 
+#if BOARD_NGPIOOUT > 0
+/* This array maps the GPIO pins used as OUTPUT */
+
+static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
+{
+  GPIO_WARN,
+};
+
+static struct samgpio_dev_s g_gpout[BOARD_NGPIOOUT];
+#endif
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -105,6 +132,34 @@ static int gpin_read(FAR struct gpio_dev_s *dev, FAR bool *value)
   gpioinfo("Reading...\n");
 
   *value = sam_gpioread(g_gpioinputs[samgpio->id]);
+  return OK;
+}
+#endif
+
+#if BOARD_NGPIOOUT > 0
+static int gpout_read(FAR struct gpio_dev_s *dev, FAR bool *value)
+{
+  FAR struct samgpio_dev_s *samgpio =
+                        (FAR struct samgpio_dev_s *)dev;
+
+  DEBUGASSERT(samgpio != NULL && value != NULL);
+  DEBUGASSERT(samgpio->id < BOARD_NGPIOOUT);
+  gpioinfo("Reading...\n");
+
+  *value = sam_gpioread(g_gpiooutputs[samgpio->id]);
+  return OK;
+}
+
+static int gpout_write(FAR struct gpio_dev_s *dev, bool value)
+{
+  FAR struct samgpio_dev_s *samgpio =
+                             (FAR struct samgpio_dev_s *)dev;
+
+  DEBUGASSERT(samgpio != NULL);
+  DEBUGASSERT(samgpio->id < BOARD_NGPIOOUT);
+  gpioinfo("Writing %d\n", (int)value);
+
+  sam_gpiowrite(g_gpiooutputs[samgpio->id], value);
   return OK;
 }
 #endif
@@ -139,6 +194,25 @@ int sam_gpio_initialize(void)
       /* Configure the pin that will be used as input */
 
       sam_configgpio(g_gpioinputs[i]);
+
+      pincount++;
+    }
+#endif
+
+#if BOARD_NGPIOOUT > 0
+  for (i = 0; i < BOARD_NGPIOOUT; i++)
+    {
+      /* Setup and register the GPIO pin */
+
+      g_gpout[i].gpio.gp_pintype = GPIO_OUTPUT_PIN;
+      g_gpout[i].gpio.gp_ops     = &gpout_ops;
+      g_gpout[i].id              = i;
+      gpio_pin_register(&g_gpout[i].gpio, pincount);
+
+      /* Configure the pin that will be used as output */
+
+      sam_gpiowrite(g_gpiooutputs[i], 0);
+      sam_configgpio(g_gpiooutputs[i]);
 
       pincount++;
     }
