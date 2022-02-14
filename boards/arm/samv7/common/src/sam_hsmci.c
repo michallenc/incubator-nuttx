@@ -90,8 +90,8 @@ static bool sam_cardinserted_internal(struct sam_hsmci_state_s *state)
   /* Get the state of the PIO pin */
 
   inserted = sam_gpioread(state->cdcfg);
-  finfo("Slot %d inserted: %s\n", state->slotno, inserted ? "NO" : "YES");
-  return !inserted;
+  finfo("Slot %d inserted: %s\n", state->slotno, inserted ? "YES" : "NO");
+  return inserted;
 }
 
 /****************************************************************************

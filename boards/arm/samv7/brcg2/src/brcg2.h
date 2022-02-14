@@ -59,7 +59,7 @@
 #define HAVE_HSMCI           1
 #define HAVE_USB             1
 #define HAVE_USBDEV          1
-//#define HAVE_AUTOMOUNTER     1
+#define HAVE_AUTOMOUNTER     1
 
 /* HSMCI */
 
@@ -267,6 +267,12 @@
 #define GPIO_WARN    (GPIO_OUTPUT | GPIO_OUTPUT_CLEAR | GPIO_CFG_DEFAULT | \
                       GPIO_PORT_PIOA | GPIO_PIN0)  /* PA_00 */
 
+/* SD Card */
+
+#define GPIO_HSMCI0_CD (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_CFG_DEGLITCH | \
+                        GPIO_INT_BOTHEDGES | GPIO_PORT_PIOA | GPIO_PIN27)
+#define IRQ_HSMCI0_CD   SAM_IRQ_PA27
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -339,20 +345,6 @@ void sam_adm2483_enable(void);
 
 #ifdef CONFIG_SAMV7_SPI
 void sam_spidev_initialize(void);
-#endif
-
-/****************************************************************************
- * Name: sam_hsmci_initialize
- *
- * Description:
- *   Initialize HSMCI support
- *
- ****************************************************************************/
-
-#ifdef HAVE_HSMCI
-int sam_hsmci_initialize(int slot, int minor);
-#else
-# define sam_hsmci_initialize(s,m) (-ENOSYS)
 #endif
 
 /****************************************************************************
