@@ -28,12 +28,6 @@ else ifeq ($(CONFIG_BOARD_LATE_INITIALIZE),y)
 CSRCS += sam_bringup.c
 endif
 
-ifeq ($(CONFIG_ARCH_LEDS),y)
-CSRCS += sam_autoleds.c
-else
-CSRCS += sam_userleds.c
-endif
-
 ifeq ($(CONFIG_BRCG2_ADM2483_USART),y)
 CSRCS += sam_adm2483.c
 endif

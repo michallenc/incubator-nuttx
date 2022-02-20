@@ -56,10 +56,14 @@
 #define HAVE_MRF24J40        1
 #define HAVE_XBEE            1*/
 
-#define HAVE_HSMCI           1
-#define HAVE_USB             1
-#define HAVE_USBDEV          1
-#define HAVE_AUTOMOUNTER     1
+#define HAVE_HSMCI              1
+#define HAVE_AUTOMOUNTER        1
+#define HAVE_W25QXXXJV          1
+#define HAVE_W25QXXXJV_NXFFS    1
+#define HAVE_W25QXXXJV_SMARTFS  1
+#define HAVE_W25QXXXJV_CHARDEV  1
+#define HAVE_USB                1
+#define HAVE_USBDEV             1
 
 /* HSMCI */
 
@@ -113,6 +117,51 @@
 #  undef HAVE_AUTOMOUNTER
 #endif
 
+/* W25QXXXJV QuadSPI FLASH */
+
+#ifndef CONFIG_MTD_W25QXXXJV
+#  undef HAVE_W25QXXXJV
+#  undef HAVE_W25QXXXJV_NXFFS
+#  undef HAVE_W25QXXXJV_SMARTFS
+#  undef HAVE_W25QXXXJV_CHARDEV
+#endif
+
+#ifndef CONFIG_SAMV7_QSPI
+#  undef HAVE_W25QXXXJV
+#  undef HAVE_W25QXXXJV_NXFFS
+#  undef HAVE_W25QXXXJV_SMARTFS
+#  undef HAVE_W25QXXXJV_CHARDEV
+#endif
+
+#ifndef CONFIG_FS_NXFFS
+#  undef HAVE_W25QXXXJV_NXFFS
+#endif
+
+#if !defined(CONFIG_MTD_SMART) || !defined(CONFIG_FS_SMARTFS)
+#  undef HAVE_W25QXXXJV_SMARTFS
+#endif
+
+#if defined(HAVE_W25QXXXJV_NXFFS) && defined(HAVE_W25QXXXJV_SMARTFS)
+#  undef HAVE_W25QXXXJV_NXFFS
+#endif
+
+#if defined(HAVE_W25QXXXJV_NXFFS) || defined(HAVE_W25QXXXJV_SMARTFS)
+#  undef HAVE_W25QXXXJV_CHARDEV
+#endif
+
+/* If both the S25FL1 FLASH and SmartFS, then this is the minor device
+ * number of the Smart block driver (/dev/smartN)
+ */
+
+#define W25QXXXJV_SMART_MINOR 0
+
+/* If the W25QXXXJV FLASH is enabled but not SmartFS, then the S25FL will be
+ * wrapped as a character device.  This is the minor number of both the
+ * block device (/dev/mtdblockN) and the character device (/dev/mtdN).
+ */
+
+#define W25QXXXJV_MTD_MINOR 0
+
 /* USB Device */
 
 /* CONFIG_USBDEV must be defined, or there is no USB
@@ -142,26 +191,6 @@
 #  undef HAVE_USBMONITOR
 #endif
 
-/* Networking and AT24-based MTD config */
-
-#if !defined(CONFIG_NET) || !defined(CONFIG_SAMV7_EMAC)
-#  undef HAVE_NETWORK
-#  undef HAVE_MACADDR
-#endif
-
-#if !defined(CONFIG_SAMV7_TWIHS0) || !defined(CONFIG_MTD_AT24XX)
-#  undef HAVE_MACADDR
-#  undef HAVE_MTDCONFIG
-#endif
-
-#if defined(CONFIG_NSH_NOMAC) || !defined(CONFIG_AT24XX_EXTENDED)
-#  undef HAVE_MACADDR
-#endif
-
-#if !defined(CONFIG_MTD_CONFIG)
-#  undef HAVE_MTDCONFIG
-#endif
-
 /* On-chip Programming Memory */
 
 #if !defined(CONFIG_SAMV7_PROGMEM) || !defined(CONFIG_MTD_PROGMEM)
@@ -187,15 +216,6 @@
 #    define SAME70_PROCFS_MOUNTPOINT "/proc"
 #  endif
 #endif
-
-
-/* LEDs
- *
- * A single LED is available driven by PA24.
- */
-
-#define GPIO_LED0     (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                       GPIO_PORT_PIOA | GPIO_PIN24)
 
 /* Buttons
  * BRCg2 has one button GPIO_ENC_SW (software button on user encoder) on pin

@@ -105,20 +105,6 @@ void sam_boardinitialize(void)
 
   sam_usbinitialize();
 #endif
-
-#ifdef HAVE_NETWORK
-  /* Configure board resources to support networking if the 1) networking is
-   * enabled, and 2) the EMAC module is enabled
-   */
-
-  sam_netinitialize();
-#endif
-
-  /* Configure on-board LEDs if LED support has been selected. */
-
-#ifdef CONFIG_ARCH_LEDS
-  board_autoled_initialize();
-#endif
 }
 
 /****************************************************************************
