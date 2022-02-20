@@ -119,7 +119,7 @@
  */
 
 #undef  HSCMI_NORXDMA              /* Define to disable RX DMA */
-#define HSCMI_NOTXDMA            1 /* Define to disable TX DMA */
+#define HSCMI_NOTXDMA            0 /* Define to disable TX DMA */
 
 /* Timing */
 
