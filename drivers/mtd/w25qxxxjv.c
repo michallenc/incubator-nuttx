@@ -173,6 +173,10 @@
 #define STATUS_SRP_UNLOCKED  (0 << 7) /*   see blow for details           */
 #define STATUS_SRP_LOCKED    (1 << 7) /*   see blow for details           */
 
+/* Status register 2 bit definitions                                      */
+
+#define STATUS_QE            (1 << 1) /* Bit 1: Enable QSPI operations    */
+
 /* Some chips have four protect bits                                      */
 
 /* Bits 2-5: Block protect bits                                           */
@@ -345,8 +349,11 @@ static int  w25qxxxjv_command_write(FAR struct qspi_dev_s *qspi,
                                     uint8_t cmd,
                                     FAR const void *buffer,
                                     size_t buflen);
-static uint8_t w25qxxxjv_read_status(FAR struct w25qxxxjv_dev_s *priv);
-static void w25qxxxjv_write_status(FAR struct w25qxxxjv_dev_s *priv);
+static int w25qxxxjv_enable_qspi(FAR struct w25qxxxjv_dev_s *priv);
+static uint8_t w25qxxxjv_read_status(FAR struct w25qxxxjv_dev_s *priv,
+                                     uint32_t reg);
+static void w25qxxxjv_write_status(FAR struct w25qxxxjv_dev_s *priv,
+                                   uint32_t reg);
 #if 0
 static uint8_t w25qxxxjv_read_volcfg(FAR struct w25qxxxjv_dev_s *priv);
 static void w25qxxxjv_write_volcfg(FAR struct w25qxxxjv_dev_s *priv);
@@ -538,9 +545,10 @@ static int w25qxxxjv_command_write(FAR struct qspi_dev_s *qspi, uint8_t cmd,
  * Name: w25qxxxjv_read_status
  ****************************************************************************/
 
-static uint8_t w25qxxxjv_read_status(FAR struct w25qxxxjv_dev_s *priv)
+static uint8_t w25qxxxjv_read_status(FAR struct w25qxxxjv_dev_s *priv,
+                                     uint32_t reg)
 {
-  DEBUGVERIFY(w25qxxxjv_command_read(priv->qspi, W25QXXXJV_READ_STATUS_1,
+  DEBUGVERIFY(w25qxxxjv_command_read(priv->qspi, reg,
                                      (FAR void *)&priv->readbuf[0], 1));
   return priv->readbuf[0];
 }
@@ -549,7 +557,8 @@ static uint8_t w25qxxxjv_read_status(FAR struct w25qxxxjv_dev_s *priv)
  * Name:  w25qxxxjv_write_status
  ****************************************************************************/
 
-static void w25qxxxjv_write_status(FAR struct w25qxxxjv_dev_s *priv)
+static void w25qxxxjv_write_status(FAR struct w25qxxxjv_dev_s *priv,
+                                   uint32_t reg)
 {
   w25qxxxjv_write_enable(priv);
 
@@ -557,9 +566,43 @@ static void w25qxxxjv_write_status(FAR struct w25qxxxjv_dev_s *priv)
 
   priv->cmdbuf[0] &= ~STATUS_SRP_MASK;
 
-  w25qxxxjv_command_write(priv->qspi, W25QXXXJV_WRITE_STATUS_1,
+  w25qxxxjv_command_write(priv->qspi, reg,
                        (FAR const void *)priv->cmdbuf, 1);
   w25qxxxjv_write_disable(priv);
+}
+
+/****************************************************************************
+ * Name:  w25qxxxjv_enable_qspi
+ ****************************************************************************/
+
+static int w25qxxxjv_enable_qspi(FAR struct w25qxxxjv_dev_s *priv)
+{
+  /* Get the status register value to check the current protection */
+
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_2);
+
+  if ((priv->cmdbuf[0] & STATUS_QE) != 0)
+    {
+      /* QSPI already enabled */
+
+      return 0;
+    }
+
+  /* set the QE bit */
+
+  priv->cmdbuf[0] |= (STATUS_QE);
+  w25qxxxjv_write_status(priv, W25QXXXJV_WRITE_STATUS_2);
+
+  /* Check the new status */
+
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_2);
+  if ((priv->cmdbuf[0] & STATUS_QE) != STATUS_QE)
+    {
+      ferr("ERROR: Could not set QE bit\n");
+      return -EACCES;
+    }
+
+  return OK;
 }
 
 /****************************************************************************
@@ -573,7 +616,7 @@ static void w25qxxxjv_write_enable(FAR struct w25qxxxjv_dev_s *priv)
   do
     {
       w25qxxxjv_command(priv->qspi, W25QXXXJV_WRITE_ENABLE);
-      status = w25qxxxjv_read_status(priv);
+      status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
     }
   while ((status & STATUS_WEL_MASK) != STATUS_WEL_ENABLED);
 }
@@ -589,7 +632,7 @@ static void w25qxxxjv_write_disable(FAR struct w25qxxxjv_dev_s *priv)
   do
     {
       w25qxxxjv_command(priv->qspi, W25QXXXJV_WRITE_DISABLE);
-      status = w25qxxxjv_read_status(priv);
+      status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
     }
   while ((status & STATUS_WEL_MASK) != STATUS_WEL_DISABLED);
 }
@@ -612,7 +655,7 @@ static inline int w25qxxxjv_readid(struct w25qxxxjv_dev_s *priv)
 
   w25qxxxjv_unlock(priv->qspi);
 
-  finfo("Manufacturer: %02x Device Type %02x, Capacity: %02x\n",
+  ferr("Manufacturer: %02x Device Type %02x, Capacity: %02x\n",
         priv->cmdbuf[0], priv->cmdbuf[1], priv->cmdbuf[2]);
 
   /* Check for a recognized memory device type */
@@ -710,7 +753,7 @@ static int w25qxxxjv_protect(FAR struct w25qxxxjv_dev_s *priv,
 {
   /* Get the status register value to check the current protection */
 
-  priv->cmdbuf[0] = w25qxxxjv_read_status(priv);
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
 
   if ((priv->cmdbuf[0] & priv->protectmask) ==
                            (STATUS_BP_ALL & priv->protectmask))
@@ -723,11 +766,11 @@ static int w25qxxxjv_protect(FAR struct w25qxxxjv_dev_s *priv,
   /* set the BP bits as necessary to protect the range of sectors. */
 
   priv->cmdbuf[0] |= (STATUS_BP_ALL & priv->protectmask);
-  w25qxxxjv_write_status(priv);
+  w25qxxxjv_write_status(priv, W25QXXXJV_WRITE_STATUS_1);
 
   /* Check the new status */
 
-  priv->cmdbuf[0] = w25qxxxjv_read_status(priv);
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
   if ((priv->cmdbuf[0] & priv->protectmask) !=
                             (STATUS_BP_ALL & priv->protectmask))
     {
@@ -746,7 +789,7 @@ static int w25qxxxjv_unprotect(FAR struct w25qxxxjv_dev_s *priv,
 {
   /* Get the status register value to check the current protection */
 
-  priv->cmdbuf[0] = w25qxxxjv_read_status(priv);
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
 
   if ((priv->cmdbuf[0] & priv->protectmask) == STATUS_BP_NONE)
     {
@@ -761,11 +804,11 @@ static int w25qxxxjv_unprotect(FAR struct w25qxxxjv_dev_s *priv,
    */
 
   priv->cmdbuf[0] &= ~priv->protectmask;
-  w25qxxxjv_write_status(priv);
+  w25qxxxjv_write_status(priv, W25QXXXJV_WRITE_STATUS_1);
 
   /* Check the new status */
 
-  priv->cmdbuf[0] = w25qxxxjv_read_status(priv);
+  priv->cmdbuf[0] = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
   if ((priv->cmdbuf[0] & (STATUS_SRP_MASK | priv->protectmask)) != 0)
     {
       return -EACCES;
@@ -841,10 +884,10 @@ static int w25qxxxjv_erase_sector(FAR struct w25qxxxjv_dev_s *priv,
 
   /* Check that the flash is ready and unprotected */
 
-  status = w25qxxxjv_read_status(priv);
+  status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
   if ((status & STATUS_BUSY_MASK) != STATUS_READY)
     {
-      ferr("ERROR: Flash busy: %02x", status);
+      ferr("ERROR: Flash busy: 0x%x\n", status);
       return -EBUSY;
     }
 
@@ -868,7 +911,8 @@ static int w25qxxxjv_erase_sector(FAR struct w25qxxxjv_dev_s *priv,
 
   /* Wait for erasure to finish */
 
-  while ((w25qxxxjv_read_status(priv) & STATUS_BUSY_MASK) != 0);
+  while ((w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1) & \
+                                STATUS_BUSY_MASK) != 0);
 
   return OK;
 }
@@ -883,7 +927,7 @@ static int w25qxxxjv_erase_chip(FAR struct w25qxxxjv_dev_s *priv)
 
   /* Check if the FLASH is protected */
 
-  status = w25qxxxjv_read_status(priv);
+  status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
   if ((status & priv->protectmask) != 0)
     {
       ferr("ERROR: FLASH is Protected: %02x", status);
@@ -897,11 +941,11 @@ static int w25qxxxjv_erase_chip(FAR struct w25qxxxjv_dev_s *priv)
 
   /* Wait for the erasure to complete */
 
-  status = w25qxxxjv_read_status(priv);
+  status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
   while ((status & STATUS_BUSY_MASK) != 0)
     {
       nxsig_usleep(200  *1000);
-      status = w25qxxxjv_read_status(priv);
+      status = w25qxxxjv_read_status(priv, W25QXXXJV_READ_STATUS_1);
     }
 
   return OK;
@@ -976,7 +1020,7 @@ static int w25qxxxjv_write_page(struct w25qxxxjv_dev_s *priv,
 
       if (ret < 0)
         {
-          ferr("ERROR: QSPI_MEMORY failed writing address=%06x\n",
+          ferr("ERROR: QSPI_MEMORY failed writing address=%06llx\n",
                address);
           return ret;
         }
@@ -1343,6 +1387,7 @@ static ssize_t w25qxxxjv_read(FAR struct mtd_dev_s *dev,
   /* Lock the QuadSPI bus and select this FLASH part */
 
   w25qxxxjv_lock(priv->qspi);
+
   ret = w25qxxxjv_read_byte(priv, buffer, offset, nbytes);
   w25qxxxjv_unlock(priv->qspi);
 
@@ -1401,7 +1446,7 @@ static int w25qxxxjv_ioctl(FAR struct mtd_dev_s *dev,
 #endif
               ret               = OK;
 
-              finfo("blocksize: %lu erasesize: %lu neraseblocks: %lu\n",
+              ferr("blocksize: %lu erasesize: %lu neraseblocks: %lu\n",
                     geo->blocksize, geo->erasesize, geo->neraseblocks);
             }
         }
@@ -1557,6 +1602,8 @@ FAR struct mtd_dev_s *w25qxxxjv_initialize(FAR struct qspi_dev_s *qspi,
           ferr("ERROR Unrecognized QSPI device\n");
           goto errout_with_readbuf;
         }
+
+      w25qxxxjv_enable_qspi(priv);
 
       /* Enter 4-byte address mode if chip is 4-byte addressable */
 

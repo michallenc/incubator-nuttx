@@ -11,4 +11,53 @@ config BRCG2_ADM2483_USART
 	---help---
 	  Enables output from ADM2483 Transciever (USART to RS-485).
 
+config BRCG2_FLASH
+	bool "MTD driver for external 64 Mbyte W25Q512JV FLASH on QSPI"
+	default n
+	select MTD
+	select MTD_W25QXXXJV
+	select MTD_SMART
+	select FS_SMARTFS
+	select SAMV7_QSPI
+	---help---
+		Configures an MTD device for use with the onboard flash
+
+config BRCG2_FLASH_MINOR
+	int "Minor number for the FLASH /dev/smart entry"
+	default 0
+	depends on BRCG2_FLASH
+	---help---
+		Sets the minor number for the FLASH MTD /dev entry
+
+config BRCG2_FLASH_PART
+	bool "Enable partition support on FLASH"
+	default n
+	depends on BRCG2_FLASH
+	select MTD_PARTITION
+	---help---
+		Enables creation of partitions on the FLASH
+
+config BRCG2_FLASH_CONFIG_PART
+	bool "Create application config data partition on FLASH"
+	default n
+	depends on BRCG2_FLASH_PART
+	depends on PLATFORM_CONFIGDATA
+	---help---
+		Enables creation of a /dev/config partition on the FLASH
+
+config BRCG2_FLASH_CONFIG_PART_NUMBER
+	int "Index number of config partition (in list below)"
+	default 0
+	depends on BRCG2_FLASH_CONFIG_PART
+	---help---
+		Specifies the index number of the config data partition
+		from the partition list.
+
+config BRCG2_FLASH_PART_LIST
+	string "Flash partition size list"
+	default "16384,16384,16384,16384"
+	depends on BRCG2_FLASH_PART
+	---help---
+		Comma separated list of partition sizes in KB.
+
 endif # ARCH_BOARD_SAME70_BRCG2

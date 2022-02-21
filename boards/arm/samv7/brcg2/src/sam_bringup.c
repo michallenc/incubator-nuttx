@@ -61,12 +61,6 @@
 #  include "board_hsmci.h"
 #endif /* HAVE_HSMCI */
 
-#ifdef HAVE_W25QXXXJV
-#  include <nuttx/spi/qspi.h>
-#  include <nuttx/mtd/mtd.h>
-#  include "sam_qspi.h"
-#endif
-
 #ifdef HAVE_PROGMEM_CHARDEV
 #  include <nuttx/mtd/mtd.h>
 #  include "board_progmem.h"
@@ -110,16 +104,6 @@
 
 int sam_bringup(void)
 {
-#ifdef HAVE_W25QXXXJV
-  FAR struct qspi_dev_s *qspi;
-  FAR struct mtd_dev_s *mtd;
-#endif
-#if defined(HAVE_W25QXXXJV_CHARDEV)
-#if defined(CONFIG_BCH)
-  char blockdev[18];
-  char chardev[12];
-#endif /* defined(CONFIG_BCH) */
-#endif
   int ret;
 
 #ifdef CONFIG_FS_PROCFS
@@ -207,81 +191,10 @@ int sam_bringup(void)
 #endif
 
 #ifdef HAVE_W25QXXXJV
-  /* Create an instance of the SAMV71 QSPI device driver */
-
-  qspi = sam_qspi_initialize(0);
-  if (!qspi)
+  ret = sam_w25qxxxjv_initialize(0);
+  if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: sam_qspi_initialize failed\n");
-    }
-  else
-    {
-      /* Use the QSPI device instance to initialize the
-       * W25QXXXJV device.
-       */
-
-      mtd = w25qxxxjv_initialize(qspi, true);
-      if (!mtd)
-        {
-          syslog(LOG_ERR, "ERROR: w25qxxxjv_initialize failed\n");
-        }
-
-#ifdef HAVE_W25QXXXJV_SMARTFS
-      /* Configure the device with no partition support */
-
-      ret = smart_initialize(W25QXXXJV_SMART_MINOR, mtd, NULL);
-      if (ret != OK)
-        {
-          syslog(LOG_ERR, "ERROR: Failed to initialize SmartFS: %d\n", ret);
-        }
-
-#elif defined(HAVE_W25QXXXJV_NXFFS)
-      /* Initialize to provide NXFFS on the W25QXXXJV MTD interface */
-
-      ret = nxffs_initialize(mtd);
-      if (ret < 0)
-        {
-         syslog(LOG_ERR, "ERROR: NXFFS initialization failed: %d\n", ret);
-        }
-
-      /* Mount the file system at /mnt/w25qxxxjv */
-
-      ret = nx_mount(NULL, "/mnt/w25qxxxjv", "nxffs", 0, NULL);
-      if (ret < 0)
-        {
-          syslog(LOG_ERR, "ERROR: Failed to mount the NXFFS volume: %d\n",
-                 ret);
-          return ret;
-        }
-
-#else /* if  defined(HAVE_W25QXXXJV_CHARDEV) */
-      /* Use the FTL layer to wrap the MTD driver as a block driver */
-
-      ret = ftl_initialize(W25QXXXJV_MTD_MINOR, mtd);
-      if (ret < 0)
-        {
-          syslog(LOG_ERR, "ERROR: Failed to initialize the FTL layer: %d\n",
-                 ret);
-          return ret;
-        }
-#if defined(CONFIG_BCH)
-      /* Use the minor number to create device paths */
-
-      snprintf(blockdev, sizeof(blockdev), "/dev/mtdblock%d",
-               W25QXXXJV_MTD_MINOR);
-      snprintf(chardev, sizeof(chardev), "/dev/mtd%d", W25QXXXJV_MTD_MINOR);
-
-      /* Now create a character device on the block device */
-
-      ret = bchdev_register(blockdev, chardev, false);
-      if (ret < 0)
-        {
-          syslog(LOG_ERR, "ERROR: bchdev_register %s failed: %d\n",
-                 chardev, ret);
-          return ret;
-        }
-#endif /* defined(CONFIG_BCH) */
-#endif
+      syslog(LOG_ERR, "ERROR: sam_w25qxxxjv_initialize failed: %d.\n", ret);
     }
 #endif
 

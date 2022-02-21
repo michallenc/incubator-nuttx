@@ -149,19 +149,6 @@
 #  undef HAVE_W25QXXXJV_CHARDEV
 #endif
 
-/* If both the S25FL1 FLASH and SmartFS, then this is the minor device
- * number of the Smart block driver (/dev/smartN)
- */
-
-#define W25QXXXJV_SMART_MINOR 0
-
-/* If the W25QXXXJV FLASH is enabled but not SmartFS, then the S25FL will be
- * wrapped as a character device.  This is the minor number of both the
- * block device (/dev/mtdblockN) and the character device (/dev/mtdN).
- */
-
-#define W25QXXXJV_MTD_MINOR 0
-
 /* USB Device */
 
 /* CONFIG_USBDEV must be defined, or there is no USB
@@ -429,6 +416,18 @@ int sam_afec_setup(void);
 
 #ifdef CONFIG_SENSORS_QENCODER
 int sam_gpio_enc_init(void);
+#endif
+
+/****************************************************************************
+ * Name: sam_w25qxxxjv_initialize
+ *
+ * Description:
+ *   Initialize and register the W25QXXXJV FLASH file system.
+ *
+ ****************************************************************************/
+
+#ifdef HAVE_W25QXXXJV
+int sam_w25qxxxjv_initialize(int minor);
 #endif
 
 /****************************************************************************
