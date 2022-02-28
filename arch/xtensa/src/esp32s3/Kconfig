@@ -302,6 +302,14 @@ config ESP32S3_UART
 	bool
 	default n
 
+config ESP32S3_TIMER
+	bool
+	default n
+
+config ESP32S3_WDT
+	bool
+	default n
+
 config ESP32S3_UART0
 	bool "UART 0"
 	default n
@@ -323,9 +331,64 @@ config ESP32S3_UART2
 	select UART2_SERIALDRIVER
 	select ARCH_HAVE_SERIAL_TERMIOS
 
-endmenu # ESP32S3 Peripheral Selection
+config ESP32S3_TIMER0
+	bool "54-bit Timer 0 (Group 0 Timer 0)"
+	default n
+	select ESP32S3_TIMER
+	---help---
+		Enables Timer 0
 
-menu "UART configuration"
+config ESP32S3_TIMER1
+	bool "54-bit Timer 1 (Group 0 Timer 1)"
+	default n
+	select ESP32S3_TIMER
+	---help---
+		Enables Timer 1
+
+config ESP32S3_TIMER2
+	bool "54-bit Timer 2 (Group 1 Timer 0)"
+	default n
+	select ESP32S3_TIMER
+	---help---
+		Enables Timer 2
+
+config ESP32S3_TIMER3
+	bool "54-bit Timer 3 (Group 1 Timer 1)"
+	default n
+	select ESP32S3_TIMER
+	---help---
+		Enables Timer 3
+
+config ESP32S3_MWDT0
+	bool "Main System Watchdog Timer (Group 0)"
+	default n
+	select ESP32S3_WDT
+	---help---
+		Includes MWDT0. This watchdog timer is part of the Group 0
+		timer submodule.
+
+config ESP32S3_MWDT1
+	bool "Main System Watchdog Timer (Group 1)"
+	default n
+	select ESP32S3_WDT
+	---help---
+		Includes MWDT1. This watchdog timer is part of the Group 0
+		timer submodule.
+
+config ESP32S3_RWDT
+	bool "RTC Watchdog Timer"
+	default n
+	select ESP32S3_WDT
+	---help---
+		Includes RWDT. This watchdog timer is from the RTC module.
+		When it is selected, if the developer sets it to reset on expiration
+		it will reset Main System and the RTC module. If you don't want
+		to have the RTC module reset, please, use the Timers' Module WDTs.
+		They will only reset Main System.
+
+endmenu # ESP32-S3 Peripheral Selection
+
+menu "UART Configuration"
 	depends on ESP32S3_UART
 
 if ESP32S3_UART0
@@ -406,7 +469,19 @@ config ESP32S3_UART2_CTSPIN
 
 endif # ESP32S3_UART2
 
-endmenu # UART configuration
+endmenu # UART Configuration
+
+menu "Timer/Counter Configuration"
+	depends on ESP32S3_TIMER
+
+config ESP32S3_ONESHOT
+	bool "One-shot wrapper"
+	default n
+	---help---
+		Enable a wrapper around the low level timer/counter functions to
+		support one-shot timer.
+
+endmenu # Timer/Counter Configuration
 
 menu "Application Image Configuration"
 

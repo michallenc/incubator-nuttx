@@ -39,7 +39,8 @@ CMN_CSRCS += xtensa_modifyreg8.c xtensa_modifyreg16.c xtensa_modifyreg32.c
 CMN_CSRCS += xtensa_puts.c xtensa_releasepending.c xtensa_releasestack.c
 CMN_CSRCS += xtensa_reprioritizertr.c xtensa_schedsigaction.c
 CMN_CSRCS += xtensa_sigdeliver.c xtensa_stackframe.c xtensa_udelay.c
-CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c
+CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c xtensa_swint.c
+CMN_CSRCS += xtensa_switchcontext.c
 
 # Configuration-dependent common XTENSA files
 
@@ -71,4 +72,22 @@ CHIP_CSRCS += esp32s3_systemreset.c
 
 ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
 CHIP_CSRCS += esp32s3_idle.c
+endif
+
+ifeq ($(CONFIG_ESP32S3_TIMER),y)
+CHIP_CSRCS += esp32s3_tim.c
+ifeq ($(CONFIG_TIMER),y)
+CHIP_CSRCS += esp32s3_tim_lowerhalf.c
+endif
+endif
+
+ifeq ($(CONFIG_WATCHDOG),y)
+CHIP_CSRCS += esp32s3_wdt_lowerhalf.c
+endif
+
+ifeq ($(CONFIG_ESP32S3_ONESHOT),y)
+CHIP_CSRCS += esp32s3_oneshot.c
+ifeq ($(CONFIG_ONESHOT),y)
+CHIP_CSRCS += esp32s3_oneshot_lowerhalf.c
+endif
 endif

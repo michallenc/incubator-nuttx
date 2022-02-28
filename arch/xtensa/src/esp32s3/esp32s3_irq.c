@@ -334,6 +334,10 @@ void up_irqinitialize(void)
 
   g_irqmap[XTENSA_IRQ_TIMER0] = IRQ_MKMAP(0, ESP32S3_CPUINT_TIMER0);
 
+  g_irqmap[XTENSA_IRQ_SWINT]  = IRQ_MKMAP(0, ESP32S3_CPUINT_SOFTWARE1);
+
+  g_irqmap[XTENSA_IRQ_SWINT]  = IRQ_MKMAP(1, ESP32S3_CPUINT_SOFTWARE1);
+
   /* Initialize CPU interrupts */
 
   esp32s3_cpuint_initialize();
@@ -343,6 +347,14 @@ void up_irqinitialize(void)
 
   up_irq_enable();
 #endif
+
+  /* Attach the software interrupt */
+
+  irq_attach(XTENSA_IRQ_SWINT, (xcpt_t)xtensa_swint, NULL);
+
+  /* Enable the software CPU interrupt. */
+
+  up_enable_irq(XTENSA_IRQ_SWINT);
 }
 
 /****************************************************************************
@@ -402,20 +414,38 @@ void up_disable_irq(int irq)
 
 void up_enable_irq(int irq)
 {
-  int cpu = IRQ_GETCPU(g_irqmap[irq]);
   int cpuint = IRQ_GETCPUINT(g_irqmap[irq]);
 
   DEBUGASSERT(cpuint >= 0 && cpuint <= ESP32S3_CPUINT_MAX);
-  DEBUGASSERT(cpu == 0);
 
   if (irq < XTENSA_NIRQ_INTERNAL)
     {
+      /* For internal interrupts, use the current CPU.  We can't enable other
+       * CPUs' internal interrupts.
+       * The CPU interrupt can still be taken from the map as internal
+       * interrupts have the same number for all CPUs.  In this case then
+       * we are just overwriting the cpu part of the map.
+       */
+
+      int cpu = up_cpu_index();
+
       /* Enable the CPU interrupt now for internal CPU. */
 
-      xtensa_enable_cpuint(&g_intenable[cpu], 1ul << cpuint);
+      xtensa_enable_cpuint(&g_intenable[cpu], (1ul << cpuint));
     }
   else
     {
+      /* Retrieve the CPU that enabled this interrupt from the IRQ map.
+       *
+       * For peripheral interrupts we rely on the interrupt matrix to manage
+       * interrupts.  The interrupt matrix registers are available for both
+       * CPUs.
+       */
+
+      int cpu = IRQ_GETCPU(g_irqmap[irq]);
+
+      DEBUGASSERT(cpu == 0);
+
       /* For peripheral interrupts, attach the interrupt to the peripheral;
        * the CPU interrupt was already enabled when allocated.
        */
@@ -484,12 +514,13 @@ int esp32s3_cpuint_initialize(void)
    *   ESP32S3_CPUINT_PROFILING  11  Not yet defined
    *   ESP32S3_CPUINT_TIMER1     15  XTENSA_IRQ_TIMER1  1
    *   ESP32S3_CPUINT_TIMER2     16  XTENSA_IRQ_TIMER2  2
-   *   ESP32S3_CPUINT_SOFTWARE1  29  Not yet defined
+   *   ESP32S2_CPUINT_SOFTWARE1  29  XTENSA_IRQ_SWINT   4
    */
 
-  intmap[ESP32S3_CPUINT_TIMER0] = CPUINT_ASSIGN(XTENSA_IRQ_TIMER0);
-  intmap[ESP32S3_CPUINT_TIMER1] = CPUINT_ASSIGN(XTENSA_IRQ_TIMER1);
-  intmap[ESP32S3_CPUINT_TIMER2] = CPUINT_ASSIGN(XTENSA_IRQ_TIMER2);
+  intmap[ESP32S3_CPUINT_TIMER0]    = CPUINT_ASSIGN(XTENSA_IRQ_TIMER0);
+  intmap[ESP32S3_CPUINT_TIMER1]    = CPUINT_ASSIGN(XTENSA_IRQ_TIMER1);
+  intmap[ESP32S3_CPUINT_TIMER2]    = CPUINT_ASSIGN(XTENSA_IRQ_TIMER2);
+  intmap[ESP32S3_CPUINT_SOFTWARE1] = CPUINT_ASSIGN(XTENSA_IRQ_SWINT);
 
   return OK;
 }

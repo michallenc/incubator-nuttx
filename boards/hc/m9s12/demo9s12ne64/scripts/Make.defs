@@ -39,10 +39,6 @@ ifneq ($(CONFIG_HCS12_MSOFTREGS),0)
   ARCHCPUFLAGS += -msoft-reg-count=$(CONFIG_HCS12_MSOFTREGS)
 endif
 
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-  MAXOPTIMIZATION = -O2
-else
-endif
 ARCHSCRIPT += $(BOARD_DIR)$(DELIM)ostest$(DELIM)$(LDSCRIPT)
 
 ifeq ($(CONFIG_DEBUG_SYMBOLS),y)
@@ -53,8 +49,8 @@ ifneq ($(CONFIG_DEBUG_NOOPT),y)
   ARCHOPTIMIZATION += $(MAXOPTIMIZATION) -fno-strict-aliasing -fomit-frame-pointer
 endif
 
-ARCHCFLAGS = -fno-builtin
-ARCHCXXFLAGS = -fno-builtin -fno-exceptions -fcheck-new
+ARCHCFLAGS = -fno-common -fno-builtin
+ARCHCXXFLAGS = -fno-common -fno-builtin -fno-exceptions -fcheck-new
 ARCHWARNINGS = -Wall -Wstrict-prototypes -Wshadow -Wundef
 ARCHWARNINGSXX = -Wall -Wshadow -Wundef
 ARCHPICFLAGS = -fpic -msingle-pic-base -mpic-register=r10
