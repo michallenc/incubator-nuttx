@@ -7,7 +7,6 @@
 #
 # CONFIG_ARCH_LEDS is not set
 # CONFIG_ARCH_RAMFUNCS is not set
-# CONFIG_BRCG2_FLASH_PART is not set
 # CONFIG_MMCSD_MMCSUPPORT is not set
 # CONFIG_MMCSD_SPI is not set
 # CONFIG_SAMV7_UART2 is not set
