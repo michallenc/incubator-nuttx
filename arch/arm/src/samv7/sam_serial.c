@@ -50,6 +50,7 @@
 
 #include "hardware/sam_uart.h"
 #include "sam_xdmac.h"
+#include "sam_periphclks.h"
 #include "sam_serial.h"
 
 /****************************************************************************
@@ -88,7 +89,7 @@
 # define DMA_RXFLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
      DMACH_FLAG_PERIPHH2SEL | DMACH_FLAG_PERIPHISPERIPH |  \
      DMACH_FLAG_PERIPHWIDTH_8BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
-     DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF1 | \
+     DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
      DMACH_FLAG_PERIPHAHB_AHB_IF1 | DMACH_FLAG_MEMWIDTH_8BITS | \
      DMACH_FLAG_MEMINCREMENT | DMACH_FLAG_MEMCHUNKSIZE_1 | \
      DMACH_FLAG_MEMBURST_1)
@@ -98,10 +99,14 @@
  * When streaming data, the generic serial layer will be called
  * every time the FIFO receives half this number of bytes.
  */
-#  if !defined(CONFIG_SAMV7_SERIAL_RXDMA_BUFFER)
+#  if defined(CONFIG_SAMV7_SERIAL_RXDMA_BUFFER)
 #    define CONFIG_SAMV7_SERIAL_RXDMA_BUFFER 32
 #  endif
-#  define RXDMA_BUFFER_SIZE CONFIG_SAMV7_SERIAL_RXDMA_BUFFER
+#  define RXDMA_MUTIPLE  4
+#  define RXDMA_MUTIPLE_MASK  (RXDMA_MUTIPLE - 1)
+#  define RXDMA_BUFFER_SIZE ((CONFIG_SAMV7_SERIAL_RXDMA_BUFFER \
+                                + RXDMA_MUTIPLE_MASK) \
+                                & ~RXDMA_MUTIPLE_MASK)
 
 #endif  /* SERIAL_HAVE_RXDMA */
 
@@ -110,9 +115,9 @@
 # define DMA_TXFLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
      DMACH_FLAG_PERIPHH2SEL | DMACH_FLAG_PERIPHISPERIPH |  \
      DMACH_FLAG_PERIPHWIDTH_8BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
-     DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF1 | \
+     DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
      DMACH_FLAG_PERIPHAHB_AHB_IF1 | DMACH_FLAG_MEMWIDTH_8BITS | \
-     DMACH_FLAG_MEMCHUNKSIZE_1 | DMACH_FLAG_MEMBURST_1)
+     DMACH_FLAG_MEMCHUNKSIZE_1 | DMACH_FLAG_MEMBURST_1 | DMACH_FLAG_MEMINCREMENT)
 
 #endif  /* SERIAL_HAVE_TXDMA */
 
@@ -1009,6 +1014,27 @@ static void sam_disableallints(struct sam_dev_s *priv, uint32_t *imr)
 }
 
 /****************************************************************************
+ * Name: sam_dma_nextrx
+ *
+ * Description:
+ *   Returns the index into the RX FIFO where the DMA will place the next
+ *   byte that it receives.
+ *
+ ****************************************************************************/
+
+#ifdef SERIAL_HAVE_RXDMA
+static int sam_dma_nextrx(struct sam_dev_s *priv)
+{
+  size_t dmaresidual;
+
+  dmaresidual = sam_dmaresidual(priv->rxdma);
+  printf("residual = %d\n", dmaresidual);
+
+  return ((RXDMA_BUFFER_SIZE - (int)dmaresidual) - 1);
+}
+#endif
+
+/****************************************************************************
  * Name: sam_setup
  *
  * Description:
@@ -1192,6 +1218,8 @@ static int sam_dma_setup(struct uart_dev_s *dev)
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
   int result;
 
+  printf("in sam_dma_setup\n");
+
   /* Do the basic UART setup first, unless we are the console */
 
   if (!dev->isconsole)
@@ -1199,9 +1227,14 @@ static int sam_dma_setup(struct uart_dev_s *dev)
       result = sam_setup(dev);
       if (result != OK)
         {
+          printf("sam_setup faied\n");
           return result;
         }
     }
+
+  //sam_uart0_enableclk();
+
+  //sam_rxint(dev, true);
 
 #if defined(SERIAL_HAVE_TXDMA)
   /* Acquire the Tx DMA channel. */
@@ -1211,33 +1244,44 @@ static int sam_dma_setup(struct uart_dev_s *dev)
 
 #endif
 
+  printf("before SERIAL_HAVE_RXDMA\n");
+
 #if defined(SERIAL_HAVE_RXDMA)
   /* Acquire the DMA channel.  This should always succeed. */
 
-  priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
-                             DMACH_FLAG_PERIPHPID(priv->pid));
+  printf("setting dma channlel\n");
+
+  if (priv->rxdma == NULL)
+    {
+      priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
+                                  DMACH_FLAG_PERIPHPID(priv->pid));
+    }
+
+  printf("periph id = %d\n", DMACH_FLAG_PERIPHPID(priv->pid));
 
   /* Configure for circular DMA reception into the RX fifo */
 
   uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
-  uint32_t maddr = (uint32_t)priv->rxfifo;
+  uint32_t maddr = (uintptr_t)priv->rxfifo;
   size_t buflen = RXDMA_BUFFER_SIZE;
 
-  sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
+  printf("bufflen = %d\n", buflen);
 
+  sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
 
   /* Reset our DMA shadow pointer to match the address just
    * programmed above.
    */
 
   priv->rxdmanext = 0;
+  priv->rxenable = true;
 
   /* Start the DMA channel, and arrange for callbacks at the half and
    * full points in the FIFO.  This ensures that we have half a FIFO
    * worth of time to claim bytes before they are overwritten.
    */
 
-  sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)priv);
+  sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
 #endif
 
   return OK;
@@ -1283,6 +1327,8 @@ static void sam_dma_shutdown(struct uart_dev_s *dev)
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
   /* Perform the normal UART shutdown */
+
+  printf("dma_shutdown\n");
 
   sam_shutdown(dev);
 
@@ -1768,12 +1814,23 @@ static int sam_dma_receive(struct uart_dev_s *dev, unsigned int *status)
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
   int c = 0;
 
-  c = priv->rxfifo[priv->rxdmanext];
+  *status  = priv->sr;
+  priv->sr = 0;
 
-  priv->rxdmanext++;
-  if (priv->rxdmanext == RXDMA_BUFFER_SIZE)
+  //printf("dma receive\n");
+  if (sam_dma_nextrx(priv) != priv->rxdmanext)
     {
-      priv->rxdmanext = 0;
+
+      //up_invalidate_dcache((uintptr_t)priv->rxfifo,
+      //                     (uintptr_t)priv->rxfifo + RXDMA_BUFFER_SIZE);
+
+      c = priv->rxfifo[priv->rxdmanext];
+      priv->rxdmanext++;
+      //printf("c = %c\n", c);
+      if ((priv->rxdmanext) == RXDMA_BUFFER_SIZE)
+        {
+          priv->rxdmanext = 0;
+        }
     }
 
   return c;
@@ -1801,7 +1858,43 @@ static void sam_dma_rxint(struct uart_dev_s *dev, bool enable)
    * DMA event.
    */
 
-  priv->rxenable = enable;
+  //printf("enable = %d\n", enable);
+
+  if (priv->rxenable != enable)
+    {
+      priv->rxenable = enable;
+
+      if (enable)
+        {
+         /* if (priv->rxdma == NULL)
+            {
+              printf("rxdma still null\n");
+              priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
+                             DMACH_FLAG_PERIPHPID(priv->pid));
+            }
+
+          uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
+          uint32_t maddr = (uintptr_t)priv->rxfifo;
+          size_t buflen = RXDMA_BUFFER_SIZE;
+
+          printf("bufflen = %d\n", buflen);
+
+          sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
+
+          Reset our DMA shadow pointer to match the address just
+          programmed above.
+          */
+
+          //priv->rxdmanext = 0;
+
+          /* Start the DMA channel, and arrange for callbacks at the half and
+          * full points in the FIFO.  This ensures that we have half a FIFO
+          * worth of time to claim bytes before they are overwritten.
+          */
+
+          //sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
+        } 
+    }
 }
 #endif
 
@@ -1822,7 +1915,10 @@ static bool sam_dma_rxavailable(struct uart_dev_s *dev)
    * do not match, then there are bytes to be received.
    */
 
-  return true;
+  printf("next = %d, rdmanext = %d\n", sam_dma_nextrx(priv) , priv->rxdmanext);
+
+  return (sam_dma_nextrx(priv) != priv->rxdmanext);
+
 }
 #endif
 
@@ -1838,38 +1934,39 @@ static bool sam_dma_rxavailable(struct uart_dev_s *dev)
 #ifdef SERIAL_HAVE_TXDMA
 static void sam_dma_txcallback(DMA_HANDLE handle, void *arg, int status)
 {
-  struct sam_dev_s *priv = (struct sam_dev_s *)arg;
+  struct uart_dev_s *dev = (struct uart_dev_s *)arg;
+  struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
   /* Update 'nbytes' indicating number of bytes actually transferred by DMA.
    * This is important to free TX buffer space by 'uart_xmitchars_done'.
    */
 
-  priv->dev.dmatx.nbytes += priv->dev.dmatx.length;
-  if (priv->dev.dmatx.nlength)
+  dev->dmatx.nbytes += dev->dmatx.length;
+  if (dev->dmatx.nlength)
     {
       /* Set up DMA on next buffer */
 
       uint32_t paddr = priv->usartbase + SAM_UART_THR_OFFSET;
-      uint32_t maddr = (uint32_t) priv->dev.dmatx.nbuffer;
-      size_t buflen = (size_t) priv->dev.dmatx.nlength;
+      uint32_t maddr = (uint32_t) dev->dmatx.nbuffer;
+      size_t buflen = (size_t) dev->dmatx.nlength;
 
       sam_dmatxsetup(priv->txdma, paddr, maddr, buflen);
 
           /* Set length for the next completion */
 
-      priv->dev.dmatx.length  = priv->dev.dmatx.nlength;
-      priv->dev.dmatx.nlength = 0;
+      dev->dmatx.length  = dev->dmatx.nlength;
+      dev->dmatx.nlength = 0;
 
       /* Start transmission with the callback on DMA completion */
 
-      sam_dmastart(priv->txdma, sam_dma_txcallback, (void *)priv);
+      sam_dmastart(priv->txdma, sam_dma_txcallback, (void *)dev);
 
       return;
     }
 
   /* Adjust the pointers */
 
-  uart_xmitchars_done(&priv->dev);
+  uart_xmitchars_done(dev);
 }
 #endif
 
@@ -1888,7 +1985,10 @@ static void sam_dma_txavailable(struct uart_dev_s *dev)
 
   /* Only send when the DMA is idle */
 
-  uart_xmitchars_dma(dev);
+  if (sam_dmaresidual(priv->txdma) == 0)
+    {
+      uart_xmitchars_dma(dev);
+    }
 }
 #endif
 
@@ -1906,6 +2006,8 @@ static void sam_dma_send(struct uart_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
+  printf("in dma send\n");
+
   /* We need to stop DMA before reconfiguration */
 
   sam_dmastop(priv->txdma);
@@ -1922,11 +2024,13 @@ static void sam_dma_send(struct uart_dev_s *dev)
   uint32_t maddr = (uint32_t) dev->dmatx.buffer;
   size_t buflen = (size_t) dev->dmatx.length;
 
+  //printf("paddr = 0x%x\n", paddr);
+
   sam_dmatxsetup(priv->txdma, paddr, maddr, buflen);
 
   /* Start transmission with the callback on DMA completion */
 
-  sam_dmastart(priv->txdma, sam_dma_txcallback, (void *)priv);
+  sam_dmastart(priv->txdma, sam_dma_txcallback, (void *)dev);
 }
 #endif
 
@@ -1959,7 +2063,7 @@ static void sam_dma_txint(struct uart_dev_s *dev, bool enable)
 
   /* In case of DMA transfer we do not want to make use of UART interrupts.
    * Instead, we use DMA interrupts that are activated once during boot
-   * sequence. Furthermore we can use up_dma_txcallback() to handle staff at
+   * sequence. Furthermore we can use sam_dma_txcallback() to handle staff at
    * half DMA transfer or after transfer completion (depending configuration,
    * see stm32_dmastart(...) ).
    */
@@ -2035,11 +2139,14 @@ static bool sam_txready(struct uart_dev_s *dev)
 #ifdef SERIAL_HAVE_RXDMA
 static void sam_dma_rxcallback(DMA_HANDLE handle, void *arg, int status)
 {
-  struct sam_dev_s *priv = (struct sam_dev_s *)arg;
+  struct uart_dev_s *dev = (struct uart_dev_s *)arg;
+  struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
+  printf("in callback\n");
 
-  if (priv->rxenable && sam_dma_rxavailable(&priv->dev))
+  if (priv->rxenable && sam_dma_rxavailable(dev))
     {
-      uart_recvchars(&priv->dev);
+      printf("call uart_recvchars\n");
+      uart_recvchars(dev);
     }
 }
 #endif
