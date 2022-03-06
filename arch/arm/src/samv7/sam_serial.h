@@ -127,4 +127,23 @@
 #  define SERIAL_HAVE_RXDMA_OPS
 #endif
 
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: sam_serial_dma_poll
+ *
+ * Description:
+ *   Checks receive DMA buffers for received bytes that have not accumulated
+ *   to the point where the DMA half/full interrupt has triggered.
+ *
+ *   This function should be called from a timer or other periodic context.
+ *
+ ****************************************************************************/
+
+#ifdef SERIAL_HAVE_RXDMA
+void sam_serial_dma_poll(void)
+#endif
+
 #endif /* __ARCH_ARM_SRC_SAMV7_SAM_SERIAL_H */

@@ -99,7 +99,7 @@
  * When streaming data, the generic serial layer will be called
  * every time the FIFO receives half this number of bytes.
  */
-#  if defined(CONFIG_SAMV7_SERIAL_RXDMA_BUFFER)
+#  ifndef CONFIG_SAMV7_SERIAL_RXDMA_BUFFER
 #    define CONFIG_SAMV7_SERIAL_RXDMA_BUFFER 32
 #  endif
 #  define RXDMA_MUTIPLE  4
@@ -385,7 +385,7 @@
 
 struct sam_dev_s
 {
-  struct uart_dev_s dev;       /* Generic UART device */
+  struct uart_dev_s dev;        /* Generic UART device */
   const uint32_t usartbase;     /* Base address of USART registers */
   uint32_t baud;                /* Configured baud */
   uint32_t sr;                  /* Saved status bits */
@@ -397,6 +397,9 @@ struct sam_dev_s
 #if defined(CONFIG_SERIAL_IFLOWCONTROL) || defined(CONFIG_SERIAL_OFLOWCONTROL)
   bool     flowc;               /* input flow control (RTS) enabled */
 #endif
+
+  bool     has_rxdma;           /* True if RX DMA is enabled */
+  bool     has_txdma;           /* True if TX DMA is enabled */
 
 /* TX DMA state */
 
@@ -622,6 +625,14 @@ static struct sam_dev_s g_uart0priv =
   .stopbits2      = CONFIG_UART0_2STOP,
 #ifdef CONFIG_UART0_RXDMA
   .rxfifo         = g_uart0rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_UART0_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -664,6 +675,14 @@ static struct sam_dev_s g_uart1priv =
   .stopbits2      = CONFIG_UART1_2STOP,
 #ifdef CONFIG_UART1_RXDMA
   .rxfifo         = g_uart1rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_UART1_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -706,6 +725,14 @@ static struct sam_dev_s g_uart2priv =
   .stopbits2      = CONFIG_UART2_2STOP,
 #ifdef CONFIG_UART2_RXDMA
   .rxfifo         = g_uart2rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_UART2_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -748,6 +775,14 @@ static struct sam_dev_s g_uart3priv =
   .stopbits2      = CONFIG_UART3_2STOP,
 #ifdef CONFIG_UART3_RXDMA
   .rxfifo         = g_uart3rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_UART3_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -790,6 +825,14 @@ static struct sam_dev_s g_uart4priv =
   .stopbits2      = CONFIG_UART4_2STOP,
 #ifdef CONFIG_UART4_RXDMA
   .rxfifo         = g_uart4rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_UART4_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -835,6 +878,14 @@ static struct sam_dev_s g_usart0priv =
 #endif
 #ifdef CONFIG_USART0_RXDMA
   .rxfifo         = g_usart0rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_USART0_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -880,6 +931,14 @@ static struct sam_dev_s g_usart1priv =
 #endif
 #ifdef CONFIG_USART1_RXDMA
   .rxfifo         = g_usart1rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_USART1_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -925,6 +984,14 @@ static struct sam_dev_s g_usart2priv =
 #endif
 #ifdef CONFIG_USART2_RXDMA
   .rxfifo         = g_usart2rxfifo,
+  .has_rxdma      = true,
+#else
+  .has_rxdma      = false,
+#endif
+#ifdef CONFIG_USART2_TXDMA
+  .has_txdma      = true,
+#else
+  .has_txdma      = false,
 #endif
 };
 
@@ -1028,9 +1095,9 @@ static int sam_dma_nextrx(struct sam_dev_s *priv)
   size_t dmaresidual;
 
   dmaresidual = sam_dmaresidual(priv->rxdma);
-  printf("residual = %d\n", dmaresidual);
+  //printf("residual = %d\n", dmaresidual);
 
-  return ((RXDMA_BUFFER_SIZE - (int)dmaresidual) - 1);
+  return ((RXDMA_BUFFER_SIZE - (int)dmaresidual));
 }
 #endif
 
@@ -1238,50 +1305,48 @@ static int sam_dma_setup(struct uart_dev_s *dev)
 
 #if defined(SERIAL_HAVE_TXDMA)
   /* Acquire the Tx DMA channel. */
-  
-  priv->txdma = sam_dmachannel(0, DMA_TXFLAGS | \
-                             DMACH_FLAG_PERIPHPID(priv->pid));
+  if (priv->has_txdma)
+    {
+      priv->txdma = sam_dmachannel(0, DMA_TXFLAGS | \
+                                   DMACH_FLAG_PERIPHPID(priv->pid));
+    }
 
 #endif
-
-  printf("before SERIAL_HAVE_RXDMA\n");
 
 #if defined(SERIAL_HAVE_RXDMA)
   /* Acquire the DMA channel.  This should always succeed. */
 
-  printf("setting dma channlel\n");
-
-  if (priv->rxdma == NULL)
+  if (priv->has_rxdma)
     {
-      priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
-                                  DMACH_FLAG_PERIPHPID(priv->pid));
+      if (priv->rxdma == NULL)
+        {
+          priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
+                                      DMACH_FLAG_PERIPHPID(priv->pid));
+        }
+
+      /* Configure for circular DMA reception into the RX fifo */
+
+      uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
+      uint32_t maddr = (uintptr_t)priv->rxfifo;
+      size_t buflen = RXDMA_BUFFER_SIZE;
+
+      sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
+
+      /* Reset our DMA shadow pointer to match the address just
+      * programmed above.
+      */
+
+      priv->rxdmanext = 0;
+      priv->rxenable = true;
+
+      /* Start the DMA channel, and arrange for callbacks at the half and
+      * full points in the FIFO.  This ensures that we have half a FIFO
+      * worth of time to claim bytes before they are overwritten.
+      */
+
+      sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
     }
 
-  printf("periph id = %d\n", DMACH_FLAG_PERIPHPID(priv->pid));
-
-  /* Configure for circular DMA reception into the RX fifo */
-
-  uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
-  uint32_t maddr = (uintptr_t)priv->rxfifo;
-  size_t buflen = RXDMA_BUFFER_SIZE;
-
-  printf("bufflen = %d\n", buflen);
-
-  sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
-
-  /* Reset our DMA shadow pointer to match the address just
-   * programmed above.
-   */
-
-  priv->rxdmanext = 0;
-  priv->rxenable = true;
-
-  /* Start the DMA channel, and arrange for callbacks at the half and
-   * full points in the FIFO.  This ensures that we have half a FIFO
-   * worth of time to claim bytes before they are overwritten.
-   */
-
-  sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
 #endif
 
   return OK;
@@ -1821,15 +1886,16 @@ static int sam_dma_receive(struct uart_dev_s *dev, unsigned int *status)
   if (sam_dma_nextrx(priv) != priv->rxdmanext)
     {
 
-      //up_invalidate_dcache((uintptr_t)priv->rxfifo,
-      //                     (uintptr_t)priv->rxfifo + RXDMA_BUFFER_SIZE);
+      up_invalidate_dcache((uintptr_t)priv->rxfifo,
+                           (uintptr_t)priv->rxfifo + RXDMA_BUFFER_SIZE);
 
       c = priv->rxfifo[priv->rxdmanext];
       priv->rxdmanext++;
-      //printf("c = %c\n", c);
+      //printf("priv->rxdmanext = %d\n", priv->rxdmanext);
       if ((priv->rxdmanext) == RXDMA_BUFFER_SIZE)
         {
           priv->rxdmanext = 0;
+          priv->rxenable = false;
         }
     }
 
@@ -1854,45 +1920,41 @@ static void sam_dma_rxint(struct uart_dev_s *dev, bool enable)
    *
    * Note that it is not safe to check for available bytes and immediately
    * pass them to uart_recvchars as that could potentially recurse back
-   * to us again.  Instead, bytes must wait until the next up_dma_poll or
+   * to us again.  Instead, bytes must wait until the next sam_dma_poll or
    * DMA event.
    */
 
-  //printf("enable = %d\n", enable);
-
   if (priv->rxenable != enable)
     {
+      //printf("enable = %d\n", enable);
       priv->rxenable = enable;
 
       if (enable)
         {
-         /* if (priv->rxdma == NULL)
+          if (priv->rxdma == NULL)
             {
-              printf("rxdma still null\n");
               priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
-                             DMACH_FLAG_PERIPHPID(priv->pid));
+                                          DMACH_FLAG_PERIPHPID(priv->pid));
             }
 
           uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
           uint32_t maddr = (uintptr_t)priv->rxfifo;
           size_t buflen = RXDMA_BUFFER_SIZE;
 
-          printf("bufflen = %d\n", buflen);
-
           sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
 
-          Reset our DMA shadow pointer to match the address just
-          programmed above.
-          */
+          /* Reset our DMA shadow pointer to match the address just
+           * programmed above.
+           */
 
-          //priv->rxdmanext = 0;
+          priv->rxdmanext = 0;
 
           /* Start the DMA channel, and arrange for callbacks at the half and
           * full points in the FIFO.  This ensures that we have half a FIFO
           * worth of time to claim bytes before they are overwritten.
           */
 
-          //sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
+          sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
         } 
     }
 }
@@ -1915,9 +1977,9 @@ static bool sam_dma_rxavailable(struct uart_dev_s *dev)
    * do not match, then there are bytes to be received.
    */
 
-  printf("next = %d, rdmanext = %d\n", sam_dma_nextrx(priv) , priv->rxdmanext);
+  //printf("rx avail, next = %d, rdmanext = %d\n", sam_dma_nextrx(priv) , priv->rxdmanext);
 
-  return (sam_dma_nextrx(priv) != priv->rxdmanext);
+  return ((sam_dma_nextrx(priv) != priv->rxdmanext) && priv->rxenable);
 
 }
 #endif
@@ -2006,8 +2068,6 @@ static void sam_dma_send(struct uart_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
-  printf("in dma send\n");
-
   /* We need to stop DMA before reconfiguration */
 
   sam_dmastop(priv->txdma);
@@ -2023,8 +2083,6 @@ static void sam_dma_send(struct uart_dev_s *dev)
   uint32_t paddr = priv->usartbase + SAM_UART_THR_OFFSET;
   uint32_t maddr = (uint32_t) dev->dmatx.buffer;
   size_t buflen = (size_t) dev->dmatx.length;
-
-  //printf("paddr = 0x%x\n", paddr);
 
   sam_dmatxsetup(priv->txdma, paddr, maddr, buflen);
 
@@ -2141,11 +2199,9 @@ static void sam_dma_rxcallback(DMA_HANDLE handle, void *arg, int status)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
-  printf("in callback\n");
 
   if (priv->rxenable && sam_dma_rxavailable(dev))
     {
-      printf("call uart_recvchars\n");
       uart_recvchars(dev);
     }
 }
@@ -2168,6 +2224,84 @@ static bool sam_txempty(struct uart_dev_s *dev)
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: sam_serial_dma_poll
+ *
+ * Description:
+ *   Checks receive DMA buffers for received bytes that have not accumulated
+ *   to the point where the DMA half/full interrupt has triggered.
+ *
+ *   This function should be called from a timer or other periodic context.
+ *
+ ****************************************************************************/
+
+#ifdef SERIAL_HAVE_RXDMA
+void sam_serial_dma_poll(void)
+{
+    irqstate_t flags;
+
+    flags = enter_critical_section();
+
+#ifdef CONFIG_USART0_RXDMA
+  if (g_usart0priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_usart0priv.rxdma, &g_usart0port, 0);
+    }
+#endif
+
+#ifdef CONFIG_USART1_RXDMA
+  if (g_usart1priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_usart1priv.rxdma, &g_usart1port, 0);
+    }
+#endif
+
+#ifdef CONFIG_USART2_RXDMA
+  if (g_usart2priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_usart2priv.rxdma, &g_usart2port, 0);
+    }
+#endif
+
+#ifdef CONFIG_UART0_RXDMA
+  if (g_uart0priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_uart0priv.rxdma, &g_uart0priv, 0);
+    }
+#endif
+
+#ifdef CONFIG_UART1_RXDMA
+  if (g_uart1priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_uart1priv.rxdma, &g_uart1priv, 0);
+    }
+#endif
+
+#ifdef CONFIG_UART2_RXDMA
+  if (g_usart2priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_uart2priv.rxdma, &g_uart2priv, 0);
+    }
+#endif
+
+#ifdef CONFIG_UART3_RXDMA
+  if (g_uart3priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_uart3priv.rxdma, &g_uart3priv, 0);
+    }
+#endif
+
+#ifdef CONFIG_UART4_RXDMA
+  if (g_uart4priv.rxdma != NULL)
+    {
+      sam_dma_rxcallback(g_uart4priv.rxdma, &g_uart4priv, 0);
+    }
+#endif
+
+  leave_critical_section(flags);
+}
+#endif
 
 /****************************************************************************
  * Name: arm_earlyserialinit

@@ -944,7 +944,6 @@ static inline uint32_t sam_rxcc(struct sam_xdmach_s *xdmach)
       /* Look up the DMA channel code for RX:  Peripheral is the source. */
 
       field   = sam_source_channel(xdmach, pid);
-      printf("field = %d\n", field);
       regval |= (field << XDMACH_CC_PERID_SHIFT);
 
 #if 0 /* Not supported */
@@ -1197,8 +1196,6 @@ static int sam_rxbuffer(struct sam_xdmach_s *xdmach, uint32_t paddr,
       xdmach->cc = sam_rxcc(xdmach);
     }
 
-  printf("cc = 0x%x\n", xdmach->cc);
-
   /* Calculate the number of transfers for CUBC */
 
   cubc  = sam_cubc(xdmach, nbytes);
@@ -1226,8 +1223,6 @@ static inline int sam_single(struct sam_xdmach_s *xdmach)
 {
   struct sam_xdmac_s *xdmac = sam_controller(xdmach);
   struct chnext_view1_s *llhead = xdmach->llhead;
-
-  printf("sam_single start\n");
 
   /* 1. Read the XDMAC Global Channel Status Register (XDMAC_GS) to choose a
    *    free channel.
@@ -1326,8 +1321,6 @@ static inline int sam_multiple(struct sam_xdmach_s *xdmach)
   struct chnext_view1_s *llhead = xdmach->llhead;
   uintptr_t paddr;
   uint32_t regval;
-
-  printf("sam_multiple start\n");
 
   DEBUGASSERT(llhead != NULL && llhead->csa != 0);
 
@@ -1450,8 +1443,6 @@ static void sam_dmaterminate(struct sam_xdmach_s *xdmach, int result)
   struct sam_xdmac_s *xdmac = sam_controller(xdmach);
   uint32_t chanbit = XDMAC_CHAN(xdmach->chan);
 
-  printf("dmaterminate\n");
-
   /* Disable all channel interrupts */
 
   sam_putdmac(xdmac, chanbit, SAM_XDMAC_GID_OFFSET);
@@ -1476,12 +1467,7 @@ static void sam_dmaterminate(struct sam_xdmach_s *xdmach, int result)
 
   if (xdmach->callback)
     {
-      printf("callback call\n");
       xdmach->callback((DMA_HANDLE)xdmach, xdmach->arg, result);
-    }
-  else
-    {
-      printf("no callback\n");
     }
 
   xdmach->callback = NULL;
@@ -1511,9 +1497,6 @@ static int sam_xdmac_interrupt(int irq, void *context, FAR void *arg)
              sam_getdmac(xdmac, SAM_XDMAC_GIM_OFFSET);
 
   /* Yes.. Check each bit to see which channel(s) have interrupted */
-
-  printf("we have some kind of pending interrpt\n");
-  printf("pendning = 0x%x\n", gpending);
 
   for (chndx = 0; chndx < SAMV7_NDMACHAN && gpending != 0; chndx++)
     {
