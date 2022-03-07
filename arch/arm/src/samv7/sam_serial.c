@@ -84,6 +84,10 @@
 # error SERIAL DMA requires CONFIG_SAMV7_XDMAC to be selected
 #endif
 
+#ifndef CONFIG_SAMV7_SERIAL_DMA_TIMEOUT
+# define CONFIG_SAMV7_SERIAL_DMA_TIMEOUT 0
+#endif
+
 #ifdef SERIAL_HAVE_RXDMA
 
 # define DMA_RXFLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
@@ -99,6 +103,7 @@
  * When streaming data, the generic serial layer will be called
  * every time the FIFO receives half this number of bytes.
  */
+
 #  ifndef CONFIG_SAMV7_SERIAL_RXDMA_BUFFER
 #    define CONFIG_SAMV7_SERIAL_RXDMA_BUFFER 32
 #  endif
@@ -398,6 +403,7 @@ struct sam_dev_s
   bool     flowc;               /* input flow control (RTS) enabled */
 #endif
 
+  bool     is_usart;            /* True if dev is USART (and not UART) */
   bool     has_rxdma;           /* True if RX DMA is enabled */
   bool     has_txdma;           /* True if TX DMA is enabled */
 
@@ -623,6 +629,7 @@ static struct sam_dev_s g_uart0priv =
   .parity         = CONFIG_UART0_PARITY,
   .bits           = CONFIG_UART0_BITS,
   .stopbits2      = CONFIG_UART0_2STOP,
+  .is_usart       = false,
 #ifdef CONFIG_UART0_RXDMA
   .rxfifo         = g_uart0rxfifo,
   .has_rxdma      = true,
@@ -673,6 +680,7 @@ static struct sam_dev_s g_uart1priv =
   .parity         = CONFIG_UART1_PARITY,
   .bits           = CONFIG_UART1_BITS,
   .stopbits2      = CONFIG_UART1_2STOP,
+  .is_usart       = false,
 #ifdef CONFIG_UART1_RXDMA
   .rxfifo         = g_uart1rxfifo,
   .has_rxdma      = true,
@@ -723,6 +731,7 @@ static struct sam_dev_s g_uart2priv =
   .parity         = CONFIG_UART2_PARITY,
   .bits           = CONFIG_UART2_BITS,
   .stopbits2      = CONFIG_UART2_2STOP,
+  .is_usart       = false,
 #ifdef CONFIG_UART2_RXDMA
   .rxfifo         = g_uart2rxfifo,
   .has_rxdma      = true,
@@ -773,6 +782,7 @@ static struct sam_dev_s g_uart3priv =
   .parity         = CONFIG_UART3_PARITY,
   .bits           = CONFIG_UART3_BITS,
   .stopbits2      = CONFIG_UART3_2STOP,
+  .is_usart       = false,
 #ifdef CONFIG_UART3_RXDMA
   .rxfifo         = g_uart3rxfifo,
   .has_rxdma      = true,
@@ -823,6 +833,7 @@ static struct sam_dev_s g_uart4priv =
   .parity         = CONFIG_UART4_PARITY,
   .bits           = CONFIG_UART4_BITS,
   .stopbits2      = CONFIG_UART4_2STOP,
+  .is_usart       = false,
 #ifdef CONFIG_UART4_RXDMA
   .rxfifo         = g_uart4rxfifo,
   .has_rxdma      = true,
@@ -873,6 +884,7 @@ static struct sam_dev_s g_usart0priv =
   .parity         = CONFIG_USART0_PARITY,
   .bits           = CONFIG_USART0_BITS,
   .stopbits2      = CONFIG_USART0_2STOP,
+  .is_usart       = true,
 #if defined(CONFIG_USART0_OFLOWCONTROL) || defined(CONFIG_USART0_IFLOWCONTROL)
   .flowc          = true,
 #endif
@@ -926,6 +938,7 @@ static struct sam_dev_s g_usart1priv =
   .parity         = CONFIG_USART1_PARITY,
   .bits           = CONFIG_USART1_BITS,
   .stopbits2      = CONFIG_USART1_2STOP,
+  .is_usart       = true,
 #if defined(CONFIG_USART1_OFLOWCONTROL) || defined(CONFIG_USART1_IFLOWCONTROL)
   .flowc          = true,
 #endif
@@ -979,6 +992,7 @@ static struct sam_dev_s g_usart2priv =
   .parity         = CONFIG_USART2_PARITY,
   .bits           = CONFIG_USART2_BITS,
   .stopbits2      = CONFIG_USART2_2STOP,
+  .is_usart       = true,
 #if defined(CONFIG_USART2_OFLOWCONTROL) || defined(CONFIG_USART2_IFLOWCONTROL)
   .flowc          = true,
 #endif
@@ -1345,6 +1359,15 @@ static int sam_dma_setup(struct uart_dev_s *dev)
       */
 
       sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
+
+      if (priv->is_usart)
+        {
+          /* We can use timout to check idle bus status on RX */
+
+          sam_serialout(priv, SAM_UART_RTOR_OFFSET,
+                        CONFIG_SAMV7_SERIAL_DMA_TIMEOUT);
+          sam_serialout(priv, SAM_UART_IER_OFFSET, UART_INT_TIMEOUT);
+        }
     }
 
 #endif
@@ -1537,6 +1560,24 @@ static int sam_interrupt(int irq, void *context, FAR void *arg)
           uart_xmitchars(dev);
           handled = true;
         }
+
+      /* Timeout interrupt (idle detection for USART) */
+
+#ifdef SERIAL_HAVE_RXDMA
+      if ((pending & UART_INT_TIMEOUT) != 0)
+        {
+          if (priv->has_rxdma)
+            {
+              //printf("timeout!\n");
+              //sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
+              sam_dma_rxcallback(priv->rxdma, dev, 0);
+
+              uint32_t regval = sam_serialin(priv, SAM_UART_CR_OFFSET);
+              regval |= UART_CR_STTTO;
+              sam_serialout(priv, SAM_UART_CR_OFFSET, regval);
+            }
+        }
+#endif /* SERIAL_HAVE_RXDMA */
     }
 
   return OK;
@@ -1955,7 +1996,18 @@ static void sam_dma_rxint(struct uart_dev_s *dev, bool enable)
           */
 
           sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
-        } 
+
+          if (priv->is_usart)
+            {
+              /* Start timeout interrupt */
+
+              sam_serialout(priv, SAM_UART_IER_OFFSET, UART_INT_TIMEOUT);
+            }
+        }
+      else
+        {
+          sam_serialout(priv, SAM_UART_IDR_OFFSET, UART_INT_TIMEOUT);
+        }
     }
 }
 #endif

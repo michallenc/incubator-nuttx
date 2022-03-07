@@ -1084,6 +1084,17 @@ config SAMV7_SERIAL_RXDMA_BUFFER
 	---help---
 		The DMA buffer size when using RX DMA to emulate a FIFO.
 
+config SAMV7_SERIAL_DMA_TIMEOUT
+	int "Rx DMA timeout"
+	default 16384
+	depends on SAMV7_HAVE_USART0 || SAMV7_HAVE_USART1 || SAMV7_HAVE_USART2
+	range 0 131071
+	---help---
+		USART support timeout interrupt for idle bus. This ensures the reception of bytes
+		that did not filled the entire RX buffer. This option can be turn off by setting
+		timeout to zero but then some other polling is required. This is not supported for
+		UART, only for USART driver.
+
 endmenu
 
 menu "SPI Device Driver Configuration"
