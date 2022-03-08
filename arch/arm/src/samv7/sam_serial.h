@@ -35,95 +35,44 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* No DMA ops */
+/* Is RX DMA used on the console UART? */
 
-#undef SERIAL_HAVE_NODMA_OPS
-#if defined(CONFIG_SAMV7_USART0) && !defined(CONFIG_USART0_RXDMA) &&   \
-    !defined(CONFIG_USART1_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_USART1) && !defined(CONFIG_USART1_RXDMA) && \
-    !defined(CONFIG_USART2_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_USART2) && !defined(CONFIG_USART2_RXDMA) && \
-    !defined(CONFIG_USART2_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_UART0) && !defined(CONFIG_UART0_RXDMA) &&  \
-    !defined(CONFIG_UART0_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_UART1) && !defined(CONFIG_UART1_RXDMA) &&  \
-    !defined(CONFIG_UART1_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_UART2) && !defined(CONFIG_UART2_RXDMA) &&  \
-    !defined(CONFIG_UART2_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_UART3) && !defined(CONFIG_UART3_RXDMA) &&  \
-    !defined(CONFIG_UART3_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#elif defined(CONFIG_SAMV7_UART4) && !defined(CONFIG_UART4_RXDMA) &&  \
-    !defined(CONFIG_UART4_TXDMA)
-#  define SERIAL_HAVE_NODMA_OPS
-#endif
-
-/* RX+TX DMA ops */
-
-#undef SERIAL_HAVE_RXTXDMA_OPS
-#if defined(CONFIG_USART0_RXDMA) && defined(CONFIG_USART0_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_UART0_RXDMA) && defined(CONFIG_UART0_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_UART1_RXDMA) && defined(CONFIG_UART1_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_UART2_RXDMA) && defined(CONFIG_UART2_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_UART3_RXDMA) && defined(CONFIG_UART3_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#elif defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
-#  define SERIAL_HAVE_RXTXDMA_OPS
-#endif
-
-/* TX DMA ops */
-
-#undef SERIAL_HAVE_TXDMA_OPS
-#if !defined(CONFIG_USART0_RXDMA) && defined(CONFIG_USART0_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_UART0_RXDMA) && defined(CONFIG_UART0_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_UART1_RXDMA) && defined(CONFIG_UART1_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_UART2_RXDMA) && defined(CONFIG_UART2_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_UART3_RXDMA) && defined(CONFIG_UART3_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
-#elif !defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
-#  define SERIAL_HAVE_TXDMA_OPS
+#undef SERIAL_HAVE_CONSOLE_RXDMA
+#if defined(CONFIG_USART0_SERIAL_CONSOLE) && defined(CONFIG_USART0_RXDMA)
+#  define SERIAL_HAVE_CONSOLE_RXDMA
+#elif defined(CONFIG_USART1_SERIAL_CONSOLE) && defined(CONFIG_USART1_RXDMA)
+#  define SERIAL_HAVE_CONSOLE_RXDMA
+#elif defined(CONFIG_USART1_SERIAL_CONSOLE) && defined(CONFIG_USART2_RXDMA)
+#  define SERIAL_HAVE_CONSOLE_RXDMA
 #endif
 
 /* RX DMA ops */
 
+#undef SERIAL_HAVE_NODMA_OPS
+#if !defined(CONFIG_USART0_RXDMA) && defined(CONFIG_SAMV7_USART0)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif !defined(CONFIG_USART1_RXDMA) && defined(CONFIG_SAMV7_USART1)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif !defined(CONFIG_USART2_RXDMA) && defined(CONFIG_SAMV7_USART2)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif defined(CONFIG_SAMV7_UART0)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif defined(CONFIG_SAMV7_UART1)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif defined(CONFIG_SAMV7_UART2)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif defined(CONFIG_SAMV7_UART3)
+#  define SERIAL_HAVE_NODMA_OPS
+#elif defined(CONFIG_SAMV7_UART4)
+#  define SERIAL_HAVE_NODMA_OPS
+#endif
+
 #undef SERIAL_HAVE_RXDMA_OPS
-#if defined(CONFIG_USART0_RXDMA) && !defined(CONFIG_USART0_TXDMA)
+#if defined(CONFIG_USART0_RXDMA)
 #  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_USART1_RXDMA) && !defined(CONFIG_USART1_TXDMA)
+#elif defined(CONFIG_USART1_RXDMA)
 #  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_USART2_RXDMA) && !defined(CONFIG_USART2_TXDMA)
-#  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_UART0_RXDMA) && !defined(CONFIG_UART0_TXDMA)
-#  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_UART1_RXDMA) && !defined(CONFIG_UART1_TXDMA)
-#  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_UART2_RXDMA) && !defined(CONFIG_UART2_TXDMA)
-#  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_UART3_RXDMA) && !defined(CONFIG_UART3_TXDMA)
-#  define SERIAL_HAVE_RXDMA_OPS
-#elif defined(CONFIG_UART4_RXDMA) && !defined(CONFIG_UART4_TXDMA)
+#elif defined(CONFIG_USART2_RXDMA)
 #  define SERIAL_HAVE_RXDMA_OPS
 #endif
 
