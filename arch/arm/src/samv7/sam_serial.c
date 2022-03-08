@@ -92,9 +92,9 @@
 
 # define DMA_RXFLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
      DMACH_FLAG_PERIPHH2SEL | DMACH_FLAG_PERIPHISPERIPH |  \
-     DMACH_FLAG_PERIPHWIDTH_8BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
+     DMACH_FLAG_PERIPHWIDTH_32BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
      DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
-     DMACH_FLAG_PERIPHAHB_AHB_IF1 | DMACH_FLAG_MEMWIDTH_8BITS | \
+     DMACH_FLAG_PERIPHAHB_AHB_IF1 | DMACH_FLAG_MEMWIDTH_32BITS | \
      DMACH_FLAG_MEMINCREMENT | DMACH_FLAG_MEMCHUNKSIZE_1 | \
      DMACH_FLAG_MEMBURST_1)
 
@@ -105,13 +105,9 @@
  */
 
 #  ifndef CONFIG_SAMV7_SERIAL_RXDMA_BUFFER
-#    define CONFIG_SAMV7_SERIAL_RXDMA_BUFFER 32
+#    define CONFIG_SAMV7_SERIAL_RXDMA_BUFFER 128
 #  endif
-#  define RXDMA_MUTIPLE  4
-#  define RXDMA_MUTIPLE_MASK  (RXDMA_MUTIPLE - 1)
-#  define RXDMA_BUFFER_SIZE ((CONFIG_SAMV7_SERIAL_RXDMA_BUFFER \
-                                + RXDMA_MUTIPLE_MASK) \
-                                & ~RXDMA_MUTIPLE_MASK)
+#define RXDMA_BUFFER_SIZE CONFIG_SAMV7_SERIAL_RXDMA_BUFFER
 
 #endif  /* SERIAL_HAVE_RXDMA */
 
@@ -122,7 +118,8 @@
      DMACH_FLAG_PERIPHWIDTH_8BITS | DMACH_FLAG_PERIPHCHUNKSIZE_1 | \
      DMACH_FLAG_MEMPID_MAX | DMACH_FLAG_MEMAHB_AHB_IF0 | \
      DMACH_FLAG_PERIPHAHB_AHB_IF1 | DMACH_FLAG_MEMWIDTH_8BITS | \
-     DMACH_FLAG_MEMCHUNKSIZE_1 | DMACH_FLAG_MEMBURST_1 | DMACH_FLAG_MEMINCREMENT)
+     DMACH_FLAG_MEMCHUNKSIZE_1 | DMACH_FLAG_MEMBURST_1 | \
+    DMACH_FLAG_MEMINCREMENT)
 
 #endif  /* SERIAL_HAVE_TXDMA */
 
@@ -418,10 +415,10 @@ struct sam_dev_s
 
 #ifdef SERIAL_HAVE_RXDMA
   const unsigned int rxdma_channel; /* DMA channel assigned */
-  DMA_HANDLE        rxdma;     /* currently-open receive DMA stream */
-  bool              rxenable;  /* DMA-based reception en/disable */
-  uint32_t          rxdmanext; /* Next byte in the DMA buffer to be read */
-  char       *const rxfifo;    /* Receive DMA buffer */
+  DMA_HANDLE         rxdma;     /* currently-open receive DMA stream */
+  bool               rxenable;  /* DMA-based reception en/disable */
+  uint32_t           rxdmanext; /* Next byte in the DMA buffer to be read */
+  uint32_t    *const rxfifo;    /* Receive DMA buffer */
 #endif
 };
 
@@ -564,56 +561,56 @@ static const struct uart_ops_s g_uart_rxtxdma_ops =
 static char g_uart0rxbuffer[CONFIG_UART0_RXBUFSIZE];
 static char g_uart0txbuffer[CONFIG_UART0_TXBUFSIZE];
 # ifdef CONFIG_UART0_RXDMA
-static char g_uart0rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_uart0rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #ifdef CONFIG_SAMV7_UART1
 static char g_uart1rxbuffer[CONFIG_UART1_RXBUFSIZE];
 static char g_uart1txbuffer[CONFIG_UART1_TXBUFSIZE];
 # ifdef CONFIG_UART1_RXDMA
-static char g_uart1rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_uart1rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #ifdef CONFIG_SAMV7_UART2
 static char g_uart2rxbuffer[CONFIG_UART2_RXBUFSIZE];
 static char g_uart2txbuffer[CONFIG_UART2_TXBUFSIZE];
 # ifdef CONFIG_UART2_RXDMA
-static char g_uart2rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_uart2rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #ifdef CONFIG_SAMV7_UART3
 static char g_uart3rxbuffer[CONFIG_UART3_RXBUFSIZE];
 static char g_uart3txbuffer[CONFIG_UART3_TXBUFSIZE];
 # ifdef CONFIG_UART3_RXDMA
-static char g_uart3rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_uart3rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #ifdef CONFIG_SAMV7_UART4
 static char g_uart4rxbuffer[CONFIG_UART4_RXBUFSIZE];
 static char g_uart4txbuffer[CONFIG_UART4_TXBUFSIZE];
 # ifdef CONFIG_UART4_RXDMA
-static char g_uart4rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_uart4rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #if defined(CONFIG_SAMV7_USART0) && defined(CONFIG_USART0_SERIALDRIVER)
 static char g_usart0rxbuffer[CONFIG_USART0_RXBUFSIZE];
 static char g_usart0txbuffer[CONFIG_USART0_TXBUFSIZE];
 # ifdef CONFIG_USART0_RXDMA
-static char g_usart0rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_usart0rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #if defined(CONFIG_SAMV7_USART1) && defined(CONFIG_USART1_SERIALDRIVER)
 static char g_usart1rxbuffer[CONFIG_USART1_RXBUFSIZE];
 static char g_usart1txbuffer[CONFIG_USART1_TXBUFSIZE];
 # ifdef CONFIG_USART1_RXDMA
-static char g_usart1rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_usart1rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 #if defined(CONFIG_SAMV7_USART2) && defined(CONFIG_USART2_SERIALDRIVER)
 static char g_usart2rxbuffer[CONFIG_USART2_RXBUFSIZE];
 static char g_usart2txbuffer[CONFIG_USART2_TXBUFSIZE];
 # ifdef CONFIG_USART2_RXDMA
-static char g_usart2rxfifo[RXDMA_BUFFER_SIZE];
+static uint32_t g_usart2rxfifo[RXDMA_BUFFER_SIZE];
 # endif
 #endif
 
@@ -1109,9 +1106,8 @@ static int sam_dma_nextrx(struct sam_dev_s *priv)
   size_t dmaresidual;
 
   dmaresidual = sam_dmaresidual(priv->rxdma);
-  //printf("residual = %d\n", dmaresidual);
 
-  return ((RXDMA_BUFFER_SIZE - (int)dmaresidual));
+  return ((RXDMA_BUFFER_SIZE) - (int)dmaresidual);
 }
 #endif
 
@@ -1298,9 +1294,6 @@ static int sam_dma_setup(struct uart_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
   int result;
-
-  printf("in sam_dma_setup\n");
-
   /* Do the basic UART setup first, unless we are the console */
 
   if (!dev->isconsole)
@@ -1308,7 +1301,6 @@ static int sam_dma_setup(struct uart_dev_s *dev)
       result = sam_setup(dev);
       if (result != OK)
         {
-          printf("sam_setup faied\n");
           return result;
         }
     }
@@ -1342,7 +1334,7 @@ static int sam_dma_setup(struct uart_dev_s *dev)
 
       uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
       uint32_t maddr = (uintptr_t)priv->rxfifo;
-      size_t buflen = RXDMA_BUFFER_SIZE;
+      size_t buflen = RXDMA_BUFFER_SIZE << 2;
 
       sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
 
@@ -1415,8 +1407,6 @@ static void sam_dma_shutdown(struct uart_dev_s *dev)
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
   /* Perform the normal UART shutdown */
-
-  printf("dma_shutdown\n");
 
   sam_shutdown(dev);
 
@@ -1568,13 +1558,12 @@ static int sam_interrupt(int irq, void *context, FAR void *arg)
         {
           if (priv->has_rxdma)
             {
-              //printf("timeout!\n");
-              //sam_dmastart(priv->rxdma, sam_dma_rxcallback, (void *)dev);
-              sam_dma_rxcallback(priv->rxdma, dev, 0);
 
               uint32_t regval = sam_serialin(priv, SAM_UART_CR_OFFSET);
               regval |= UART_CR_STTTO;
               sam_serialout(priv, SAM_UART_CR_OFFSET, regval);
+
+              sam_dma_rxcallback(priv->rxdma, dev, 0);
             }
         }
 #endif /* SERIAL_HAVE_RXDMA */
@@ -1923,16 +1912,14 @@ static int sam_dma_receive(struct uart_dev_s *dev, unsigned int *status)
   *status  = priv->sr;
   priv->sr = 0;
 
-  //printf("dma receive\n");
   if (sam_dma_nextrx(priv) != priv->rxdmanext)
     {
 
       up_invalidate_dcache((uintptr_t)priv->rxfifo,
-                           (uintptr_t)priv->rxfifo + RXDMA_BUFFER_SIZE);
+                           (uintptr_t)priv->rxfifo + (RXDMA_BUFFER_SIZE << 2));
 
-      c = priv->rxfifo[priv->rxdmanext];
+      c = priv->rxfifo[priv->rxdmanext] & UART_RHR_RXCHR_MASK;
       priv->rxdmanext++;
-      //printf("priv->rxdmanext = %d\n", priv->rxdmanext);
       if ((priv->rxdmanext) == RXDMA_BUFFER_SIZE)
         {
           priv->rxdmanext = 0;
@@ -1967,7 +1954,6 @@ static void sam_dma_rxint(struct uart_dev_s *dev, bool enable)
 
   if (priv->rxenable != enable)
     {
-      //printf("enable = %d\n", enable);
       priv->rxenable = enable;
 
       if (enable)
@@ -1976,11 +1962,14 @@ static void sam_dma_rxint(struct uart_dev_s *dev, bool enable)
             {
               priv->rxdma = sam_dmachannel(0, DMA_RXFLAGS | \
                                           DMACH_FLAG_PERIPHPID(priv->pid));
+
+              sam_serialout(priv, SAM_UART_RTOR_OFFSET,
+                        CONFIG_SAMV7_SERIAL_DMA_TIMEOUT);
             }
 
           uint32_t paddr = priv->usartbase + SAM_UART_RHR_OFFSET;
           uint32_t maddr = (uintptr_t)priv->rxfifo;
-          size_t buflen = RXDMA_BUFFER_SIZE;
+          size_t buflen = RXDMA_BUFFER_SIZE << 2;
 
           sam_dmarxsetup(priv->rxdma, paddr, maddr, buflen);
 
@@ -2029,8 +2018,6 @@ static bool sam_dma_rxavailable(struct uart_dev_s *dev)
    * do not match, then there are bytes to be received.
    */
 
-  //printf("rx avail, next = %d, rdmanext = %d\n", sam_dma_nextrx(priv) , priv->rxdmanext);
-
   return ((sam_dma_nextrx(priv) != priv->rxdmanext) && priv->rxenable);
 
 }
@@ -2066,7 +2053,7 @@ static void sam_dma_txcallback(DMA_HANDLE handle, void *arg, int status)
 
       sam_dmatxsetup(priv->txdma, paddr, maddr, buflen);
 
-          /* Set length for the next completion */
+      /* Set length for the next completion */
 
       dev->dmatx.length  = dev->dmatx.nlength;
       dev->dmatx.nlength = 0;
@@ -2099,10 +2086,10 @@ static void sam_dma_txavailable(struct uart_dev_s *dev)
 
   /* Only send when the DMA is idle */
 
-  if (sam_dmaresidual(priv->txdma) == 0)
-    {
+  if ((sam_dmaresidual(priv->txdma)) == 0 && (dev->dmatx.nbytes < 1024))
+  {
       uart_xmitchars_dma(dev);
-    }
+  }
 }
 #endif
 
@@ -2131,6 +2118,19 @@ static void sam_dma_send(struct uart_dev_s *dev)
   /* Make use of setup function to update buffer and its length for
    * next transfer
    */
+
+  up_clean_dcache((uintptr_t)dev->dmatx.buffer,
+                  (uintptr_t)dev->dmatx.buffer + dev->dmatx.length);
+
+  /* Is this a split transfer */
+
+  if (dev->dmatx.nbuffer)
+    {
+      /* Flush the contents of the next TX buffer into physical memory */
+
+      up_clean_dcache((uintptr_t)dev->dmatx.nbuffer,
+                      (uintptr_t)dev->dmatx.nbuffer + dev->dmatx.nlength);
+    }
 
   uint32_t paddr = priv->usartbase + SAM_UART_THR_OFFSET;
   uint32_t maddr = (uint32_t) dev->dmatx.buffer;

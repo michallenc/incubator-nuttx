@@ -1076,17 +1076,19 @@ config SAMV7_SDRAMHEAP
 endmenu # SDRAM Configuration
 
 menu "Serial Driver Configuration"
+	depends on SAMV7_HAVE_USART0 || SAMV7_HAVE_USART1 || SAMV7_HAVE_USART2
 
 config SAMV7_SERIAL_RXDMA_BUFFER
 	int "Rx DMA buffer size"
-	default 32
+	depends on SAMV7_HAVE_USART0 || SAMV7_HAVE_USART1 || SAMV7_HAVE_USART2
+	default 128
 	range 32 4096
 	---help---
 		The DMA buffer size when using RX DMA to emulate a FIFO.
 
 config SAMV7_SERIAL_DMA_TIMEOUT
 	int "Rx DMA timeout"
-	default 16384
+	default 3750
 	depends on SAMV7_HAVE_USART0 || SAMV7_HAVE_USART1 || SAMV7_HAVE_USART2
 	range 0 131071
 	---help---
@@ -1094,6 +1096,8 @@ config SAMV7_SERIAL_DMA_TIMEOUT
 		that did not filled the entire RX buffer. This option can be turn off by setting
 		timeout to zero but then some other polling is required. This is not supported for
 		UART, only for USART driver.
+
+		The delay is calculated as: Delay = SAMV7_SERIAL_DMA_TIMEOUT / bit_period
 
 endmenu
 
