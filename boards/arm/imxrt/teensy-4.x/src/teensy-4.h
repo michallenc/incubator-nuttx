@@ -132,9 +132,12 @@
 #define GPIO_OUT4      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
                         GPIO_PORT4 | GPIO_PIN5)                  /* EMC_05 */
 
-#define GPIO_IN1       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN1)       /* B0_01 */
-#define GPIO_IN2       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN2)       /* B0_02 */
-#define GPIO_IN3       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN0)       /* B0_00 */
+#define GPIO_IN1       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN1 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_01 */
+#define GPIO_IN2       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN2 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_02 */
+#define GPIO_IN3       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN0 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_00 */
 
 /****************************************************************************
  * Public Types

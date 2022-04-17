@@ -97,7 +97,6 @@ static void adc_rxint(FAR struct adc_dev_s *dev, bool enable);
 static int  adc_ioctl(FAR struct adc_dev_s *dev, int cmd, unsigned long arg);
 static int  adc_interrupt(int irq, void *context, FAR void *arg);
 static int  adc_interrupt_etc(int irq, void *context, FAR void *arg);
-static int  adc_interrupt_etc2(int irq, void *context, FAR void *arg);
 static int  adc_interrupt_err(int irq, void *context, FAR void *arg);
 
 /****************************************************************************
