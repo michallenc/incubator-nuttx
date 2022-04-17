@@ -29,6 +29,7 @@
 
 #ifndef __ASSEMBLY__
 #  include <nuttx/compiler.h>
+#  include <nuttx/arch.h>
 #  include <sys/types.h>
 #  include <stdint.h>
 #endif
@@ -71,6 +72,18 @@
 #  define CONFIG_ARCH_INTERRUPTSTACK 0
 #endif
 
+/* For use with EABI and floating point, the stack must be aligned to 8-byte
+ * addresses.
+ */
+
+#define STACK_ALIGNMENT     8
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
 #define up_savestate(regs)  up_copyfullstate(regs, (uint32_t*)CURRENT_REGS)
 #define up_restorestate(regs) up_copyfullstate((uint32_t*)CURRENT_REGS, regs)
 
@@ -89,6 +102,13 @@
 #define STACK_COLOR    0x1bad1dea
 #define INTSTACK_COLOR 0x1bad1dea
 #define HEAP_COLOR     'h'
+
+#define getreg8(a)     (*(volatile uint8_t *)(a))
+#define putreg8(v,a)   (*(volatile uint8_t *)(a) = (v))
+#define getreg16(a)    (*(volatile uint16_t *)(a))
+#define putreg16(v,a)  (*(volatile uint16_t *)(a) = (v))
+#define getreg32(a)    (*(volatile uint32_t *)(a))
+#define putreg32(v,a)  (*(volatile uint32_t *)(a) = (v))
 
 /****************************************************************************
  * Public Types
@@ -117,21 +137,12 @@ extern "C"
  * CURRENT_REGS for portability.
  */
 
-#ifdef CONFIG_SMP
 /* For the case of architectures with multiple CPUs, then there must be one
  * such value for each processor that can receive an interrupt.
  */
 
-int up_cpu_index(void); /* See include/nuttx/arch.h */
 EXTERN volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#  define CURRENT_REGS (g_current_regs[up_cpu_index()])
-
-#else
-
-EXTERN volatile uint32_t *g_current_regs[1];
-#  define CURRENT_REGS (g_current_regs[0])
-
-#endif
+#define CURRENT_REGS (g_current_regs[up_cpu_index()])
 
 /* This is the beginning of heap as provided from up_head.S.
  * This is the first address in DRAM after the loaded
@@ -153,10 +164,10 @@ EXTERN uint32_t g_intstacktop;   /* Initial top of interrupt stack */
  * in the following way:
  *
  *  - The linker script defines, for example, the symbol_sdata.
- *  - The declareion extern uint32_t _sdata; makes C happy.  C will believe
+ *  - The declaration extern uint32_t _sdata; makes C happy.  C will believe
  *    that the value _sdata is the address of a uint32_t variable _data
  *    (it is not!).
- *  - We can recoved the linker value then by simply taking the address of
+ *  - We can recover the linker value then by simply taking the address of
  *    of _data.  like:  uint32_t *pdata = &_sdata;
  */
 
@@ -180,7 +191,7 @@ EXTERN uint32_t _ebss;            /* End+1 of .bss */
 
 #ifdef CONFIG_ARCH_RAMFUNCS
 
-#  define __ramfunc__ __attribute__ ((section(".ramfunc"),long_call,noinline))
+#  define __ramfunc__ locate_code(".ramfunc") farcall_function noinline_function
 
 /* Functions declared in the .ramfunc section will be packaged together
  * by the linker script and stored in FLASH.  During boot-up, the start
@@ -214,6 +225,11 @@ EXTERN uint32_t _eramfuncs;       /* Copy destination end address in RAM */
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* Atomic modification of registers */
+
+void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
+void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
+void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 /* Low level initialization provided by board-level logic *******************/
 
@@ -265,7 +281,6 @@ uint32_t *or1k_syscall(uint32_t *regs);
 /* Low level serial output **************************************************/
 
 void up_lowputc(char ch);
-void up_puts(const char *str);
 void up_lowputs(const char *str);
 
 #ifdef USE_SERIALDRIVER
@@ -274,10 +289,6 @@ void up_serialinit(void);
 
 #ifdef USE_EARLYSERIALINIT
 void up_earlyserialinit(void);
-#endif
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
 #endif
 
 /* DMA **********************************************************************/
@@ -301,10 +312,6 @@ void up_addregion(void);
 #else
 # define up_addregion()
 #endif
-
-/* Watchdog timer ***********************************************************/
-
-void up_wdtinit(void);
 
 /* Networking ***************************************************************/
 

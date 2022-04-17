@@ -35,7 +35,7 @@
 
 #include <nuttx/timers/pwm.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "imxrt_config.h"
 #include "imxrt_flexpwm.h"
@@ -1027,7 +1027,6 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
     {
       for (int i = 0; i < PWM_NCHANNELS; i++)
         {
-
 #ifdef CONFIG_PWM_MULTICHAN
           /* Break the loop if all following channels are not configured */
 
@@ -1073,6 +1072,9 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
         {
           ret = pwm_set_output(dev, info->channels[i].channel,
                                     info->channels[i].duty);
+
+          /* Remember the channel number in bitmap */
+
           ldok_map |= 1 << (info->channels[i].channel - 1);
         }
     }
@@ -1082,8 +1084,13 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
   /* Enable PWM output just for first channel */
 
   ret = pwm_set_output(dev, priv->modules[0].module, info->duty);
+
+  /* Remember the channel number in bitmap */
+
   ldok_map = 1 << (priv->modules[0].module - 1);
 #endif /* CONFIG_PWM_MULTICHAN */
+
+  /* Set Load Okay bits */
 
   uint16_t regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
   regval |= MCTRL_LDOK(ldok_map);

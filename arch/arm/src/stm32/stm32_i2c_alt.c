@@ -99,8 +99,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_rcc.h"
 #include "stm32_i2c.h"
 #include "stm32_waste.h"
@@ -1866,7 +1865,7 @@ static int stm32_i2c_isr_process(struct stm32_i2c_priv_s *priv)
       status |= (stm32_i2c_getreg(priv, STM32_I2C_SR2_OFFSET) << 16);
 
       i2cerr("ERROR:  "
-             "No correct state detected(start bit, read or write) \n");
+             "No correct state detected(start bit, read or write)\n");
       i2cerr("   state %" PRIi32 "\n", status);
 
       /* Set condition to terminate ISR and wake waiting thread */

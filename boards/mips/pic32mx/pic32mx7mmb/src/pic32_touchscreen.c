@@ -40,9 +40,7 @@
 #include <nuttx/semaphore.h>
 
 #include <arch/board/board.h>
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mx.h"
 #include "pic32mx_adc.h"
 #include "pic32mx_ioport.h"
@@ -246,10 +244,13 @@ static const struct file_operations tc_fops =
   tc_open,    /* open */
   tc_close,   /* close */
   tc_read,    /* read */
-  0,          /* write */
-  0,          /* seek */
+  NULL,       /* write */
+  NULL,       /* seek */
   tc_ioctl,   /* ioctl */
   tc_poll     /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL      /* unlink */
+#endif
 };
 
 /* If only a single touchscreen device is supported, then the driver state
@@ -489,7 +490,7 @@ static void tc_notify(FAR struct tc_dev_s *priv)
       if (fds)
         {
           fds->revents |= POLLIN;
-          iinfo("Report events: %02x\n", fds->revents);
+          iinfo("Report events: %08" PRIx32 "\n", fds->revents);
           nxsem_post(fds->sem);
         }
     }
@@ -1261,7 +1262,8 @@ static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if ((fds->events & POLLIN) == 0)
         {
-          ierr("ERROR: Missing POLLIN: revents: %08x\n", fds->revents);
+          ierr("ERROR: Missing POLLIN: revents: %08" PRIx32 "\n",
+               fds->revents);
           ret = -EDEADLK;
           goto errout;
         }
@@ -1379,7 +1381,7 @@ int pic32mx_tsc_setup(int minor)
 
   /* Register the device as an input device */
 
-  snprintf(devname, DEV_NAMELEN, DEV_FORMAT, minor);
+  snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
   ret = register_driver(devname, &tc_fops, 0666, priv);

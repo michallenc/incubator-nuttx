@@ -27,6 +27,7 @@
 
 #include <sys/types.h>
 #include <nuttx/compiler.h>
+#include <limits.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -256,8 +257,6 @@
 #define STDIN_FILENO                     0       /* File number of stdin */
 #define STDOUT_FILENO                    1       /* File number of stdout */
 
-#define HOST_NAME_MAX                    32
-
 /* Helpers and legacy compatibility definitions */
 
 #define link(p1, p2)                     symlink((p1), (p2))
@@ -267,10 +266,19 @@
 
 /* Accessor functions associated with getopt(). */
 
-#define optarg  (*(getoptargp()))
-#define opterr  (*(getopterrp()))
-#define optind  (*(getoptindp()))
-#define optopt  (*(getoptoptp()))
+#define optarg                           (*(getoptargp()))
+#define opterr                           (*(getopterrp()))
+#define optind                           (*(getoptindp()))
+#define optopt                           (*(getoptoptp()))
+
+#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+#  define lseek64                        lseek
+#  define pread64                        pread
+#  define pwrite64                       pwrite
+#  define truncate64                     truncate
+#  define ftruncate64                    ftruncate
+#  define lockf64                        lockf
+#endif
 
 /****************************************************************************
  * Public Data
@@ -294,9 +302,7 @@ extern "C"
 pid_t   vfork(void);
 pid_t   getpid(void);
 pid_t   gettid(void);
-#ifdef CONFIG_SCHED_HAVE_PARENT
 pid_t   getppid(void);
-#endif
 void    _exit(int status) noreturn_function;
 unsigned int sleep(unsigned int seconds);
 int     usleep(useconds_t usec);
@@ -317,15 +323,14 @@ ssize_t write(int fd, FAR const void *buf, size_t nbytes);
 ssize_t pread(int fd, FAR void *buf, size_t nbytes, off_t offset);
 ssize_t pwrite(int fd, FAR const void *buf, size_t nbytes, off_t offset);
 int     ftruncate(int fd, off_t length);
+int     fchown(int fd, uid_t owner, gid_t group);
 
-#ifdef CONFIG_SERIAL_TERMIOS
 /* Check if a file descriptor corresponds to a terminal I/O file */
 
 int     isatty(int fd);
 
 FAR char *ttyname(int fd);
 int       ttyname_r(int fd, FAR char *buf, size_t buflen);
-#endif
 
 /* Memory management */
 
@@ -356,11 +361,13 @@ int     unlink(FAR const char *pathname);
 int     truncate(FAR const char *path, off_t length);
 int     symlink(FAR const char *path1, FAR const char *path2);
 ssize_t readlink(FAR const char *path, FAR char *buf, size_t bufsize);
+int     chown(FAR const char *path, uid_t owner, gid_t group);
+int     lchown(FAR const char *path, uid_t owner, gid_t group);
 
 /* Execution of programs from files */
 
 #ifdef CONFIG_LIBC_EXECFUNCS
-int     execl(FAR const char *path, ...);
+int     execl(FAR const char *path, FAR const char *arg0, ...);
 int     execv(FAR const char *path, FAR char * const argv[]);
 #endif
 
@@ -379,8 +386,8 @@ FAR int   *getopterrp(void);  /* Print error message */
 FAR int   *getoptindp(void);  /* Index into argv */
 FAR int   *getoptoptp(void);  /* Unrecognized option character */
 
-int     gethostname(FAR char *name, size_t size);
-int     sethostname(FAR const char *name, size_t size);
+int     gethostname(FAR char *name, size_t namelen);
+int     sethostname(FAR const char *name, size_t namelen);
 
 /* Get configurable system variables */
 
@@ -402,6 +409,8 @@ gid_t   getegid(void);
 
 int     setreuid(uid_t ruid, uid_t euid);
 int     setregid(gid_t rgid, gid_t egid);
+
+int     getentropy(FAR void *buffer, size_t length);
 
 #undef EXTERN
 #if defined(__cplusplus)

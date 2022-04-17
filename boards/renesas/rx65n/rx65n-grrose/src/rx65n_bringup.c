@@ -40,7 +40,7 @@
 #include "rx65n_usbhost.h"
 #include "rx65n_grrose.h"
 #include <rx65n_definitions.h>
-#ifdef CONFIG_LIB_BOARDCTL
+#ifdef CONFIG_BOARDCTL
 
 #ifdef HAVE_RTC_DRIVER
 #  include <nuttx/timers/rtc.h>
@@ -149,7 +149,6 @@ static int nsh_waiter(int argc, char *argv[])
 #ifdef NSH_HAVE_USBHOST
 static int nsh_usbhostinitialize(void)
 {
-  int pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -210,11 +209,11 @@ static int nsh_usbhostinitialize(void)
 
       syslog(LOG_INFO, "Start nsh_waiter\n");
 
-      pid = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
+      ret = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
                            CONFIG_USBHOST_STACKSIZE,
                            (main_t)nsh_waiter, (FAR char * const *)NULL);
-      syslog(LOG_INFO, "USBHost: Created pid = %d\n", pid);
-      return pid < 0 ? -ENOEXEC : OK;
+      syslog(LOG_INFO, "USBHost: Created pid = %d\n", ret);
+      return ret < 0 ? -ENOEXEC : OK;
     }
 
   return -ENODEV;
@@ -349,7 +348,7 @@ static int rtc_driver_initialize(void)
  *   CONFIG_BOARD_LATE_INITIALIZE=y :
  *     Called from board_late_initialize().
  *
- *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_LIB_BOARDCTL=y :
+ *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_BOARDCTL=y :
  *     Called from the NSH library
  *
  ****************************************************************************/

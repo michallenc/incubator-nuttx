@@ -24,10 +24,14 @@
 
 #include <nuttx/config.h>
 
-#include <sched.h>
-#include <errno.h>
+#include <nuttx/arch.h>
+#include <nuttx/tls.h>
 
-#include <arch/tls.h>
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static int g_errno;
 
 /****************************************************************************
  * Public Functions
@@ -57,5 +61,5 @@ FAR int *__errno(void)
 
   /* And return the return refernce to the error number */
 
-  return &tlsinfo->tl_errno;
+  return tlsinfo ? &tlsinfo->tl_errno : &g_errno;
 }

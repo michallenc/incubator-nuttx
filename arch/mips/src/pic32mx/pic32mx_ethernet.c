@@ -53,7 +53,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "mips_arch.h"
+#include "mips_internal.h"
 #include "pic32mx_config.h"
 #include "pic32mx_ethernet.h"
 #include "pic32mx.h"
@@ -215,7 +215,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->pd_dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->pd_dev.d_buf)
 
 /* PHYs *********************************************************************/
 
@@ -1549,7 +1549,7 @@ static void pic32mx_rxdone(struct pic32mx_driver_s *priv)
           else
 #endif
 #ifdef CONFIG_NET_ARP
-          if (BUF->type == htons(ETHTYPE_ARP))
+          if (BUF->type == HTONS(ETHTYPE_ARP))
             {
               /* Handle the incoming ARP packet */
 
@@ -1572,7 +1572,7 @@ static void pic32mx_rxdone(struct pic32mx_driver_s *priv)
               /* Unrecognized... drop it. */
 
               nerr("ERROR: Unrecognized packet type dropped: %04x\n",
-                   ntohs(BUF->type));
+                   NTOHS(BUF->type));
               NETDEV_RXDROPPED(&priv->pd_dev);
             }
 

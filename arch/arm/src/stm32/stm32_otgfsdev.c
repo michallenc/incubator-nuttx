@@ -44,9 +44,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "stm32_otgfs.h"
 
 #if defined(CONFIG_USBDEV) && (defined(CONFIG_STM32_OTGFS))
@@ -2090,6 +2088,8 @@ static void stm32_usbreset(struct stm32_usbdev_s *priv)
       /* Reset IN endpoint status */
 
       privep->stalled = false;
+      privep->active  = false;
+      privep->zlp     = false;
 
       /* Return read requests to the class implementation */
 
@@ -2099,6 +2099,8 @@ static void stm32_usbreset(struct stm32_usbdev_s *priv)
       /* Reset endpoint status */
 
       privep->stalled = false;
+      privep->active  = false;
+      privep->zlp     = false;
     }
 
   stm32_putreg(0xffffffff, STM32_OTGFS_DAINT);
@@ -4003,6 +4005,8 @@ static int stm32_epout_configure(FAR struct stm32_ep_s *privep,
       privep->ep.maxpacket = maxpacket;
       privep->eptype       = eptype;
       privep->stalled      = false;
+      privep->active       = false;
+      privep->zlp          = false;
     }
 
   /* Enable the interrupt for this endpoint */
@@ -4101,6 +4105,8 @@ static int stm32_epin_configure(FAR struct stm32_ep_s *privep,
       privep->ep.maxpacket = maxpacket;
       privep->eptype       = eptype;
       privep->stalled      = false;
+      privep->active       = false;
+      privep->zlp          = false;
     }
 
   /* Enable the interrupt for this endpoint */
@@ -5615,7 +5621,11 @@ void arm_usbinitialize(void)
 
   stm32_configgpio(GPIO_OTGFS_DM);
   stm32_configgpio(GPIO_OTGFS_DP);
-  stm32_configgpio(GPIO_OTGFS_ID);    /* Only needed for OTG */
+
+  /* Only needed for OTG */
+#ifndef CONFIG_OTG_ID_GPIO_DISABLE
+  stm32_configgpio(GPIO_OTGFS_ID);
+#endif
 
   /* SOF output pin configuration is configurable. */
 

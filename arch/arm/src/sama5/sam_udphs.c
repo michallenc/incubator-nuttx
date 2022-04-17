@@ -67,9 +67,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_periphclks.h"
 #include "sam_memories.h"
 #include "hardware/sam_udphs.h"
@@ -563,7 +561,7 @@ static const struct usb_epdesc_s g_ep0desc =
 /* This is a properly aligned pool of preallocated DMA transfer descriptors */
 
 static struct sam_dtd_s g_dtdpool[CONFIG_SAMA5_UDPHS_NDTDS]
-                        __attribute__ ((aligned(16)));
+                        aligned_data(16);
 #endif
 #endif
 

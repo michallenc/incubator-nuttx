@@ -41,6 +41,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/clock.h>
 #include <nuttx/semaphore.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/spi/slave.h>
 
@@ -48,7 +49,7 @@
 
 #include "esp32_spi.h"
 #include "esp32_gpio.h"
-#include "esp32_cpuint.h"
+#include "esp32_irq.h"
 #include "esp32_dma.h"
 
 #include "xtensa.h"
@@ -101,7 +102,6 @@ struct esp32_spislv_config_s
   uint8_t miso_pin;           /* GPIO configuration for MISO */
   uint8_t clk_pin;            /* GPIO configuration for CLK */
 
-  uint8_t cpu;                /* CPU ID */
   uint8_t periph;             /* peripher ID */
   uint8_t irq;                /* Interrupt ID */
 
@@ -136,6 +136,7 @@ struct esp32_spislv_priv_s
 
   const struct esp32_spislv_config_s *config; /* Port configuration */
 
+  uint8_t          cpu;         /* CPU ID */
   int              cpuint;      /* SPI interrupt ID */
 
   enum spi_mode_e  mode;        /* Actual SPI hardware mode */
@@ -163,29 +164,31 @@ struct esp32_spislv_priv_s
   /* Copy from config to speed up checking */
 
   bool dma_chan;
+
+  spinlock_t lock;              /* Device specific lock. */
 };
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static void esp32_spislv_setmode(FAR struct spi_slave_ctrlr_s *ctrlr,
+static void esp32_spislv_setmode(struct spi_slave_ctrlr_s *ctrlr,
                                  enum spi_mode_e mode);
-static void esp32_spislv_setbits(FAR struct spi_slave_ctrlr_s *ctrlr,
+static void esp32_spislv_setbits(struct spi_slave_ctrlr_s *ctrlr,
                                  int nbits);
-static int esp32_spislv_interrupt(int irq, void *context, FAR void *arg);
-static void esp32_spislv_initialize(FAR struct spi_slave_ctrlr_s *ctrlr);
+static int esp32_spislv_interrupt(int irq, void *context, void *arg);
+static void esp32_spislv_initialize(struct spi_slave_ctrlr_s *ctrlr);
 static void esp32_spislv_bind(struct spi_slave_ctrlr_s *ctrlr,
                               struct spi_slave_dev_s *dev,
                               enum spi_slave_mode_e mode,
                               int nbits);
 static void esp32_spislv_unbind(struct spi_slave_ctrlr_s *ctrlr);
 static int esp32_spislv_enqueue(struct spi_slave_ctrlr_s *ctrlr,
-                                FAR const void *data,
+                                const void *data,
                                 size_t nwords);
 static bool esp32_spislv_qfull(struct spi_slave_ctrlr_s *ctrlr);
 static void esp32_spislv_qflush(struct spi_slave_ctrlr_s *ctrlr);
-static size_t esp32_spislv_qpoll(FAR struct spi_slave_ctrlr_s *ctrlr);
+static size_t esp32_spislv_qpoll(struct spi_slave_ctrlr_s *ctrlr);
 
 /****************************************************************************
  * Private Data
@@ -200,7 +203,6 @@ static const struct esp32_spislv_config_s esp32_spi2_config =
   .mosi_pin     = CONFIG_ESP32_SPI2_MOSIPIN,
   .miso_pin     = CONFIG_ESP32_SPI2_MISOPIN,
   .clk_pin      = CONFIG_ESP32_SPI2_CLKPIN,
-  .cpu          = 0,
   .periph       = ESP32_PERIPH_SPI2,
   .irq          = ESP32_IRQ_SPI2,
   .clk_bit      = DPORT_SPI_CLK_EN_2,
@@ -254,7 +256,6 @@ static const struct esp32_spislv_config_s esp32_spi3_config =
   .mosi_pin     = CONFIG_ESP32_SPI3_MOSIPIN,
   .miso_pin     = CONFIG_ESP32_SPI3_MISOPIN,
   .clk_pin      = CONFIG_ESP32_SPI3_CLKPIN,
-  .cpu          = 0,
   .periph       = ESP32_PERIPH_SPI3,
   .irq          = ESP32_IRQ_SPI3,
   .clk_bit      = DPORT_SPI_CLK_EN,
@@ -460,7 +461,7 @@ static inline bool esp32_spi_iomux(struct esp32_spislv_priv_s *priv)
  *
  ****************************************************************************/
 
-static void esp32_spislv_setmode(FAR struct spi_slave_ctrlr_s *ctrlr,
+static void esp32_spislv_setmode(struct spi_slave_ctrlr_s *ctrlr,
                                  enum spi_mode_e mode)
 {
   uint32_t ck_idle_edge;
@@ -589,7 +590,7 @@ static void esp32_spislv_setmode(FAR struct spi_slave_ctrlr_s *ctrlr,
  *
  ****************************************************************************/
 
-static void esp32_spislv_setbits(FAR struct spi_slave_ctrlr_s *ctrlr,
+static void esp32_spislv_setbits(struct spi_slave_ctrlr_s *ctrlr,
                                  int nbits)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
@@ -616,7 +617,7 @@ static void esp32_spislv_setbits(FAR struct spi_slave_ctrlr_s *ctrlr,
  *
  ****************************************************************************/
 
-static int esp32_io_interrupt(int irq, void *context, FAR void *arg)
+static int esp32_io_interrupt(int irq, void *context, void *arg)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)arg;
 
@@ -757,7 +758,7 @@ static void esp32_spislv_rx(struct esp32_spislv_priv_s *priv)
  *
  ****************************************************************************/
 
-static int esp32_spislv_interrupt(int irq, void *context, FAR void *arg)
+static int esp32_spislv_interrupt(int irq, void *context, void *arg)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)arg;
   uint32_t n;
@@ -848,7 +849,7 @@ static int esp32_spislv_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void esp32_spislv_initialize(FAR struct spi_slave_ctrlr_s *ctrlr)
+static void esp32_spislv_initialize(struct spi_slave_ctrlr_s *ctrlr)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
   const struct esp32_spislv_config_s *config = priv->config;
@@ -960,7 +961,7 @@ static void esp32_spislv_initialize(FAR struct spi_slave_ctrlr_s *ctrlr)
  *
  ****************************************************************************/
 
-static void esp32_spislv_deinit(FAR struct spi_slave_ctrlr_s *ctrlr)
+static void esp32_spislv_deinit(struct spi_slave_ctrlr_s *ctrlr)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
 
@@ -1011,7 +1012,7 @@ static void esp32_spislv_bind(struct spi_slave_ctrlr_s *ctrlr,
 
   DEBUGASSERT(priv != NULL && priv->dev == NULL && dev != NULL);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   priv->dev = dev;
 
@@ -1029,11 +1030,11 @@ static void esp32_spislv_bind(struct spi_slave_ctrlr_s *ctrlr,
   esp32_spislv_setmode(ctrlr, mode);
   esp32_spislv_setbits(ctrlr, nbits);
 
-  up_enable_irq(priv->cpuint);
+  up_enable_irq(priv->config->irq);
 
   esp32_spi_set_regbits(priv, SPI_CMD_OFFSET, SPI_USR_M);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1063,9 +1064,9 @@ static void esp32_spislv_unbind(struct spi_slave_ctrlr_s *ctrlr)
 
   DEBUGASSERT(priv->dev != NULL);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
-  up_disable_irq(priv->cpuint);
+  up_disable_irq(priv->config->irq);
 
   esp32_gpioirqdisable(ESP32_PIN2IRQ(priv->config->cs_pin));
   esp32_spi_reset_regbits(priv, SPI_SLAVE_OFFSET, SPI_INT_EN_M);
@@ -1078,7 +1079,7 @@ static void esp32_spislv_unbind(struct spi_slave_ctrlr_s *ctrlr)
 
   priv->dev = NULL;
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1103,7 +1104,7 @@ static void esp32_spislv_unbind(struct spi_slave_ctrlr_s *ctrlr)
  ****************************************************************************/
 
 static int esp32_spislv_enqueue(struct spi_slave_ctrlr_s *ctrlr,
-                                FAR const void *data,
+                                const void *data,
                                 size_t nwords)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
@@ -1116,7 +1117,7 @@ static int esp32_spislv_enqueue(struct spi_slave_ctrlr_s *ctrlr,
           ctrlr, data, nwords);
   DEBUGASSERT(priv != NULL && priv->dev != NULL);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   bufsize = SPI_SLAVE_BUFSIZE - priv->txlen;
   if (!bufsize)
@@ -1137,7 +1138,7 @@ static int esp32_spislv_enqueue(struct spi_slave_ctrlr_s *ctrlr,
         }
     }
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return ret;
 }
@@ -1167,9 +1168,9 @@ static bool esp32_spislv_qfull(struct spi_slave_ctrlr_s *ctrlr)
 
   spiinfo("spi_qfull(ctrlr=%p)\n", ctrlr);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
   ret = priv->txlen == SPI_SLAVE_BUFSIZE;
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return ret;
 }
@@ -1197,11 +1198,11 @@ static void esp32_spislv_qflush(struct spi_slave_ctrlr_s *ctrlr)
 
   DEBUGASSERT(priv != NULL && priv->dev != NULL);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
   priv->rxlen = 0;
   priv->txlen = 0;
   priv->txen  = false;
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1219,7 +1220,7 @@ static void esp32_spislv_qflush(struct spi_slave_ctrlr_s *ctrlr)
  *
  ****************************************************************************/
 
-static size_t esp32_spislv_qpoll(FAR struct spi_slave_ctrlr_s *ctrlr)
+static size_t esp32_spislv_qpoll(struct spi_slave_ctrlr_s *ctrlr)
 {
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
   irqstate_t flags;
@@ -1227,12 +1228,12 @@ static size_t esp32_spislv_qpoll(FAR struct spi_slave_ctrlr_s *ctrlr)
 
   DEBUGASSERT(priv != NULL && priv->dev != NULL);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   esp32_spislv_rx(priv);
   n = priv->rxlen;
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return n;
 }
@@ -1251,11 +1252,11 @@ static size_t esp32_spislv_qpoll(FAR struct spi_slave_ctrlr_s *ctrlr)
  *
  ****************************************************************************/
 
-FAR struct spi_slave_ctrlr_s *esp32_spislv_ctrlr_initialize(int port)
+struct spi_slave_ctrlr_s *esp32_spislv_ctrlr_initialize(int port)
 {
   int ret;
-  FAR struct spi_slave_ctrlr_s *spislv_dev;
-  FAR struct esp32_spislv_priv_s *priv;
+  struct spi_slave_ctrlr_s *spislv_dev;
+  struct esp32_spislv_priv_s *priv;
   irqstate_t flags;
 
   switch (port)
@@ -1274,13 +1275,13 @@ FAR struct spi_slave_ctrlr_s *esp32_spislv_ctrlr_initialize(int port)
         return NULL;
     }
 
-  spislv_dev = (FAR struct spi_slave_ctrlr_s *)priv;
+  spislv_dev = (struct spi_slave_ctrlr_s *)priv;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   if ((volatile int)priv->refs != 0)
     {
-      leave_critical_section(flags);
+      spin_unlock_irqrestore(&priv->lock, flags);
 
       return spislv_dev;
     }
@@ -1298,35 +1299,25 @@ FAR struct spi_slave_ctrlr_s *esp32_spislv_ctrlr_initialize(int port)
                          esp32_io_interrupt,
                          priv));
 
-  priv->cpuint = esp32_alloc_levelint(1);
-  if (priv->cpuint < 0)
-    {
-      leave_critical_section(flags);
+  /* Set up to receive peripheral interrupts on the current CPU */
 
-      return NULL;
-    }
-
-  up_disable_irq(priv->cpuint);
-  esp32_attach_peripheral(priv->config->cpu,
-                          priv->config->periph,
-                          priv->cpuint);
+  priv->cpu = up_cpu_index();
+  priv->cpuint = esp32_setup_irq(priv->cpu, priv->config->periph,
+                                 1, ESP32_CPUINT_LEVEL);
 
   ret = irq_attach(priv->config->irq, esp32_spislv_interrupt, priv);
   if (ret != OK)
     {
-      esp32_detach_peripheral(priv->config->cpu,
-                              priv->config->periph,
-                              priv->cpuint);
-      esp32_free_cpuint(priv->cpuint);
+      esp32_teardown_irq(priv->cpu, priv->config->periph, priv->cpuint);
 
-      leave_critical_section(flags);
+      spin_unlock_irqrestore(&priv->lock, flags);
 
       return NULL;
     }
 
   priv->refs++;
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return spislv_dev;
 }
@@ -1345,7 +1336,7 @@ FAR struct spi_slave_ctrlr_s *esp32_spislv_ctrlr_initialize(int port)
  *
  ****************************************************************************/
 
-int esp32_spislv_ctrlr_uninitialize(FAR struct spi_slave_ctrlr_s *ctrlr)
+int esp32_spislv_ctrlr_uninitialize(struct spi_slave_ctrlr_s *ctrlr)
 {
   irqstate_t flags;
   struct esp32_spislv_priv_s *priv = (struct esp32_spislv_priv_s *)ctrlr;
@@ -1357,23 +1348,19 @@ int esp32_spislv_ctrlr_uninitialize(FAR struct spi_slave_ctrlr_s *ctrlr)
       return ERROR;
     }
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   if (--priv->refs)
     {
-      leave_critical_section(flags);
+      spin_unlock_irqrestore(&priv->lock, flags);
       return OK;
     }
 
-  up_disable_irq(priv->cpuint);
-  esp32_detach_peripheral(priv->config->cpu,
-                          priv->config->periph,
-                          priv->cpuint);
-  esp32_free_cpuint(priv->cpuint);
-
+  up_disable_irq(priv->config->irq);
+  esp32_teardown_irq(priv->cpu, priv->config->periph, priv->cpuint);
   esp32_spislv_deinit(ctrlr);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return OK;
 }

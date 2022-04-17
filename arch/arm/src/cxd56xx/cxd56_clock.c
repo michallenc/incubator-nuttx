@@ -32,8 +32,7 @@
 
 #include <arch/chip/pm.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/cxd56_crg.h"
 #include "hardware/cxd5602_backupmem.h"
@@ -76,10 +75,6 @@
 #define APDID_XOSC       1
 #define APDID_HPADC     12
 #define APDID_LPADC     13
-
-/* Compiler hint shortcut */
-
-#define __unused __attribute__((unused))
 
 #define ALIGNUP(v, a) (((v) + ((a) - 1)) & ~((a) - 1))
 #define TILESIZESHIT 17
@@ -133,11 +128,11 @@ static void cxd56_img_clock_enable(void);
 static void cxd56_img_clock_disable(void);
 static void cxd56_scu_clock_ctrl(uint32_t block, uint32_t intr, int on);
 static void cxd56_scu_peri_clock_enable(FAR const struct scu_peripheral *p)
-  __unused;
+  unused_code;
 static void cxd56_scu_peri_clock_disable(FAR const struct scu_peripheral *p)
-  __unused;
+  unused_code;
 static void cxd56_scu_peri_clock_gating(FAR const struct scu_peripheral *p,
-                                        int enable) __unused;
+                                        int enable) unused_code;
 
 /****************************************************************************
  * Public Data

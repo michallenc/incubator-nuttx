@@ -54,10 +54,8 @@
 
 #include "chip.h"
 #include "arm.h"
-#include "fpu.h"
 #include "sctlr.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 #include <nuttx/init.h>
 
@@ -376,11 +374,9 @@ void arm_boot(void)
 
   tms570_esm_initialize();
 
-#ifdef CONFIG_ARCH_FPU
   /* Initialize the FPU */
 
   arm_fpuconfig();
-#endif
 
 #ifdef CONFIG_ARMV7R_MEMINIT
   /* Initialize the .bss and .data sections as well as RAM functions

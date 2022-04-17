@@ -52,7 +52,6 @@
 #include <arch/chip/pm.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "cxd56_clock.h"
 #include "cxd56_usbdev.h"
@@ -95,10 +94,6 @@
 #define CONFIG_DEFAULT_PHY_CFG0 \
   (PHY_STAGSELECT | PHY_HSFALLCNTRL | PHY_IHSTX(0xc) | PHY_INHSRFRED | \
    PHY_INHSIPLUS | PHY_INHSDRVSLEW| PHY_INLFSFBCAP)
-
-#ifndef __aligned
-#  define __aligned(x) __attribute__((aligned(x)))
-#endif
 
 /* Debug ********************************************************************/
 
@@ -385,7 +380,7 @@ struct cxd56_usbdev_s
   /* signal */
 
   int signo;
-  int pid;
+  pid_t pid;
 };
 
 /* For maintaining tables of endpoint info */
@@ -556,9 +551,9 @@ static struct cxd56_usbdev_s g_usbdev;
 
 /* DMA Descriptors for each endpoints */
 
-static struct cxd56_setup_desc_s __aligned(4) g_ep0setup;
-static struct cxd56_data_desc_s __aligned(4) g_ep0in;
-static struct cxd56_data_desc_s __aligned(4) g_ep0out;
+static struct cxd56_setup_desc_s aligned_data(4) g_ep0setup;
+static struct cxd56_data_desc_s aligned_data(4) g_ep0in;
+static struct cxd56_data_desc_s aligned_data(4) g_ep0out;
 
 /* Summarizes information about all CXD56 endpoints */
 

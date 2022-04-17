@@ -35,7 +35,6 @@
 #include <nuttx/arch.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 #include "chip.h"
@@ -143,9 +142,9 @@ static struct sam_dmach_s g_dmach[SAMD2L2_NDMACHAN];
  */
 
 static struct dma_desc_s g_base_desc[SAMD2L2_NDMACHAN]
-  __attribute__ ((section(".lpram"), aligned(16)));
+  locate_data(".lpram"), aligned(16);
 static struct dma_desc_s g_writeback_desc[SAMD2L2_NDMACHAN]
-  __attribute__ ((section(".lpram"), aligned(16)));
+  locate_data(".lpram"), aligned(16);
 
 #if CONFIG_SAMD2L2_DMAC_NDESC > 0
 /* Additional DMA descriptors for (optional) multi-block transfer support.
@@ -153,7 +152,7 @@ static struct dma_desc_s g_writeback_desc[SAMD2L2_NDMACHAN]
  */
 
 static struct dma_desc_s g_dma_desc[CONFIG_SAMD2L2_DMAC_NDESC]
-  __attribute__ ((section(".lpram"), aligned(16)));
+  locate_data(".lpram"), aligned(16);
 #endif
 
 /****************************************************************************

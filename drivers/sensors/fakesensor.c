@@ -204,7 +204,10 @@ static inline void fakesensor_read_gps(FAR struct fakesensor_s *sensor)
       gps.longitude = -gps.longitude;
     }
 
-  gps.height = altitude;
+  gps.latitude /= 100.0f;
+  gps.longitude /= 100.0f;
+
+  gps.altitude = altitude;
 
   sensor->lower.push_event(sensor->lower.priv, &gps,
                            sizeof(struct sensor_event_gps));
@@ -401,7 +404,8 @@ int fakesensor_init(int type, FAR const char *file_name,
   argv[0] = arg1;
   argv[1] = NULL;
   ret = kthread_create("fakesensor_thread", SCHED_PRIORITY_DEFAULT,
-                    CONFIG_DEFAULT_TASK_STACKSIZE, fakesensor_thread, argv);
+                       CONFIG_DEFAULT_TASK_STACKSIZE,
+                       fakesensor_thread, argv);
   if (ret < 0)
     {
       kmm_free(sensor);

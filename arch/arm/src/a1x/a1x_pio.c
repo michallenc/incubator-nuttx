@@ -34,8 +34,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "a1x_pio.h"
 #include "hardware/a1x_pio.h"
@@ -246,6 +244,7 @@ int a1x_pio_config(pio_pinset_t cfgset)
         break;
 
       default:
+        leave_critical_section(flags);
         return -EINVAL;
     }
 
@@ -286,6 +285,7 @@ int a1x_pio_config(pio_pinset_t cfgset)
         break;
 
       default:
+        leave_critical_section(flags);
         return -EINVAL;
     }
 

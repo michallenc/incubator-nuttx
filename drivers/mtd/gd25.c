@@ -923,7 +923,7 @@ static int gd25_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
   FAR struct gd25_dev_s *priv = (FAR struct gd25_dev_s *)dev;
   int ret = -EINVAL;
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -941,6 +941,22 @@ static int gd25_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
               finfo("blocksize: %" PRIu32 " erasesize: %" PRIu32
                     " neraseblocks: %" PRIu32 "\n",
                     geo->blocksize, geo->erasesize, geo->neraseblocks);
+            }
+        }
+        break;
+
+      case BIOC_PARTINFO:
+        {
+          FAR struct partition_info_s *info =
+            (FAR struct partition_info_s *)arg;
+          if (info != NULL)
+            {
+              info->numsectors  = priv->nsectors *
+                                  GD25_SECTOR_SIZE / GD25_PAGE_SIZE;
+              info->sectorsize  = GD25_PAGE_SIZE;
+              info->startsector = 0;
+              info->parent[0]   = '\0';
+              ret               = OK;
             }
         }
         break;
@@ -966,7 +982,6 @@ static int gd25_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
         }
         break;
 
-      case MTDIOC_XIPBASE:
       default:
         ret = -ENOTTY;
         break;

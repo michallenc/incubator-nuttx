@@ -49,6 +49,10 @@
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 
+#ifdef CONFIG_RNDIS_BOARD_SERIALSTR
+#include <nuttx/board.h>
+#endif
+
 #include "rndis_std.h"
 
 /****************************************************************************
@@ -939,7 +943,7 @@ static void rndis_rxdispatch(FAR void *arg)
   else
 #endif
 #ifdef CONFIG_NET_ARP
-  if (hdr->type == htons(ETHTYPE_ARP))
+  if (hdr->type == HTONS(ETHTYPE_ARP))
     {
       NETDEV_RXARP(&priv->netdev);
 
@@ -954,7 +958,7 @@ static void rndis_rxdispatch(FAR void *arg)
 #endif
     {
       uerr("ERROR: Unsupported packet type dropped (%02x)\n",
-           htons(hdr->type));
+           HTONS(hdr->type));
       NETDEV_RXDROPPED(&priv->netdev);
       priv->netdev.d_len = 0;
     }
@@ -1290,7 +1294,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             }
           else
             {
-              uerr("The packet exceeds request buffer (reqlen=%d) \n",
+              uerr("The packet exceeds request buffer (reqlen=%d)\n",
                    reqlen);
             }
         }
@@ -1893,6 +1897,7 @@ static FAR struct usbdev_req_s *usbclass_allocreq(FAR struct usbdev_ep_s *ep,
 
 static int usbclass_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
 {
+  FAR uint8_t *data = (FAR uint8_t *)(strdesc + 1);
   FAR const char *str;
   int len;
   int ndata;
@@ -1905,10 +1910,10 @@ static int usbclass_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
         {
           /* Descriptor 0 is the language id */
 
-          strdesc->len     = 4;
-          strdesc->type    = USB_DESC_TYPE_STRING;
-          strdesc->data[0] = LSBYTE(RNDIS_STR_LANGUAGE);
-          strdesc->data[1] = MSBYTE(RNDIS_STR_LANGUAGE);
+          strdesc->len  = 4;
+          strdesc->type = USB_DESC_TYPE_STRING;
+          data[0] = LSBYTE(RNDIS_STR_LANGUAGE);
+          data[1] = MSBYTE(RNDIS_STR_LANGUAGE);
           return 4;
         }
 
@@ -1921,7 +1926,11 @@ static int usbclass_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
         break;
 
       case RNDIS_SERIALSTRID:
+#ifdef CONFIG_RNDIS_BOARD_SERIALSTR
+        str = board_usbdev_serialstr();
+#else
         str = CONFIG_RNDIS_SERIALSTR;
+#endif
         break;
 #endif
 
@@ -1941,8 +1950,8 @@ static int usbclass_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
 
   for (i = 0, ndata = 0; i < len; i++, ndata += 2)
     {
-      strdesc->data[ndata]     = str[i];
-      strdesc->data[ndata + 1] = 0;
+      data[ndata]     = str[i];
+      data[ndata + 1] = 0;
     }
 
   strdesc->len  = ndata + 2;

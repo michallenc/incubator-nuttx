@@ -77,11 +77,11 @@
  * builds.  This those configurations, the user-mode work queue provides the
  * same (non-standard) facility for use by applications.
  *
- * CONFIG_LIB_USRWORK. If CONFIG_LIB_USRWORK is also defined then the
+ * CONFIG_LIBC_USRWORK. If CONFIG_LIBC_USRWORK is also defined then the
  *   user-mode work queue will be created.
- * CONFIG_LIB_USRWORKPRIORITY - The minimum execution priority of the lower
+ * CONFIG_LIBC_USRWORKPRIORITY - The minimum execution priority of the lower
  *   priority worker thread.  Default: 100
- * CONFIG_LIB_USRWORKSTACKSIZE - The stack size allocated for the lower
+ * CONFIG_LIBC_USRWORKSTACKSIZE - The stack size allocated for the lower
  *   priority worker thread.  Default: 2048.
  */
 
@@ -91,7 +91,7 @@
 
   /* Yes.. user-space worker threads are not built in a flat build */
 
-#  undef CONFIG_LIB_USRWORK
+#  undef CONFIG_LIBC_USRWORK
 
 #elif !defined(__KERNEL__)
 
@@ -179,17 +179,17 @@
 
 /* User space work queue configuration **************************************/
 
-#ifdef CONFIG_LIB_USRWORK
+#ifdef CONFIG_LIBC_USRWORK
 
-#  ifndef CONFIG_LIB_USRWORKPRIORITY
-#    define CONFIG_LIB_USRWORKPRIORITY 100
+#  ifndef CONFIG_LIBC_USRWORKPRIORITY
+#    define CONFIG_LIBC_USRWORKPRIORITY 100
 #  endif
 
-#  ifndef CONFIG_LIB_USRWORKSTACKSIZE
-#    define CONFIG_LIB_USRWORKSTACKSIZE CONFIG_IDLETHREAD_STACKSIZE
+#  ifndef CONFIG_LIBC_USRWORKSTACKSIZE
+#    define CONFIG_LIBC_USRWORKSTACKSIZE CONFIG_IDLETHREAD_STACKSIZE
 #  endif
 
-#endif /* CONFIG_LIB_USRWORK */
+#endif /* CONFIG_LIBC_USRWORK */
 
 /* Work queue IDs:
  *
@@ -208,7 +208,7 @@
  *     priority work queue (if there is one).
  */
 
-#if defined(CONFIG_LIB_USRWORK) && !defined(__KERNEL__)
+#if defined(CONFIG_LIBC_USRWORK) && !defined(__KERNEL__)
 /* User mode */
 
 #  define USRWORK  2          /* User mode work queue */
@@ -226,7 +226,7 @@
 #  endif
 #  define USRWORK  LPWORK     /* Redirect user-mode references */
 
-#endif /* CONFIG_LIB_USRWORK && !__KERNEL__ */
+#endif /* CONFIG_LIBC_USRWORK && !__KERNEL__ */
 
 /****************************************************************************
  * Public Types
@@ -292,6 +292,10 @@ struct work_notifier_s
   worker_t worker;     /* The worker function to schedule */
 };
 
+/* This is the callback type used by work_foreach() */
+
+typedef CODE void (*work_foreach_t)(int tid, FAR void *arg);
+
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -323,7 +327,7 @@ extern "C"
  *
  ****************************************************************************/
 
-#if defined(CONFIG_LIB_USRWORK) && !defined(__KERNEL__)
+#if defined(CONFIG_LIBC_USRWORK) && !defined(__KERNEL__)
 int work_usrstart(void);
 #endif
 
@@ -380,6 +384,25 @@ int work_queue(int qid, FAR struct work_s *work, worker_t worker,
  ****************************************************************************/
 
 int work_cancel(int qid, FAR struct work_s *work);
+
+/****************************************************************************
+ * Name: work_foreach
+ *
+ * Description:
+ *   Enumerate over each work thread and provide the tid of each task to a
+ *   user callback functions.
+ *
+ * Input Parameters:
+ *   qid     - The work queue ID
+ *   handler - The function to be called with the pid of each task
+ *   arg     - The function callback
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void work_foreach(int qid, work_foreach_t handler, FAR void *arg);
 
 /****************************************************************************
  * Name: work_available

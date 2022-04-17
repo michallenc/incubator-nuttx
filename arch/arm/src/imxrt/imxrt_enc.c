@@ -35,11 +35,11 @@
 #include <nuttx/semaphore.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "imxrt_periphclks.h"
 
 #include "imxrt_enc.h"
+#include "hardware/imxrt_enc.h"
 
 /* This functionality is dependent on Qencoder Sensor support */
 
@@ -292,7 +292,7 @@ struct imxrt_enc_lowerhalf_s
 static inline uint16_t imxrt_enc_getreg16
                         (FAR struct imxrt_enc_lowerhalf_s *priv, int offset);
 static inline void imxrt_enc_putreg16(FAR struct imxrt_enc_lowerhalf_s *priv,
-              int offset,  uint16_t value);
+                                      int offset,  uint16_t value);
 static inline void imxrt_enc_modifyreg16
                     (FAR struct imxrt_enc_lowerhalf_s *priv, int offset,
                     uint16_t clearbits, uint16_t setbits);
@@ -300,22 +300,21 @@ static inline void imxrt_enc_modifyreg16
 static void imxrt_enc_clock_enable (uint32_t base);
 static void imxrt_enc_clock_disable (uint32_t base);
 
-static inline int  imxrt_enc_sem_wait(
-    FAR struct imxrt_enc_lowerhalf_s *priv);
-static inline void imxrt_enc_sem_post(
-    FAR struct imxrt_enc_lowerhalf_s *priv);
+static inline int imxrt_enc_sem_wait(FAR struct imxrt_enc_lowerhalf_s *priv);
+static inline void imxrt_enc_sem_post
+                    (FAR struct imxrt_enc_lowerhalf_s *priv);
 
 static int imxrt_enc_reconfig(FAR struct imxrt_enc_lowerhalf_s *priv,
-              uint16_t args);
+                              uint16_t args);
 static void imxrt_enc_set_initial_val(FAR struct imxrt_enc_lowerhalf_s *priv,
-              uint32_t value);
+                                      uint32_t value);
 static void imxrt_enc_modulo_enable(FAR struct imxrt_enc_lowerhalf_s *priv,
-              uint32_t modulus);
+                                    uint32_t modulus);
 static void imxrt_enc_modulo_disable(FAR struct imxrt_enc_lowerhalf_s *priv);
 
 #ifdef CONFIG_DEBUG_SENSORS
 static int imxrt_enc_test_gen(FAR struct imxrt_enc_lowerhalf_s *priv,
-              uint16_t value);
+                              uint16_t value);
 #endif
 
 /* Lower-half Quadrature Encoder Driver Methods */
@@ -326,7 +325,7 @@ static int imxrt_position(FAR struct qe_lowerhalf_s *lower,
                           FAR int32_t *pos);
 static int imxrt_reset(FAR struct qe_lowerhalf_s *lower);
 static int imxrt_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
-              unsigned long arg);
+                       unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -336,11 +335,13 @@ static int imxrt_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
 
 static const struct qe_ops_s g_qecallbacks =
 {
-  .setup    = imxrt_setup,
-  .shutdown = imxrt_shutdown,
-  .position = imxrt_position,
-  .reset    = imxrt_reset,
-  .ioctl    = imxrt_ioctl,
+  .setup     = imxrt_setup,
+  .shutdown  = imxrt_shutdown,
+  .position  = imxrt_position,
+  .setposmax = NULL,            /* not supported yet */
+  .reset     = imxrt_reset,
+  .setindex  = NULL,            /* not supported yet */
+  .ioctl     = imxrt_ioctl,
 };
 
 /* Per-timer state structures */
@@ -512,7 +513,7 @@ static inline void imxrt_enc_modifyreg16
  *
  ****************************************************************************/
 
-void imxrt_enc_clock_enable (uint32_t base)
+void imxrt_enc_clock_enable(uint32_t base)
 {
   if (base == IMXRT_ENC1_BASE)
     {
@@ -544,7 +545,7 @@ void imxrt_enc_clock_enable (uint32_t base)
  *
  ****************************************************************************/
 
-void imxrt_enc_clock_disable (uint32_t base)
+void imxrt_enc_clock_disable(uint32_t base)
 {
   if (base == IMXRT_ENC1_BASE)
     {
@@ -611,7 +612,7 @@ static inline void imxrt_enc_sem_post(struct imxrt_enc_lowerhalf_s *priv)
  ****************************************************************************/
 
 static int imxrt_enc_reconfig(FAR struct imxrt_enc_lowerhalf_s *priv,
-                                uint16_t args)
+                              uint16_t args)
 {
   uint16_t clear = 0;
   uint16_t set = 0;
@@ -772,7 +773,7 @@ static void imxrt_enc_modulo_disable(FAR struct imxrt_enc_lowerhalf_s *priv)
  ****************************************************************************/
 
 static int imxrt_enc_test_gen(FAR struct imxrt_enc_lowerhalf_s *priv,
-                                uint16_t value)
+                              uint16_t value)
 {
   if (value >> 9)
     {
@@ -1023,7 +1024,7 @@ static int imxrt_reset(FAR struct qe_lowerhalf_s *lower)
  ****************************************************************************/
 
 static int imxrt_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
-              unsigned long arg)
+                       unsigned long arg)
 {
   struct imxrt_enc_lowerhalf_s *priv = (struct imxrt_enc_lowerhalf_s *)lower;
   switch (cmd)

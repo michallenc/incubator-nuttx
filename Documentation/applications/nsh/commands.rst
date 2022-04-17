@@ -193,7 +193,7 @@ Also sets the previous working directory environment variable
 ``cd -``            sets the current working directory to the previous
                     working directory ($OLDPWD). Equivalent to cd $OLDPWD.
 ``cd`` or ``cd ~``  set the current working directory to the 'home' directory.
-                    The home directory can be configured by setting CONFIG_LIB_HOMEDIR
+                    The home directory can be configured by setting CONFIG_LIBC_HOMEDIR
                     in the configuration file. The default home directory is /.
 ``cd ..`` 	        sets the current working directory to the parent directory.
 ==================  =====================================
@@ -1842,5 +1842,4 @@ Example::
   nsh>
 
 ``ping6`` differs from ``ping`` in that it uses IPv6 addressing.
-
 

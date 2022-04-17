@@ -50,7 +50,7 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "s32k1xx_config.h"
 #include "hardware/s32k1xx_enet.h"
@@ -239,7 +239,7 @@
 
 /* This is a helper pointer for accessing the contents of Ethernet header */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 #define S32K1XX_BUF_SIZE  ENET_ALIGN_UP(CONFIG_NET_ETH_PKTSIZE)
 
@@ -282,7 +282,7 @@ static struct s32k1xx_driver_s g_enet[CONFIG_S32K1XX_ENET_NETHIFS];
  */
 
 static uint8_t g_desc_pool[NENET_NBUFFERS * sizeof(struct enet_desc_s)]
-               __attribute__((aligned(ENET_ALIGN)));
+               aligned_data(ENET_ALIGN);
 
 /* The DMA buffers.  Again, A unaligned uint8_t is used to allocate the
  * memory; 16 is added to assure that we can meet the descriptor alignment
@@ -290,7 +290,7 @@ static uint8_t g_desc_pool[NENET_NBUFFERS * sizeof(struct enet_desc_s)]
  */
 
 static uint8_t g_buffer_pool[NENET_NBUFFERS * S32K1XX_BUF_SIZE]
-               __attribute__((aligned(ENET_ALIGN)));
+               aligned_data(ENET_ALIGN);
 
 /****************************************************************************
  * Private Function Prototypes
@@ -770,7 +770,7 @@ static inline void s32k1xx_dispatch(FAR struct s32k1xx_driver_s *priv)
 #ifdef CONFIG_NET_ARP
   /* Check for an ARP packet */
 
-  if (BUF->type == htons(ETHTYPE_ARP))
+  if (BUF->type == HTONS(ETHTYPE_ARP))
     {
       NETDEV_RXARP(&priv->dev);
       arp_arpin(&priv->dev);

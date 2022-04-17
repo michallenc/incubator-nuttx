@@ -44,6 +44,7 @@
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
 #include <nuttx/list.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/net/ioctl.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/mii.h>
@@ -61,7 +62,7 @@
 #include "hardware/esp32_dport.h"
 #include "hardware/esp32_emac.h"
 #include "esp32_gpio.h"
-#include "esp32_cpuint.h"
+#include "esp32_irq.h"
 
 #include <arch/board/board.h>
 
@@ -231,6 +232,10 @@ struct esp32_emac_s
   /* RX and TX buffer allocations */
 
   uint8_t alloc[EMAC_BUF_NUM * EMAC_BUF_LEN];
+
+  /* Device specific lock. */
+
+  spinlock_t lock;
 };
 
 /****************************************************************************
@@ -373,7 +378,7 @@ static void emac_init_buffer(struct esp32_emac_s *priv)
 
   for (i = 0; i < EMAC_BUF_NUM; i++)
     {
-      sq_addlast((FAR sq_entry_t *)buffer, &priv->freeb);
+      sq_addlast((sq_entry_t *)buffer, &priv->freeb);
       buffer += EMAC_BUF_LEN;
     }
 }
@@ -402,11 +407,11 @@ static inline uint8_t *emac_alloc_buffer(struct esp32_emac_s *priv)
 
   /* Allocate a buffer by returning the head of the free buffer list */
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   p = (uint8_t *)sq_remfirst(&priv->freeb);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return p;
 }
@@ -435,7 +440,7 @@ static inline void emac_free_buffer(struct esp32_emac_s *priv,
 {
   /* Free the buffer by adding it to the end of the free buffer list */
 
-  sq_addlast((FAR sq_entry_t *)buffer, &priv->freeb);
+  sq_addlast((sq_entry_t *)buffer, &priv->freeb);
 }
 
 /****************************************************************************
@@ -1271,7 +1276,7 @@ static int phy_enable_interrupt(void)
  *
  ****************************************************************************/
 
-static void emac_txtimeout_work(FAR void *arg)
+static void emac_txtimeout_work(void *arg)
 {
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
 
@@ -1315,7 +1320,7 @@ static void emac_txtimeout_expiry(wdparm_t arg)
    * Interrupts will be re-enabled when emac_ifup() is called.
    */
 
-  up_disable_irq(priv->cpuint);
+  up_disable_irq(ESP32_IRQ_EMAC);
 
   /* Schedule to perform the TX timeout processing on the worker thread,
    * perhaps canceling any pending IRQ processing.
@@ -1341,7 +1346,7 @@ static void emac_txtimeout_expiry(wdparm_t arg)
  *
  ****************************************************************************/
 
-static void emac_rx_interrupt_work(FAR void *arg)
+static void emac_rx_interrupt_work(void *arg)
 {
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
   struct net_driver_s *dev = &priv->dev;
@@ -1444,7 +1449,7 @@ static void emac_rx_interrupt_work(FAR void *arg)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (eth_hdr->type == htons(ETHTYPE_ARP))
+      if (eth_hdr->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
@@ -1496,7 +1501,7 @@ static void emac_rx_interrupt_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static void emac_tx_interrupt_work(FAR void *arg)
+static void emac_tx_interrupt_work(void *arg)
 {
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
 
@@ -1526,7 +1531,7 @@ static void emac_tx_interrupt_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int emac_interrupt(int irq, FAR void *context, FAR void *arg)
+static int emac_interrupt(int irq, void *context, void *arg)
 {
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
   uint32_t value = emac_get_reg(EMAC_DMA_SR_OFFSET);
@@ -1677,7 +1682,7 @@ static int emac_txpoll(struct net_driver_s *dev)
 
 static void emac_dopoll(struct esp32_emac_s *priv)
 {
-  FAR struct net_driver_s *dev = &priv->dev;
+  struct net_driver_s *dev = &priv->dev;
 
   if (!TX_IS_BUSY(priv))
     {
@@ -1722,7 +1727,7 @@ static void emac_dopoll(struct esp32_emac_s *priv)
  *
  ****************************************************************************/
 
-static void emac_txavail_work(FAR void *arg)
+static void emac_txavail_work(void *arg)
 {
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
 
@@ -1758,11 +1763,11 @@ static void emac_txavail_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static void emac_poll_work(FAR void *arg)
+static void emac_poll_work(void *arg)
 {
   int ret;
   struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
-  FAR struct net_driver_s *dev = &priv->dev;
+  struct net_driver_s *dev = &priv->dev;
 
   ninfo("ifup: %d\n", priv->ifup);
 
@@ -1781,6 +1786,7 @@ static void emac_poll_work(FAR void *arg)
         {
           /* never reach */
 
+          net_unlock();
           return ;
         }
 
@@ -1826,7 +1832,7 @@ static void emac_poll_work(FAR void *arg)
 
 static void emac_poll_expiry(wdparm_t arg)
 {
-  FAR struct esp32_emac_s *priv = (FAR struct esp32_emac_s *)arg;
+  struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
 
   /* Schedule to perform the interrupt processing on the worker thread. */
 
@@ -1904,7 +1910,7 @@ static int emac_ifup(struct net_driver_s *dev)
 
   /* Enable the Ethernet interrupt */
 
-  up_enable_irq(priv->cpuint);
+  up_enable_irq(ESP32_IRQ_EMAC);
 
   leave_critical_section(flags);
 
@@ -2026,7 +2032,7 @@ static int emac_txavail(struct net_driver_s *dev)
  ****************************************************************************/
 
 #if defined(CONFIG_NET_MCASTGROUP) || defined(CONFIG_NET_ICMPv6)
-static int emac_addmac(struct net_driver_s *dev, FAR const uint8_t *mac)
+static int emac_addmac(struct net_driver_s *dev, const uint8_t *mac)
 {
   ninfo("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -2055,7 +2061,7 @@ static int emac_addmac(struct net_driver_s *dev, FAR const uint8_t *mac)
  ****************************************************************************/
 
 #ifdef CONFIG_NET_MCASTGROUP
-static int emac_rmmac(struct net_driver_s *dev, FAR const uint8_t *mac)
+static int emac_rmmac(struct net_driver_s *dev, const uint8_t *mac)
 {
   ninfo("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -2096,7 +2102,7 @@ static int emac_rmmac(struct net_driver_s *dev, FAR const uint8_t *mac)
 static int emac_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
 {
 #if defined(CONFIG_NETDEV_PHY_IOCTL) && defined(CONFIG_ARCH_PHY_INTERRUPT)
-  FAR struct esp32_emacmac_s *priv = NET2PRIV(dev);
+  struct esp32_emacmac_s *priv = NET2PRIV(dev);
 #endif
   int ret;
 
@@ -2185,9 +2191,8 @@ int esp32_emac_init(void)
 
   memset(priv, 0, sizeof(struct esp32_emac_s));
 
-  /* Allocate and register interrupt */
-
-  priv->cpuint = esp32_alloc_levelint(1);
+  priv->cpuint = esp32_setup_irq(0, ESP32_PERIPH_EMAC,
+                                 1, ESP32_CPUINT_LEVEL);
   if (priv->cpuint < 0)
     {
       nerr("ERROR: Failed alloc interrupt\n");
@@ -2195,9 +2200,6 @@ int esp32_emac_init(void)
       ret = -ENOMEM;
       goto error;
     }
-
-  up_disable_irq(priv->cpuint);
-  esp32_attach_peripheral(0, ESP32_PERIPH_EMAC, priv->cpuint);
 
   ret = irq_attach(ESP32_IRQ_EMAC, emac_interrupt, priv);
   if (ret != 0)
@@ -2240,8 +2242,7 @@ int esp32_emac_init(void)
   return 0;
 
 errout_with_attachirq:
-  esp32_detach_peripheral(0, ESP32_PERIPH_EMAC, priv->cpuint);
-  esp32_free_cpuint(priv->cpuint);
+  esp32_teardown_irq(0, ESP32_PERIPH_EMAC, priv->cpuint);
 
 error:
   return ret;

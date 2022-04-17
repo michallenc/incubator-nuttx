@@ -37,34 +37,23 @@
 #include <arch/types.h>
 #include <arch/chip/tie.h>
 #include <arch/chip/core-isa.h>
+#include <arch/xtensa/core.h>
 
 #include <arch/xtensa/xtensa_specregs.h>
 #include <arch/xtensa/xtensa_corebits.h>
 #include <arch/xtensa/xtensa_coproc.h>
+
+/* Include chip-specific IRQ definitions (including IRQ numbers) */
+
+#include <arch/chip/irq.h>
 
 /* Include architecture-specific IRQ definitions */
 
 #ifdef CONFIG_ARCH_FAMILY_LX6
 #  include <arch/lx6/irq.h>
 
-/* Include implementation-specific IRQ definitions (including IRQ numbers) */
-
-#  ifdef CONFIG_ARCH_CHIP_ESP32
-#    include <arch/esp32/irq.h>
-#  else
-#    error Unknown LX6 implementation
-#  endif
-
 #elif CONFIG_ARCH_FAMILY_LX7
 #  include <arch/lx7/irq.h>
-
-/* Include implementation-specific IRQ definitions (including IRQ numbers) */
-
-#  ifdef CONFIG_ARCH_CHIP_ESP32S2
-#    include <arch/esp32s2/irq.h>
-#  else
-#    error Unknown LX7 implementation
-#  endif
 
 #else
 #  error Unknown XTENSA architecture
@@ -98,7 +87,14 @@
 #define REG_EXCCAUSE        (19)
 #define REG_EXCVADDR        (20)
 
-#define _REG_LOOPS_START    (21)
+#define _REG_EXTRA_START    (21)
+
+#if XCHAL_HAVE_S32C1I != 0
+#  define REG_SCOMPARE1       (_REG_EXTRA_START + 0)
+#  define _REG_LOOPS_START    (_REG_EXTRA_START + 1)
+#else
+#  define _REG_LOOPS_START    _REG_EXTRA_START
+#endif
 
 #if XCHAL_HAVE_LOOPS != 0
 #  define REG_LBEG          (_REG_LOOPS_START + 0)
@@ -110,13 +106,10 @@
 #endif
 
 #ifndef __XTENSA_CALL0_ABI__
-  /* Temporary space for saving stuff during window spill.
-   * REVISIT: I don't think that we need so many temporaries.
-   */
+  /* Temporary space for saving stuff during window spill. */
 
 #  define REG_TMP0          (_REG_WINDOW_TMPS + 0)
-#  define REG_TMP1          (_REG_WINDOW_TMPS + 1)
-#  define _REG_OVLY_START   (_REG_WINDOW_TMPS + 2)
+#  define _REG_OVLY_START   (_REG_WINDOW_TMPS + 1)
 #else
 #  define _REG_OVLY_START   _REG_WINDOW_TMPS
 #endif
@@ -217,7 +210,7 @@ static inline void up_irq_restore(uint32_t ps)
 {
   __asm__ __volatile__
   (
-    "wsr %0, PS \n"
+    "wsr %0, PS\n"
     "rsync \n"
     :
     : "r"(ps)
@@ -238,7 +231,7 @@ static inline uint32_t up_irq_save(void)
 
   __asm__ __volatile__
   (
-    "rsil %0, %1" : "=r"(ps) : "I"(XCHAL_EXCM_LEVEL)
+    "rsil %0, %1" : "=r"(ps) : "i"(XCHAL_IRQ_LEVEL)
   );
 
   /* Return the previous PS value so that it can be restored with
@@ -268,6 +261,37 @@ static inline void up_irq_disable(void)
 #else
   xtensa_setps(PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM | PS_WOE);
 #endif
+}
+
+/****************************************************************************
+ * Name: xtensa_disable_all
+ ****************************************************************************/
+
+static inline void xtensa_disable_all(void)
+{
+  __asm__ __volatile__
+  (
+    "movi a2, 0\n"
+    "xsr a2, INTENABLE\n"
+    "rsync\n"
+    : : : "a2"
+  );
+}
+
+/****************************************************************************
+ * Name: xtensa_intclear
+ ****************************************************************************/
+
+static inline void xtensa_intclear(uint32_t mask)
+{
+  __asm__ __volatile__
+  (
+    "wsr %0, INTCLEAR\n"
+    "rsync\n"
+    :
+    : "r"(mask)
+    :
+  );
 }
 
 /****************************************************************************

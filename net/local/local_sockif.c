@@ -131,6 +131,9 @@ static int local_sockif_alloc(FAR struct socket *psock)
   /* Save the pre-allocated connection in the socket structure */
 
   psock->s_conn = conn;
+#if defined(CONFIG_NET_LOCAL_STREAM)
+  conn->lc_psock = psock;
+#endif
   return OK;
 }
 #endif
@@ -160,7 +163,7 @@ static int local_setup(FAR struct socket *psock, int protocol)
    * connection structure, it is unallocated at this point.  It will not
    * actually be initialized until the socket is connected.
    *
-   * REVIST:  Only SOCK_STREAM and SOCK_DGRAM are supported.  Should also
+   * REVISIT:  Only SOCK_STREAM and SOCK_DGRAM are supported.  Should also
    * support SOCK_RAW.
    */
 
@@ -386,7 +389,7 @@ static int local_getsockname(FAR struct socket *psock,
 
           /* Copy the path into the user address structure */
 
-          strncpy(unaddr->sun_path, conn->lc_path, namelen);
+          strlcpy(unaddr->sun_path, conn->lc_path, namelen);
           unaddr->sun_path[pathlen - 1] = '\0';
 
           *addrlen = sizeof(sa_family_t) + namelen;
@@ -512,9 +515,11 @@ static int local_connect(FAR struct socket *psock,
 #ifdef CONFIG_NET_LOCAL_STREAM
       case SOCK_STREAM:
         {
+          FAR struct socket_conn_s *conn = psock->s_conn;
+
           /* Verify that the socket is not already connected */
 
-          if (_SS_ISCONNECTED(psock->s_flags))
+          if (_SS_ISCONNECTED(conn->s_flags))
             {
               return -EISCONN;
             }
@@ -713,10 +718,31 @@ static int local_ioctl(FAR struct socket *psock, int cmd,
 
   switch (cmd)
     {
+      case FIONBIO:
+        if (conn->lc_infile.f_inode != NULL)
+          {
+            ret = file_ioctl(&conn->lc_infile, cmd, arg);
+          }
+
+        if (ret >= 0 && conn->lc_outfile.f_inode != NULL)
+          {
+            ret = file_ioctl(&conn->lc_outfile, cmd, arg);
+          }
+        break;
       case FIONREAD:
         if (conn->lc_infile.f_inode != NULL)
           {
             ret = file_ioctl(&conn->lc_infile, cmd, arg);
+          }
+        else
+          {
+            ret = -ENOTCONN;
+          }
+        break;
+      case FIONSPACE:
+        if (conn->lc_outfile.f_inode != NULL)
+          {
+            ret = file_ioctl(&conn->lc_outfile, cmd, arg);
           }
         else
           {
@@ -784,7 +810,7 @@ static int local_socketpair(FAR struct socket *psocks[2])
       goto errout;
     }
 
-  nonblock = _SS_ISNONBLOCK(psocks[0]->s_flags);
+  nonblock = _SS_ISNONBLOCK(conns[0]->lc_conn.s_flags);
 
   /* Open the client-side write-only FIFO. */
 

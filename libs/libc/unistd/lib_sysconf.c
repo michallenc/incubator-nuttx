@@ -211,7 +211,7 @@ long sysconf(int name)
         return CLOCKS_PER_SEC;
 
       case _SC_OPEN_MAX:
-        return _POSIX_OPEN_MAX;
+        return OPEN_MAX;
 
       case _SC_ATEXIT_MAX:
 #ifdef CONFIG_SCHED_EXIT_MAX
@@ -222,18 +222,10 @@ long sysconf(int name)
 
       case _SC_NPROCESSORS_CONF:
       case _SC_NPROCESSORS_ONLN:
-#ifdef CONFIG_SMP_NCPUS
         return CONFIG_SMP_NCPUS;
-#else
-        return 1;
-#endif
 
       case _SC_MONOTONIC_CLOCK:
-#ifdef CONFIG_CLOCK_MONOTONIC
         return 1;
-#else
-        return 0;
-#endif
 
       case _SC_PAGESIZE:
 #ifdef CONFIG_MM_PGSIZE

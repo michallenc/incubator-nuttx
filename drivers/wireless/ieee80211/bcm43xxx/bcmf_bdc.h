@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H
-#define __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H
+#ifndef __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H
+#define __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H
 
 /****************************************************************************
  * Included Files
@@ -33,7 +33,7 @@
 
 /* Event frame content */
 
-struct __attribute__((packed)) bcmf_event_s
+begin_packed_struct struct bcmf_event_s
 {
   uint16_t version;       /* Vendor specific type */
   uint16_t flags;
@@ -46,7 +46,7 @@ struct __attribute__((packed)) bcmf_event_s
   char     src_name[16];  /* Event source interface name */
   uint8_t  dst_id;        /* Event destination interface id */
   uint8_t  bss_cfg_id;
-};
+} end_packed_struct;
 
 /* Event callback handler */
 
@@ -83,4 +83,4 @@ int bcmf_event_unregister(FAR struct bcmf_dev_s *priv,
 
 int bcmf_event_push_config(FAR struct bcmf_dev_s *priv);
 
-#endif /* __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H */
+#endif /* __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H */

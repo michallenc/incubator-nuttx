@@ -34,8 +34,9 @@
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
-#include <nuttx/fs/hostfs_rpmsg.h>
+#include <nuttx/fs/rpmsgfs.h>
 #include <nuttx/i2c/i2c_master.h>
+#include <nuttx/spi/spi_transfer.h>
 #include <nuttx/rc/lirc_dev.h>
 #include <nuttx/rc/dummy.h>
 #include <nuttx/sensors/fakesensor.h>
@@ -43,9 +44,7 @@
 #include <nuttx/sensors/wtgahrs2.h>
 #include <nuttx/serial/uart_rpmsg.h>
 #include <nuttx/syslog/syslog_rpmsg.h>
-#include <nuttx/timers/arch_rtc.h>
 #include <nuttx/timers/oneshot.h>
-#include <nuttx/timers/rpmsg_rtc.h>
 #include <nuttx/video/fb.h>
 #include <nuttx/timers/oneshot.h>
 #include <nuttx/wireless/pktradio.h>
@@ -101,7 +100,9 @@ int sim_bringup(void)
 #ifdef CONFIG_MPU60X0_I2C
   FAR struct mpu_config_s *mpu_config;
 #endif
-
+#ifdef CONFIG_SIM_SPI
+  FAR struct spi_dev_s *spidev;
+#endif
   int ret = OK;
 
 #ifdef CONFIG_FS_BINFS
@@ -136,7 +137,7 @@ int sim_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_LIB_ZONEINFO_ROMFS
+#ifdef CONFIG_LIBC_ZONEINFO_ROMFS
   /* Mount the TZ database */
 
   sim_zoneinfo(3);
@@ -277,17 +278,7 @@ int sim_bringup(void)
   sim_ajoy_initialize();
 #endif
 
-#if defined(CONFIG_NX) && defined(CONFIG_SIM_TOUCHSCREEN)
-  /* Initialize the touchscreen */
-
-  ret = sim_tsc_setup(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: sim_tsc_setup failed: %d\n", ret);
-    }
-#else
-
-#  ifdef CONFIG_VIDEO_FB
+#ifdef CONFIG_VIDEO_FB
   /* Initialize and register the simulated framebuffer driver */
 
   ret = fb_register(0, 0);
@@ -295,9 +286,9 @@ int sim_bringup(void)
     {
       syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
     }
-#  endif
+#endif
 
-#  ifdef CONFIG_LCD
+#ifdef CONFIG_LCD
 
   ret = board_lcd_initialize();
   if (ret < 0)
@@ -315,9 +306,9 @@ int sim_bringup(void)
 
 #  endif
 
-#  endif
+#endif
 
-#  ifdef CONFIG_SIM_TOUCHSCREEN
+#ifdef CONFIG_SIM_TOUCHSCREEN
   /* Initialize the touchscreen */
 
   ret = sim_tsc_initialize(0);
@@ -325,8 +316,16 @@ int sim_bringup(void)
     {
       syslog(LOG_ERR, "ERROR: sim_tsc_initialize failed: %d\n", ret);
     }
-#  endif
+#endif
 
+#ifdef CONFIG_SIM_KEYBOARD
+  /* Initialize the keyboard */
+
+  ret = sim_kbd_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sim_kbd_initialize failed: %d\n", ret);
+    }
 #endif
 
 #ifdef CONFIG_IEEE802154_LOOPBACK
@@ -362,7 +361,7 @@ int sim_bringup(void)
 #ifdef CONFIG_SIM_HCISOCKET
   /* Register the Host Bluetooth network device via HCI socket */
 
-  ret = bthcisock_register(0);  /* Use HCI0 */
+  ret = bthcisock_register(CONFIG_SIM_HCISOCKET_DEVID);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: bthcisock_register() failed: %d\n", ret);
@@ -405,6 +404,26 @@ int sim_bringup(void)
 #endif
 #endif
 
+#ifdef CONFIG_SIM_SPI
+  spidev = sim_spi_initialize(CONFIG_SIM_SPIDEV_NAME);
+  if (spidev == NULL)
+    {
+      syslog(LOG_ERR, "ERROR: sim_spi_initialize failed.\n");
+    }
+#ifdef CONFIG_SYSTEM_SPITOOL
+  else
+    {
+      ret = spi_register(spidev, 0);
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "ERROR: Failed to register SPI%d driver: %d\n",
+                 0, ret);
+          sim_spi_uninitialize(spidev);
+        }
+    }
+#endif /* CONFIG_SYSTEM_SPITOOL */
+#endif /* CONFIG_SIM_SPI */
+
 #if defined(CONFIG_INPUT_BUTTONS_LOWER) && defined(CONFIG_SIM_BUTTONS)
   ret = btn_lower_initialize("/dev/buttons");
   if (ret < 0)
@@ -413,7 +432,7 @@ int sim_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SIM_MOTOR_FOC
+#ifdef CONFIG_MOTOR_FOC_DUMMY
   /* Setup FOC device */
 
   ret = sim_foc_setup();
@@ -434,16 +453,8 @@ int sim_bringup(void)
   syslog_rpmsg_server_init();
 #endif
 
-#ifndef CONFIG_RTC_RPMSG_SERVER
-  up_rtc_set_lowerhalf(rpmsg_rtc_initialize(0));
-#endif
-
-#ifdef CONFIG_FS_HOSTFS_RPMSG
-  hostfs_rpmsg_init("server");
-#endif
-
-#ifdef CONFIG_FS_HOSTFS_RPMSG_SERVER
-  hostfs_rpmsg_server_init();
+#if defined(CONFIG_FS_RPMSGFS) && defined(CONFIG_SIM_RPTUN_MASTER)
+  rpmsgfs_server_init();
 #endif
 #endif
 

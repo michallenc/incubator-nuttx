@@ -245,6 +245,21 @@ static int ameba_flash_ioctl(FAR struct mtd_dev_s *dev,
     }
 
     break;
+    case BIOC_PARTINFO:
+    {
+      FAR struct partition_info_s *info =
+        (FAR struct partition_info_s *)arg;
+      if (info != NULL)
+        {
+          info->numsectors  = priv->nsectors *
+                              AMEBA_SECTOR_SIZE / AMEBA_PAGE_SIZE;
+          info->sectorsize  = AMEBA_PAGE_SIZE;
+          info->startsector = 0;
+          info->parent[0]   = '\0';
+        }
+    }
+
+    break;
     case MTDIOC_BULKERASE:
     {
       state = flash_resource_lock();

@@ -71,42 +71,75 @@ endif
 
 ifeq ($(CONFIG_DEBUG_CUSTOMOPT),y)
   MAXOPTIMIZATION := $(CONFIG_DEBUG_OPTLEVEL)
+else ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),CLANG)
+  MAXOPTIMIZATION ?= -Oz
 else
   MAXOPTIMIZATION ?= -Os
+endif
+
+ifeq ($(CONFIG_FRAME_POINTER),y)
+  MAXOPTIMIZATION += -fno-omit-frame-pointer -fno-optimize-sibling-calls
+else
+  MAXOPTIMIZATION += -fomit-frame-pointer
 endif
 
 # Parametrization for ARCHCPUFLAGS
 
 ifeq ($(CONFIG_ARCH_CORTEXM4),y)
   TOOLCHAIN_ARM7EM   := y
-  TOOLCHAIN_MCPU     := -mcpu=cortex-m4
   TOOLCHAIN_MTUNE    := -mtune=cortex-m4
   TOOLCHAIN_MARCH    := -march=armv7e-m
   ifeq ($(CONFIG_ARCH_FPU),y)
-    TOOLCHAIN_MFLOAT := -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-  else
-    TOOLCHAIN_MFLOAT := -mfloat-abi=soft
+    TOOLCHAIN_MFLOAT := -mfpu=fpv4-sp-d16
   endif
 else ifeq ($(CONFIG_ARCH_CORTEXM7),y)
   TOOLCHAIN_ARM7EM   := y
-  TOOLCHAIN_MCPU     := -mcpu=cortex-m7
   TOOLCHAIN_MTUNE    := -mtune=cortex-m7
   TOOLCHAIN_MARCH    := -march=armv7e-m
   ifeq ($(CONFIG_ARCH_FPU),y)
-  ifeq ($(CONFIG_ARCH_DPFPU),y)
-    TOOLCHAIN_MFLOAT := -mfpu=fpv5-d16 -mfloat-abi=hard
-  else
-    TOOLCHAIN_MFLOAT := -mfpu=fpv5-sp-d16 -mfloat-abi=hard
-  endif
-  else
-    TOOLCHAIN_MFLOAT := -mfloat-abi=soft
+    ifeq ($(CONFIG_ARCH_DPFPU),y)
+      TOOLCHAIN_MFLOAT := -mfpu=fpv5-d16
+    else
+      TOOLCHAIN_MFLOAT := -mfpu=fpv5-sp-d16
+    endif
   endif
 else # ifeq ($(CONFIG_ARCH_CORTEXM3),y)
   TOOLCHAIN_ARM7EM   := n
-  TOOLCHAIN_MCPU     := -mcpu=cortex-m3
   TOOLCHAIN_MTUNE    := -mtune=cortex-m3
   TOOLCHAIN_MARCH    := -march=armv7-m
   TOOLCHAIN_MFLOAT   := -mfloat-abi=soft
+endif
+
+ifeq ($(CONFIG_ARCH_FPU),y)
+  ifeq ($(CONFIG_ARM_FPU_ABI_SOFT),y)
+    TOOLCHAIN_MFLOAT += -mfloat-abi=softfp
+  else
+    TOOLCHAIN_MFLOAT += -mfloat-abi=hard
+  endif
+else
+  TOOLCHAIN_MFLOAT += -mfloat-abi=soft
+endif
+
+# Clang Configuration files
+
+ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),CLANG)
+
+  ifeq ($(CONFIG_ARCH_CORTEXM4),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      TOOLCHAIN_MARCH += --config armv7em_hard_fpv4_sp_d16_nosys
+    else
+      TOOLCHAIN_MARCH += --config armv7em_soft_nofp_nosys
+    endif
+  else ifeq ($(CONFIG_ARCH_CORTEXM7),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      TOOLCHAIN_MARCH += --config armv7em_hard_fpv5_d16_nosys
+    else
+      TOOLCHAIN_MARCH += --config armv7em_soft_nofp_nosys
+    endif
+  else # ifeq ($(CONFIG_ARCH_CORTEXM3),y)
+      TOOLCHAIN_MARCH += --config armv7m_soft_nofp_nosys
+  endif
+
 endif
 
 # NuttX buildroot under Linux or Cygwin
@@ -114,52 +147,87 @@ endif
 ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),BUILDROOT)
 ifeq ($(CONFIG_ARMV7M_OABI_TOOLCHAIN),y)
   CROSSDEV ?= arm-nuttx-elf-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MCPU) $(TOOLCHAIN_MFLOAT)
+  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) $(TOOLCHAIN_MFLOAT)
 else
   CROSSDEV ?= arm-nuttx-eabi-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MCPU) -mthumb $(TOOLCHAIN_MFLOAT)
+  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) -mthumb $(TOOLCHAIN_MFLOAT)
 endif
+endif
+
+ifeq ($(CONFIG_MM_KASAN),y)
+  ARCHCPUFLAGS += -fsanitize=kernel-address
 endif
 
 # Generic GNU EABI toolchain
 
 ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),GNU_EABI)
   CROSSDEV ?= arm-none-eabi-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MCPU) -mthumb $(TOOLCHAIN_MFLOAT)
+  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) -mthumb $(TOOLCHAIN_MFLOAT)
 endif
 
 # Clang toolchain
 
 ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),CLANG)
-  CROSSDEV ?= arm-none-eabi-
-  ARCHCPUFLAGS = -target arm-none-eabi $(TOOLCHAIN_MCPU) $(TOOLCHAIN_MFLOAT)
-  CC = clang
-  CXX = clang++
-  CPP = clang -E -P -x c
+  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) $(TOOLCHAIN_MFLOAT)
+
+  CC      = clang
+  CXX     = clang++
+  CPP     = clang -E -P -x c
+  LD      = ld.lld -m armelf
+  STRIP   = llvm-strip --strip-unneeded
+  AR      = llvm-ar rcs
+  NM      = llvm-nm
+  OBJCOPY = llvm-objcopy
+  OBJDUMP = llvm-objdump
+
+  # Since the no_builtin attribute is not fully supported on Clang
+  # disable the built-in functions, refer:
+  # https://github.com/apache/incubator-nuttx/pull/5971
+
+  MAXOPTIMIZATION += -fno-builtin
+
+# Default toolchain
+
 else
-  CC = $(CROSSDEV)gcc
-  CXX = $(CROSSDEV)g++
-  CPP = $(CROSSDEV)gcc -E -P -x c
+  CC      = $(CROSSDEV)gcc
+  CXX     = $(CROSSDEV)g++
+  CPP     = $(CROSSDEV)gcc -E -P -x c
+  LD      = $(CROSSDEV)ld
+  STRIP   = $(CROSSDEV)strip --strip-unneeded
+  AR      = $(CROSSDEV)ar rcs
+  NM      = $(CROSSDEV)nm
+  OBJCOPY = $(CROSSDEV)objcopy
+  OBJDUMP = $(CROSSDEV)objdump
 endif
 
-LD = $(CROSSDEV)gcc
-STRIP = $(CROSSDEV)strip --strip-unneeded
-AR = $(CROSSDEV)ar rcs
-NM = $(CROSSDEV)nm
-OBJCOPY = $(CROSSDEV)objcopy
-OBJDUMP = $(CROSSDEV)objdump
+# Architecture flags
+
+ARCHCFLAGS =
+ARCHCXXFLAGS =
+
+ifneq ($(CONFIG_CXX_EXCEPTION),y)
+  ARCHCXXFLAGS += -fno-exceptions -fcheck-new
+endif
+
+ifneq ($(CONFIG_CXX_RTTI),y)
+  ARCHCXXFLAGS += -fno-rtti
+endif
 
 # Add the builtin library
 
-EXTRA_LIBS += -lgcc
-EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-libgcc-file-name`"}"
-
-ifneq ($(CONFIG_LIBM),y)
-  EXTRA_LIBS += -lm
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libm.a`"}"
+COMPILER_RT_LIB = $(shell $(CC) $(ARCHCPUFLAGS) --print-libgcc-file-name)
+ifeq ($(wildcard $(COMPILER_RT_LIB)),)
+  # if "--print-libgcc-file-name" unable to find the correct libgcc PATH
+  # then go ahead and try "--print-file-name"
+  COMPILER_RT_LIB := $(wildcard $(shell $(CC) $(ARCHCPUFLAGS) --print-file-name $(notdir $(COMPILER_RT_LIB))))
 endif
 
-ifeq ($(CONFIG_CXX_LIBSUPCXX),y)
-  EXTRA_LIBS += -lsupc++
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libsupc++.a`"}"
+EXTRA_LIBS += $(COMPILER_RT_LIB)
+
+ifneq ($(CONFIG_LIBM),y)
+  EXTRA_LIBS += $(wildcard $(shell $(CC) $(ARCHCPUFLAGS) --print-file-name=libm.a))
+endif
+
+ifeq ($(CONFIG_LIBSUPCXX),y)
+  EXTRA_LIBS += $(wildcard $(shell $(CC) $(ARCHCPUFLAGS) --print-file-name=libsupc++.a))
 endif

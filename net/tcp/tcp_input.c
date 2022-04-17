@@ -68,6 +68,7 @@
  ****************************************************************************/
 
 #define IPv4BUF ((FAR struct ipv4_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
+#define IPv6BUF ((FAR struct ipv6_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
 
 /****************************************************************************
  * Private Functions
@@ -190,6 +191,77 @@ static bool tcp_trim_head(FAR struct net_driver_s *dev,
   return false;
 }
 
+static void tcp_snd_wnd_init(FAR struct tcp_conn_s *conn,
+                             FAR struct tcp_hdr_s *tcp)
+{
+  /* Just ensure that the next tcp_update_snd_wnd will be accepted. */
+
+  DEBUGASSERT((tcp->flags & TCP_ACK) != 0);
+  conn->snd_wl1 = TCP_SEQ_SUB(tcp_getsequence(tcp->seqno), 1);
+  conn->snd_wl2 = tcp_getsequence(tcp->ackno);
+  conn->snd_wnd = 0;
+  ninfo("snd_wnd init: wl1 %" PRIu32 "\n", conn->snd_wl1);
+}
+
+static void tcp_snd_wnd_update(FAR struct tcp_conn_s *conn,
+                               FAR struct tcp_hdr_s *tcp)
+{
+  uint32_t ackseq = tcp_getsequence(tcp->ackno);
+  uint32_t seq = tcp_getsequence(tcp->seqno);
+  uint16_t unscaled_wnd = ((uint16_t)tcp->wnd[0] << 8) + tcp->wnd[1];
+#ifdef CONFIG_NET_TCP_WINDOW_SCALE
+  uint32_t wnd = (uint32_t)unscaled_wnd << conn->snd_scale;
+#else
+  uint16_t wnd = unscaled_wnd;
+#endif
+  uint32_t wl2 = conn->snd_wl2;
+
+  DEBUGASSERT((tcp->flags & TCP_ACK) != 0);
+
+  if (TCP_SEQ_LT(wl2, ackseq))
+    {
+      uint32_t nacked = TCP_SEQ_SUB(ackseq, wl2);
+
+      ninfo("snd_wnd acked: "
+            "wl2 %" PRIu32 " -> %" PRIu32 " subtracting wnd %" PRIu32
+            " by %" PRIu32 "\n",
+            wl2,
+            ackseq,
+            (uint32_t)conn->snd_wnd,
+            nacked);
+
+      if (nacked > conn->snd_wnd)
+        {
+          conn->snd_wnd = 0;
+        }
+      else
+        {
+          conn->snd_wnd -= nacked;
+        }
+
+      conn->snd_wl2 = ackseq;
+    }
+
+  if (TCP_SEQ_LT(conn->snd_wl1, seq) ||
+      (conn->snd_wl1 == seq && TCP_SEQ_LT(wl2, ackseq)) ||
+      (wl2 == ackseq && conn->snd_wnd < wnd))
+    {
+      ninfo("snd_wnd update: "
+            "wl1 %" PRIu32 " wl2 %" PRIu32 " wnd %" PRIu32 " -> "
+            "wl1 %" PRIu32 " wl2 %" PRIu32 " wnd %" PRIu32 "\n",
+            conn->snd_wl1,
+            wl2,
+            (uint32_t)conn->snd_wnd,
+            seq,
+            ackseq,
+            (uint32_t)wnd);
+
+      conn->snd_wl1 = seq;
+      conn->snd_wl2 = ackseq;
+      conn->snd_wnd = wnd;
+    }
+}
+
 /****************************************************************************
  * Name: tcp_input
  *
@@ -212,8 +284,9 @@ static bool tcp_trim_head(FAR struct net_driver_s *dev,
 static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
                       unsigned int iplen)
 {
-  FAR struct tcp_hdr_s *tcp;
   FAR struct tcp_conn_s *conn = NULL;
+  FAR struct tcp_hdr_s *tcp;
+  union ip_binding_u uaddr;
   unsigned int tcpiplen;
   unsigned int hdrlen;
   uint16_t tmp16;
@@ -299,10 +372,29 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
        */
 
       tmp16 = tcp->destport;
+#ifdef CONFIG_NET_IPv6
+#  ifdef CONFIG_NET_IPv4
+      if (domain == PF_INET6)
+#  endif
+        {
+          net_ipv6addr_copy(&uaddr.ipv6.laddr, IPv6BUF->destipaddr);
+        }
+#endif
+
+#ifdef CONFIG_NET_IPv4
+#  ifdef CONFIG_NET_IPv6
+      if (domain == PF_INET)
+#  endif
+        {
+          net_ipv4addr_copy(uaddr.ipv4.laddr,
+                            net_ip4addr_conv32(IPv4BUF->destipaddr));
+        }
+#endif
+
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-      if (tcp_islistener(tmp16, domain))
+      if (tcp_islistener(&uaddr, tmp16, domain))
 #else
-      if (tcp_islistener(tmp16))
+      if (tcp_islistener(&uaddr, tmp16))
 #endif
         {
           /* We matched the incoming packet with a connection in LISTEN.
@@ -447,15 +539,6 @@ reset:
 
 found:
 
-  /* Update the connection's window size */
-
-#ifdef CONFIG_NET_TCP_WINDOW_SCALE
-  conn->snd_wnd = (((uint32_t)tcp->wnd[0] << 8) + (uint32_t)tcp->wnd[1]) <<
-                  conn->snd_scale;
-#else
-  conn->snd_wnd = (((uint16_t)tcp->wnd[0] << 8) + (uint16_t)tcp->wnd[1]);
-#endif
-
   flags = 0;
 
   /* We do a very naive form of TCP reset processing; we just accept
@@ -479,10 +562,29 @@ found:
 
           /* Notify the listener for the connection of the reset event */
 
+#ifdef CONFIG_NET_IPv6
+#  ifdef CONFIG_NET_IPv4
+          if (domain == PF_INET6)
+#  endif
+            {
+              net_ipv6addr_copy(&uaddr.ipv6.laddr, IPv6BUF->destipaddr);
+            }
+#endif
+
+#ifdef CONFIG_NET_IPv4
+#  ifdef CONFIG_NET_IPv6
+          if (domain == PF_INET)
+#  endif
+            {
+              net_ipv4addr_copy(uaddr.ipv4.laddr,
+                                net_ip4addr_conv32(IPv4BUF->destipaddr));
+            }
+#endif
+
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-          listener = tcp_findlistener(conn->lport, domain);
+          listener = tcp_findlistener(&uaddr, conn->lport, domain);
 #else
-          listener = tcp_findlistener(conn->lport);
+          listener = tcp_findlistener(&uaddr, conn->lport);
 #endif
 
           /* We must free this TCP connection structure; this connection
@@ -588,10 +690,19 @@ found:
        * data (tx_unacked).
        */
 
-#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+#if defined(CONFIG_NET_TCP_WRITE_BUFFERS) && !defined(CONFIG_NET_SENDFILE)
       unackseq = conn->sndseq_max;
+#elif defined(CONFIG_NET_TCP_WRITE_BUFFERS) && defined(CONFIG_NET_SENDFILE)
+      if (!conn->sendfile)
+        {
+          unackseq = conn->sndseq_max;
+        }
+      else
+        {
+          unackseq = tcp_getsequence(conn->sndseq);
+        }
 #else
-      unackseq = tcp_addsequence(conn->sndseq, conn->tx_unacked);
+      unackseq = tcp_getsequence(conn->sndseq);
 #endif
 
       /* Get the sequence number of that has just been acknowledged by this
@@ -634,16 +745,27 @@ found:
             }
         }
 
-      /* Update sequence number to the unacknowledge sequence number.  If
-       * there is still outstanding, unacknowledged data, then this will
-       * be beyond ackseq.
-       */
+#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+#ifdef CONFIG_NET_SENDFILE
+      if (!conn->sendfile)
+#endif
+        {
+          /* Update sequence number to the unacknowledge sequence number. If
+           * there is still outstanding, unacknowledged data, then this will
+           * be beyond ackseq.
+           */
 
-      ninfo("sndseq: %08" PRIx32 "->%08" PRIx32
-            " unackseq: %08" PRIx32 " new tx_unacked: %" PRId32 "\n",
-            tcp_getsequence(conn->sndseq), ackseq, unackseq,
-            (uint32_t)conn->tx_unacked);
-      tcp_setsequence(conn->sndseq, ackseq);
+          uint32_t sndseq = tcp_getsequence(conn->sndseq);
+          if (TCP_SEQ_LT(sndseq, ackseq))
+            {
+              ninfo("sndseq: %08" PRIx32 "->%08" PRIx32
+                    " unackseq: %08" PRIx32 " new tx_unacked: %" PRIu32 "\n",
+                    tcp_getsequence(conn->sndseq), ackseq, unackseq,
+                    (uint32_t)conn->tx_unacked);
+              tcp_setsequence(conn->sndseq, ackseq);
+            }
+        }
+#endif
 
       /* Do RTT estimation, unless we have done retransmissions. */
 
@@ -673,6 +795,14 @@ found:
       /* Reset the retransmission timer. */
 
       conn->timer = conn->rto;
+    }
+
+  /* Update the connection's window size */
+
+  if ((tcp->flags & TCP_ACK) != 0 &&
+      (conn->tcpstateflags & TCP_STATE_MASK) != TCP_SYN_RCVD)
+    {
+      tcp_snd_wnd_update(conn, tcp);
     }
 
   /* Do different things depending on in what state the connection is. */
@@ -710,8 +840,7 @@ found:
                  */
 
                 nwarn("WARNING: Listen canceled while waiting for ACK on "
-                      "port %d\n",
-                      ntohs(tcp->destport));
+                      "port %d\n", NTOHS(tcp->destport));
 
                 /* Free the connection structure */
 
@@ -731,6 +860,9 @@ found:
             conn->sndseq_max    = 0;
 #endif
             conn->tx_unacked    = 0;
+            tcp_snd_wnd_init(conn, tcp);
+            tcp_snd_wnd_update(conn, tcp);
+
             flags               = TCP_CONNECTED;
             ninfo("TCP state: TCP_ESTABLISHED\n");
 
@@ -749,6 +881,11 @@ found:
 
         if ((tcp->flags & TCP_CTL) == TCP_SYN)
           {
+#if !defined(CONFIG_NET_TCP_WRITE_BUFFERS)
+            tcp_setsequence(conn->sndseq, conn->rexmit_seq);
+#else
+            /* REVISIT for the buffered mode */
+#endif
             tcp_synack(dev, conn, TCP_ACK | TCP_SYN);
             return;
           }
@@ -829,6 +966,8 @@ found:
             conn->tcpstateflags = TCP_ESTABLISHED;
             memcpy(conn->rcvseq, tcp->seqno, 4);
             conn->rcv_adv = tcp_getsequence(conn->rcvseq);
+            tcp_snd_wnd_init(conn, tcp);
+            tcp_snd_wnd_update(conn, tcp);
 
             net_incr32(conn->rcvseq, 1); /* ack SYN */
             conn->tx_unacked    = 0;

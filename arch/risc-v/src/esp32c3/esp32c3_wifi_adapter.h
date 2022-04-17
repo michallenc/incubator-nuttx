@@ -62,7 +62,6 @@ extern "C"
 
 #define SSID_MAX_LEN                (32)
 #define PWD_MAX_LEN                 (64)
-#define MAC_LEN                     (6)
 
 /* Wi-Fi event ID */
 
@@ -140,7 +139,7 @@ void esp_wifi_free_eb(void *eb);
  *
  ****************************************************************************/
 
-int esp_wifi_notify_subscribe(pid_t pid, FAR struct sigevent *event);
+int esp_wifi_notify_subscribe(pid_t pid, struct sigevent *event);
 
 #ifdef ESP32C3_WLAN_HAS_STA
 
@@ -194,7 +193,7 @@ int esp_wifi_sta_stop(void);
  *
  ****************************************************************************/
 
-int esp_wifi_sta_send_data(FAR void *pbuf, size_t len);
+int esp_wifi_sta_send_data(void *pbuf, size_t len);
 
 /****************************************************************************
  * Name: esp_wifi_sta_register_recv_cb
@@ -835,6 +834,22 @@ int esp_wifi_softap_rssi(struct iwreq *iwr, bool set);
 #ifdef CONFIG_ESP32C3_WIFI_BT_COEXIST
 int esp32c3_wifi_bt_coexist_init(void);
 #endif
+
+/****************************************************************************
+ * Name: esp_wifi_stop_callback
+ *
+ * Description:
+ *   Callback to stop Wi-Fi
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void esp_wifi_stop_callback(void);
 
 #ifdef __cplusplus
 }

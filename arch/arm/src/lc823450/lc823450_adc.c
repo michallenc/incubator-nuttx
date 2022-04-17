@@ -46,7 +46,7 @@
 #include <nuttx/analog/ioctl.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lc823450_adc.h"
 #include "lc823450_syscontrol.h"
 #include "lc823450_clockconfig.h"
@@ -211,7 +211,6 @@ static void lc823450_adc_start(FAR struct lc823450_adc_inst_s *inst)
   uint32_t pclk;  /* APB clock in Hz */
   uint8_t i;
   uint32_t div;
-  int ret;
 
 #ifdef CONFIG_ADC_POLLED
   irqstate_t flags;
@@ -248,11 +247,7 @@ static void lc823450_adc_start(FAR struct lc823450_adc_inst_s *inst)
   while ((getreg32(ADCSTS) & ADCSTS_ADCMPL) == 0)
     ;
 #else
-  ret = nxsem_wait_uninterruptible(&inst->sem_isr);
-  if (ret < 0)
-    {
-      return;
-    }
+  nxsem_wait_uninterruptible(&inst->sem_isr);
 
 #endif
 

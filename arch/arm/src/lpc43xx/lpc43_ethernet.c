@@ -49,7 +49,6 @@
 #endif
 
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "lpc43_pinconfig.h"
 #include "lpc43_ethernet.h"
@@ -58,7 +57,7 @@
 #include "hardware/lpc43_ccu.h"
 #include "lpc43_rgu.h"
 #include "lpc43_gpio.h"
-#include "arm_arch.h"
+
 #include <arch/board/board.h>
 
 /****************************************************************************
@@ -498,7 +497,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 /****************************************************************************
  * Private Types
@@ -1718,7 +1717,7 @@ static void lpc43_receive(FAR struct lpc43_ethmac_s *priv)
       else
 #endif /* CONFIG_NET_IPv6 */
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 

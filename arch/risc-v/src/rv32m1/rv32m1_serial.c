@@ -36,7 +36,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/serial/serial.h>
-#include <nuttx/power/pm.h>
 
 #ifdef CONFIG_SERIAL_TERMIOS
 #  include <termios.h>
@@ -44,9 +43,7 @@
 
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "chip.h"
 #include "rv32m1.h"
 #include "rv32m1_uart.h"
@@ -143,7 +140,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
@@ -491,7 +488,7 @@ static void up_set_format(struct uart_dev_s *dev)
           /* Get the closer one. i.e. the minimum difference */
 
           tdiff = priv->baud - baud;
-          tsbr ++;
+          tsbr++;
         }
 
       /* Pick up the best osr and sbr with the minimum diff */
@@ -767,7 +764,7 @@ static void up_detach(struct uart_dev_s *dev)
  ****************************************************************************/
 
 LOCATE_ITCM
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct up_dev_s   *priv;

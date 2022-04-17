@@ -70,8 +70,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_rcc.h"
 #include "stm32_i2c.h"
 #include "stm32_waste.h"
@@ -1969,7 +1968,7 @@ static int stm32_i2c_isr_process(struct stm32_i2c_priv_s *priv)
           priv->status |= I2C_SR1_BERR;
         }
 
-      i2cinfo(" No correct state detected(start bit, read or write) \n");
+      i2cinfo(" No correct state detected(start bit, read or write)\n");
       i2cinfo(" state %" PRIi32 "\n", status);
 
       /* Set condition to terminate ISR and wake waiting thread */
@@ -2077,7 +2076,7 @@ static void stm32_i2c_dmarxcallback(DMA_HANDLE handle,
   uint32_t regval;
 #endif
 
-  i2cinfo("DMA rx callback, status = %d \n", status);
+  i2cinfo("DMA rx callback, status = %d\n", status);
 
   FAR struct stm32_i2c_priv_s *priv = (FAR struct stm32_i2c_priv_s *)arg;
 
@@ -2134,7 +2133,7 @@ static void stm32_i2c_dmatxcallback(DMA_HANDLE handle,
   uint32_t regval;
 #endif
 
-  i2cinfo("DMA tx callback, status = %d \n", status);
+  i2cinfo("DMA tx callback, status = %d\n", status);
 
   FAR struct stm32_i2c_priv_s *priv = (FAR struct stm32_i2c_priv_s *)arg;
 

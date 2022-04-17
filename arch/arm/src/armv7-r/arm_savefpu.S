@@ -76,7 +76,7 @@ arm_savefpu:
 	 * s0, s1, ... in increasing address order.
 	 */
 
-#ifdef CONFIG_ARM_HAVE_FPU_D32
+#ifdef CONFIG_ARM_DPFPU32
 	vstmia.64	r1!, {d0-d15}			/* Save the full FP context */
 	vstmia.64	r1!, {d16-d31}
 #else
@@ -84,10 +84,10 @@ arm_savefpu:
 #endif
 
 	/* Store the floating point control and status register.  At the end of the
-	 * vstmia, r1 will point to the FPCSR storage location.
+	 * vstmia, r1 will point to the FPSCR storage location.
 	 */
 
-	vmrs		r2, fpscr			/* Fetch the FPCSR */
+	vmrs		r2, fpscr			/* Fetch the FPSCR */
 	str		r2, [r1], #4			/* Save the floating point control and status register */
 	bx		lr
 

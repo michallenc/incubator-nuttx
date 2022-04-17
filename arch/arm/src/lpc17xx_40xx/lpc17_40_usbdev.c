@@ -42,9 +42,7 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/lpc17_40_usb.h"
 #include "hardware/lpc17_40_syscon.h"
@@ -509,7 +507,7 @@ static const struct usbdev_ops_s g_devops =
 
 #ifdef CONFIG_LPC17_40_USBDEV_DMA
 static uint32_t
-g_udca[LPC17_40_NPHYSENDPOINTS] __attribute__ ((aligned (128)));
+g_udca[LPC17_40_NPHYSENDPOINTS] aligned_data(128);
 static struct
 lpc17_40_dmadesc_s  g_usbddesc[CONFIG_LPC17_40_USBDEV_NDMADESCRIPTORS];
 #endif
@@ -2604,7 +2602,7 @@ static void lpc17_40_dmarestart(uint8_t epphy, uint32_t descndx)
 
   /* Clear DMA descriptor status */
 
-  USB_DmaDesc[descndx].status = 0;
+  g_usbddesc[descndx].status = 0;
 
   /* Enable DMA transfer on the endpoint */
 

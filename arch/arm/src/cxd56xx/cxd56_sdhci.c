@@ -47,7 +47,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "cxd56_sdhci.h"
 #include "cxd56_clock.h"
 #include "cxd56_pinconfig.h"
@@ -68,7 +68,7 @@
 #  error "Callback support requires CONFIG_SCHED_WORKQUEUE and CONFIG_SCHED_HPWORK"
 #endif
 
-#if !defined(CONFIG_MMCSD_MULTIBLOCK_DISABLE) && !defined(CONFIG_SDIO_BLOCKSETUP)
+#if (CONFIG_MMCSD_MULTIBLOCK_LIMIT != 1) && !defined(CONFIG_SDIO_BLOCKSETUP)
 #  error "This driver requires CONFIG_SDIO_BLOCKSETUP"
 #endif
 

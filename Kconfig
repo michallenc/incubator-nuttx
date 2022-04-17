@@ -9,6 +9,50 @@ config APPSDIR
 	string
 	option env="APPSDIR"
 
+menu "License Setup"
+config ALLOW_BSD_COMPONENTS
+	bool "Use components that have BSD licenses"
+	default n
+	---help---
+		When this option is enabled the project will allow the use
+		of components that have BSD licenses.
+
+		NOTE: Please check that the license for each enabled
+		component matches your project license.
+
+		NOTE: If this option is not set the following components
+		are not included in the setup menu:
+		Crypto
+		    AES cypher support
+		FS
+		    NFS client file system
+		    SPIFFS File System
+		Wireless
+		    Bluetooth LE support
+
+config ALLOW_GPL_COMPONENTS
+	bool "Use components that have GPL/LGPL licenses"
+	default n
+	---help---
+		When this option is enabled the project will allow the use
+		of components that have GPL/LGPL licenses.
+
+		NOTE: Please check that the license for each enabled
+		component matches your project license.
+
+config ALLOW_BSDNORDIC_COMPONENTS
+	bool "Use components that have 5-Clause Nordic licenses"
+	depends on ARCH_CHIP_NRF52
+	default n
+	---help---
+		When this option is enabled the project will allow the use
+		of components that have 5-Clause Nordic licenses.
+
+		NOTE: Please check that the license for each enabled
+		component matches your project license.
+
+endmenu # License Setup
+
 menu "Build Setup"
 
 config EXPERIMENTAL
@@ -513,6 +557,10 @@ endmenu # Customize Header Files
 
 menu "Debug Options"
 
+config NDEBUG
+	bool "Define NDEBUG globally"
+	default y
+
 config DEBUG_ALERT
 	bool
 	default n
@@ -898,6 +946,37 @@ config DEBUG_POWER_INFO
 
 endif # DEBUG_POWER
 
+config DEBUG_BATTERY
+	bool "Battery-related Debug Features"
+	default n
+	---help---
+		Enable Battery-related debug features.
+
+if DEBUG_BATTERY
+
+config DEBUG_BATTERY_ERROR
+	bool "Battery-related Error Output"
+	default n
+	depends on DEBUG_ERROR
+	---help---
+		Enable battery-related error output to SYSLOG.
+
+config DEBUG_BATTERY_WARN
+	bool "Battery-related Warnings Output"
+	default n
+	depends on DEBUG_WARN
+	---help---
+		Enable battery-related warning output to SYSLOG.
+
+config DEBUG_BATTERY_INFO
+	bool "Battery-related Informational Output"
+	default n
+	depends on DEBUG_INFO
+	---help---
+		Enable battery-related informational output to SYSLOG.
+
+endif # DEBUG_BATTERY
+
 config DEBUG_WIRELESS
 	bool "Wireless Debug Features"
 	default n
@@ -1107,7 +1186,7 @@ comment "Driver Debug Options"
 config DEBUG_LCD
 	bool "Low-level LCD Debug Features"
 	default n
-	depends on LCD
+	depends on LCD || SLCD
 	---help---
 		Enable LCD driver debug features.
 
@@ -1741,7 +1820,47 @@ config DEBUG_MOTOR_INFO
 		Enable motor informational output to SYSLOG.
 
 endif # DEBUG_MOTOR
+
+config DEBUG_VIDEO
+	bool "Video Debug Features"
+	default n
+	depends on DRIVERS_VIDEO
+	---help---
+		Enable video debug features.
+
+if DEBUG_VIDEO
+
+config DEBUG_VIDEO_ERROR
+	bool "Video Error Output"
+	default n
+	depends on DEBUG_ERROR
+	---help---
+		Enable video error output to SYSLOG.
+
+config DEBUG_VIDEO_WARN
+	bool "Video Warnings Output"
+	default n
+	depends on DEBUG_WARN
+	---help---
+		Enable video warning output to SYSLOG.
+
+config DEBUG_VIDEO_INFO
+	bool "Video Informational Output"
+	default n
+	depends on DEBUG_INFO
+	---help---
+		Enable video informational output to SYSLOG.
+
+endif # DEBUG_VIDEO
 endif # DEBUG_FEATURES
+
+config DEBUG_TCBINFO
+	bool "Enable TCBinfo struct for debug"
+	default n
+	---help---
+		Enables tcbinfo struct for debugger infomation.
+		Selecting this option will enable g_tcbinfo in arch and
+		procfs.
 
 config ARCH_HAVE_STACKCHECK
 	bool
@@ -1757,20 +1876,6 @@ config STACK_COLORATION
 		to monitor the level of stack usage.
 
 		Only supported by a few architectures.
-
-config STACK_USAGE_SAFE_PERCENT
-	int "Stack usage safe percent"
-	default 0
-	range 0 100
-	depends on STACK_COLORATION
-	---help---
-		Stack usage percent = up_check_tcbstack() * 100 / tcb->adj_stack_size,
-		this should be lower than STACK_USAGE_SAFE_PERCENT.
-
-		Idle thread will periodically check stack usage when this macro
-		value > 0.
-
-		N.B. This feature should not be used in production code.
 
 config STACK_CANARIES
 	bool "Compiler stack canaries"
@@ -1803,6 +1908,14 @@ config DEBUG_SYMBOLS
 	default n
 	---help---
 		Build with debug symbols (needed for use with a debugger).
+
+config FRAME_POINTER
+	bool "Compile the NuttX with frame pointers"
+	default n
+	---help---
+		If you say Y here the resulting NuttX image will be slightly
+		larger and slower, but it gives very useful debugging information
+		in case of bugs.
 
 endmenu # Debug Options
 
@@ -1920,7 +2033,7 @@ endmenu
 # does not contain a Kconfig file
 
 config EXTERNALDIR
-        string
-        option env="EXTERNALDIR"
+	string
+	option env="EXTERNALDIR"
 
 source "$EXTERNALDIR/Kconfig"

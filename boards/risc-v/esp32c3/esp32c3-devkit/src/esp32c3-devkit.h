@@ -64,7 +64,7 @@
  *   CONFIG_BOARD_LATE_INITIALIZE=y :
  *     Called from board_late_initialize().
  *
- *   CONFIG_BOARD_LATE_INITIALIZE=y && CONFIG_LIB_BOARDCTL=y :
+ *   CONFIG_BOARD_LATE_INITIALIZE=y && CONFIG_BOARDCTL=y :
  *     Called from the NSH library via board_app_initialize()
  *
  ****************************************************************************/
@@ -150,6 +150,22 @@ int board_i2c_init(void);
 #endif
 
 /****************************************************************************
+ * Name: board_twai_setup
+ *
+ * Description:
+ *   Configure the TWAI driver.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; A negated errno value is returned
+ *   to indicate the nature of any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_CAN
+int esp32c3_twai_setup(void);
+#endif
+
+/****************************************************************************
  * Name: board_oneshot_init
  *
  * Description:
@@ -189,7 +205,23 @@ int board_bmp180_initialize(int devno, int busno);
 #endif
 
 /****************************************************************************
- * Name: esp32c3_spiflash_init
+ * Name: board_wlan_init
+ *
+ * Description:
+ *   Configure the wireless subsystem.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; A negated errno value is returned
+ *   to indicate the nature of any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ESP32C3_WIRELESS
+int board_wlan_init(void);
+#endif
+
+/****************************************************************************
+ * Name: board_spiflash_init
  *
  * Description:
  *   Initialize the SPIFLASH and register the MTD device.
@@ -197,7 +229,7 @@ int board_bmp180_initialize(int devno, int busno);
  ****************************************************************************/
 
 #ifdef CONFIG_ESP32C3_SPIFLASH
-int esp32c3_spiflash_init(void);
+int board_spiflash_init(void);
 #endif
 
 /****************************************************************************

@@ -56,9 +56,7 @@
 #endif
 
 #include "up_internal.h"
-
 #include "chip.h"
-#include "up_arch.h"
 #include "rx65n_definitions.h"
 #include "rx65n_eth.h"
 #include "rx65n_cmt.h"
@@ -198,7 +196,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 /* PHY return definitions */
 
@@ -336,7 +334,7 @@
 
 /* DMA descriptor buffer alignment to 32 bytes */
 
-#define NX_ALIGN32 __attribute__((aligned(32)))
+#define NX_ALIGN32 aligned_data(32)
 
 /****************************************************************************
  * Public Variables
@@ -1635,7 +1633,7 @@ static void rx65n_receive(FAR struct rx65n_ethmac_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-  if (BUF->type == htons(ETHTYPE_ARP))
+  if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
@@ -3646,7 +3644,7 @@ static int rx65n_ethreset(FAR struct rx65n_ethmac_s *priv)
   while (((rx65n_getreg(RX65N_ETHD_EDMR) & ETHD_EDMR_SWR) != 0) &&
          retries > 0)
     {
-      retries --;
+      retries--;
       up_mdelay(10);
     }
 
@@ -3703,7 +3701,7 @@ static int rx65n_macconfig(FAR struct rx65n_ethmac_s *priv)
   while (((rx65n_getreg(RX65N_ETHD_EDMR) & ETHD_EDMR_SWR) != 0) &&
          retries > 0)
     {
-      retries --;
+      retries--;
       up_mdelay(10);
     }
 

@@ -138,7 +138,6 @@ config ARCH_CHIP_STM32H753AI
 		STM32 H7 Cortex M7, 2048 Kb FLASH, 1024K Kb SRAM,
 		with cryptographic accelerator, UFBGA169
 
-
 config ARCH_CHIP_STM32H753BI
 	bool "STM32H753BI"
 	select STM32H7_STM32H7X3XX
@@ -402,6 +401,10 @@ config STM32H7_SPI
 	default n
 
 config STM32H7_TIM
+	bool
+	default n
+
+config STM32H7_LPTIM
 	bool
 	default n
 
@@ -711,6 +714,35 @@ config STM32H7_TIM17
 
 endmenu # STM32H7 Timer Selection
 
+menu "STM32H7 Low-power Timer Selection"
+
+config STM32H7_LPTIM1
+	bool "LPTIM1"
+	default n
+	select STM32H7_LPTIM
+
+config STM32H7_LPTIM2
+	bool "LPTIM2"
+	default n
+	select STM32H7_LPTIM
+
+config STM32H7_LPTIM3
+	bool "LPTIM3"
+	default n
+	select STM32H7_LPTIM
+
+config STM32H7_LPTIM4
+	bool "LPTIM4"
+	default n
+	select STM32H7_LPTIM
+
+config STM32H7_LPTIM5
+	bool "LPTIM5"
+	default n
+	select STM32H7_LPTIM
+
+endmenu # STM32H7 Timer Selection
+
 menu "STM32H7 U[S]ART Selection"
 
 config STM32H7_USART1
@@ -850,7 +882,7 @@ config OTG_ID_GPIO_DISABLE
 	bool "Disable the use of GPIO_OTG_ID pin."
 	default n
 	---help---
-		Disables/Enabled the use of GPIO_OTG_ID pin. This allows non OTG use
+		Disables/Enables the use of GPIO_OTG_ID pin. This allows non OTG use
 		cases to reuse this GPIO pin and ensure it is not set incorrectlty
 		during OS boot.
 
@@ -1805,6 +1837,27 @@ config STM32H7_DMACAPABLE_ASSUME_CACHE_ALIGNED
 		the count does not use the complete buffer.
 
 menu "Timer Configuration"
+
+if SCHED_TICKLESS
+
+config STM32H7_TICKLESS_TIMER
+	int "Tickless hardware timer"
+	default 2
+	range 1 17
+	---help---
+		If the Tickless OS feature is enabled, then one clock must be
+		assigned to provided the timer needed by the OS.
+
+config STM32H7_TICKLESS_CHANNEL
+	int "Tickless timer channel"
+	default 1
+	range 1 4
+	---help---
+		If the Tickless OS feature is enabled, the one clock must be
+		assigned to provided the free-running timer needed by the OS
+		and one channel on that clock is needed to handle intervals.
+
+endif # SCHED_TICKLESS
 
 config STM32H7_ONESHOT
 	bool "TIM one-shot wrapper"
@@ -4180,7 +4233,6 @@ config STM32H7_TIM17_CAP
 
 		Timer devices may be used for different purposes.  One special purpose is
 		to capture input.
-
 
 menu "STM32 TIMx Outputs Configuration"
 

@@ -61,7 +61,11 @@ int pthread_mutex_init(FAR pthread_mutex_t *mutex,
   uint8_t type = PTHREAD_MUTEX_DEFAULT;
 #endif
 #ifdef CONFIG_PRIORITY_INHERITANCE
+#  ifdef PTHREAD_MUTEX_DEFAULT_PRIO_INHERIT
   uint8_t proto = PTHREAD_PRIO_INHERIT;
+#  else
+  uint8_t proto = PTHREAD_PRIO_NONE;
+#  endif
 #endif
 #ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
 #ifdef CONFIG_PTHREAD_MUTEX_DEFAULT_UNSAFE
@@ -99,7 +103,7 @@ int pthread_mutex_init(FAR pthread_mutex_t *mutex,
 
       /* Indicate that the semaphore is not held by any thread. */
 
-      mutex->pid = -1;
+      mutex->pid = INVALID_PROCESS_ID;
 
       /* Initialize the mutex like a semaphore with initial count = 1 */
 

@@ -50,6 +50,14 @@ extern "C"
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* Number of cycles to wait from the 32k XTAL oscillator to
+ * consider it running. Larger values increase startup delay.
+ * Smaller values may cause false positive detection
+ * (i.e. oscillator runs for a few cycles and then stops).
+ */
+
+#define SLOW_CLK_CAL_CYCLES         1024
+
 /* Cycles for RTC Timer clock source (internal oscillator) calibrate */
 
 #define RTC_CLK_SRC_CAL_CYCLES           (10)
@@ -128,6 +136,40 @@ enum esp32c3_rtc_slow_freq_e
   RTC_SLOW_FREQ_8MD256 = 2,   /* Internal 8 MHz RC oscillator, divided by 256 */
 };
 
+/* Periph module values */
+
+enum esp32c3_periph_module_e
+{
+  PERIPH_LEDC_MODULE = 0,
+  PERIPH_UART0_MODULE,
+  PERIPH_UART1_MODULE,
+  PERIPH_USB_DEVICE_MODULE,
+  PERIPH_I2C0_MODULE,
+  PERIPH_I2S1_MODULE,
+  PERIPH_TIMG0_MODULE,
+  PERIPH_TIMG1_MODULE,
+  PERIPH_UHCI0_MODULE,
+  PERIPH_RMT_MODULE,
+  PERIPH_SPI_MODULE,
+  PERIPH_SPI2_MODULE,
+  PERIPH_TWAI_MODULE,
+  PERIPH_RNG_MODULE,
+  PERIPH_WIFI_MODULE,
+  PERIPH_BT_MODULE,
+  PERIPH_WIFI_BT_COMMON_MODULE,
+  PERIPH_BT_BASEBAND_MODULE,
+  PERIPH_BT_LC_MODULE,
+  PERIPH_RSA_MODULE,
+  PERIPH_AES_MODULE,
+  PERIPH_SHA_MODULE,
+  PERIPH_HMAC_MODULE,
+  PERIPH_DS_MODULE,
+  PERIPH_GDMA_MODULE,
+  PERIPH_SYSTIMER_MODULE,
+  PERIPH_SARADC_MODULE,
+  PERIPH_MODULE_MAX
+};
+
 /* CPU clock configuration structure */
 
 struct esp32c3_cpu_freq_config_s
@@ -144,7 +186,7 @@ struct esp32c3_cpu_freq_config_s
 
 /* The form of an alarm callback */
 
-typedef CODE void (*alm_callback_t)(FAR void *arg, unsigned int alarmid);
+typedef void (*alm_callback_t)(void *arg, unsigned int alarmid);
 
 enum alm_id_e
 {
@@ -160,7 +202,7 @@ struct alm_setalarm_s
   int               as_id;     /* enum alm_id_e */
   struct timespec   as_time;   /* Alarm expiration time */
   alm_callback_t    as_cb;     /* Callback (if non-NULL) */
-  FAR void          *as_arg;   /* Argument for callback */
+  void          *as_arg;       /* Argument for callback */
 };
 
 #endif /* CONFIG_RTC_ALARM */
@@ -249,6 +291,39 @@ void esp32c3_rtc_clk_set(void);
  ****************************************************************************/
 
 void esp32c3_rtc_init(void);
+
+/****************************************************************************
+ * Name: esp32c3_periph_ll_periph_enabled
+ *
+ * Description:
+ *   Whether the current Periph module is enabled
+ *
+ * Input Parameters:
+ *   periph - Periph module (one of enum esp32c3_periph_module_e values)
+ *
+ * Returned Value:
+ *   Periph module is enabled or not
+ *
+ ****************************************************************************/
+
+bool IRAM_ATTR esp32c3_periph_ll_periph_enabled(
+                                     enum esp32c3_periph_module_e periph);
+
+/****************************************************************************
+ * Name:  esp32c3_perip_clk_init
+ *
+ * Description:
+ *   This function disables clock of useless peripherals when cpu starts.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void esp32c3_perip_clk_init(void);
 
 /****************************************************************************
  * Name: esp32c3_rtc_time_get
@@ -543,7 +618,7 @@ time_t up_rtc_time(void);
  *
  ****************************************************************************/
 
-int up_rtc_settime(FAR const struct timespec *ts);
+int up_rtc_settime(const struct timespec *ts);
 
 /****************************************************************************
  * Name: up_rtc_initialize
@@ -579,7 +654,7 @@ int up_rtc_initialize(void);
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_HIRES
-int up_rtc_gettime(FAR struct timespec *tp);
+int up_rtc_gettime(struct timespec *tp);
 #endif
 
 #ifdef CONFIG_RTC_ALARM
@@ -598,7 +673,7 @@ int up_rtc_gettime(FAR struct timespec *tp);
  *
  ****************************************************************************/
 
-int up_rtc_setalarm(FAR struct alm_setalarm_s *alminfo);
+int up_rtc_setalarm(struct alm_setalarm_s *alminfo);
 
 /****************************************************************************
  * Name: up_rtc_cancelalarm
@@ -631,7 +706,7 @@ int up_rtc_cancelalarm(enum alm_id_e alarmid);
  *
  ****************************************************************************/
 
-int up_rtc_rdalarm(FAR struct timespec *tp, uint32_t alarmid);
+int up_rtc_rdalarm(struct timespec *tp, uint32_t alarmid);
 
 #endif /* CONFIG_RTC_ALARM */
 

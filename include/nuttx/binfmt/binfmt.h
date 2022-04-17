@@ -33,6 +33,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>
+#include <nuttx/streams.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -52,7 +53,7 @@ typedef FAR void (*binfmt_dtor_t)(void);
 /* This describes the file to be loaded.
  *
  * NOTE 1: The 'filename' must be the full, absolute path to the file to be
- * executed unless CONFIG_LIB_ENVPATH is defined.  In that case,
+ * executed unless CONFIG_LIBC_ENVPATH is defined.  In that case,
  * 'filename' may be a relative path; a set of candidate absolute paths
  * will be generated using the PATH environment variable and load_module()
  * will attempt to load each file that is found at those absolute paths.
@@ -102,6 +103,15 @@ struct binary_s
   CODE int (*unload)(FAR struct binary_s *bin);
 };
 
+/* This describes binfmt coredump filed */
+
+struct memory_region_s
+{
+  uintptr_t start;   /* Start address of this region */
+  uintptr_t end;     /* End address of this region */
+  uint32_t  flags;   /* Figure 5-3: Segment Flag Bits: PF_[X|W|R] */
+};
+
 /* This describes one binary format handler */
 
 struct binfmt_s
@@ -120,6 +130,11 @@ struct binfmt_s
   /* Unload module callback */
 
   CODE int (*unload)(FAR struct binary_s *bin);
+
+  /* Unload module callback */
+
+  CODE int (*coredump)(FAR struct memory_region_s *regions,
+                       FAR struct lib_outstream_s *stream);
 };
 
 /****************************************************************************
@@ -174,6 +189,22 @@ int register_binfmt(FAR struct binfmt_s *binfmt);
  ****************************************************************************/
 
 int unregister_binfmt(FAR struct binfmt_s *binfmt);
+
+/****************************************************************************
+ * Name: core_dump
+ *
+ * Description:
+ *   This function for generating core dump stream.
+ *
+ * Returned Value:
+ *   This is a NuttX internal function so it follows the convention that
+ *   0 (OK) is returned on success and a negated errno is returned on
+ *   failure.
+ *
+ ****************************************************************************/
+
+int core_dump(FAR struct memory_region_s *regions,
+              FAR struct lib_outstream_s *stream);
 
 /****************************************************************************
  * Name: load_module
@@ -271,7 +302,7 @@ int exec_module(FAR const struct binary_s *binp,
  *
  * Input Parameters:
  *   filename - The path to the program to be executed. If
- *              CONFIG_LIB_ENVPATH is defined in the configuration, then
+ *              CONFIG_LIBC_ENVPATH is defined in the configuration, then
  *              this may be a relative path from the current working
  *              directory. Otherwise, path must be the absolute path to the
  *              program.
@@ -301,7 +332,7 @@ int exec(FAR const char *filename, FAR char * const *argv,
  *
  * Input Parameters:
  *   filename - The path to the program to be executed. If
- *              CONFIG_LIB_ENVPATH is defined in the configuration, then
+ *              CONFIG_LIBC_ENVPATH is defined in the configuration, then
  *              this may be a relative path from the current working
  *              directory. Otherwise, path must be the absolute path to the
  *              program.

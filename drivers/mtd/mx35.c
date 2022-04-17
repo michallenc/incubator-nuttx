@@ -779,7 +779,7 @@ static int mx35_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
   FAR struct mx35_dev_s *priv = (FAR struct mx35_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  mx35info("cmd: %d \n", cmd);
+  mx35info("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -807,6 +807,22 @@ static int mx35_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
 
               mx35info("blocksize: %d erasesize: %d neraseblocks: %d\n",
                        geo->blocksize, geo->erasesize, geo->neraseblocks);
+            }
+        }
+        break;
+
+      case BIOC_PARTINFO:
+        {
+          FAR struct partition_info_s *info =
+            (FAR struct partition_info_s *)arg;
+          if (info != NULL)
+            {
+              info->numsectors  = priv->nsectors <<
+                                  (priv->sectorshift - priv->pageshift);
+              info->sectorsize  = 1 << priv->pageshift;
+              info->startsector = 0;
+              info->parent[0]   = '\0';
+              ret               = OK;
             }
         }
         break;

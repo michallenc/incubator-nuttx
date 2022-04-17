@@ -72,7 +72,7 @@ enum scan_status_e
   ESP_SCAN_DONE
 };
 
-/* WiFi scan result information */
+/* Wi-Fi scan result information */
 
 struct wifi_scan_result
 {
@@ -362,7 +362,7 @@ void esp_wifi_scan_event_parse(void)
       return;
     }
 
-  ap_list_buffer = kmm_malloc(bss_total * sizeof(wifi_ap_record_t));
+  ap_list_buffer = kmm_zalloc(bss_total * sizeof(wifi_ap_record_t));
   if (ap_list_buffer == NULL)
     {
       priv->scan_status = ESP_SCAN_DONE;
@@ -370,7 +370,6 @@ void esp_wifi_scan_event_parse(void)
       return;
     }
 
-  memset(ap_list_buffer, 0x0, sizeof(ap_list_buffer));
   if (esp_wifi_scan_get_ap_records(&bss_total,
               (wifi_ap_record_t *)ap_list_buffer) == OK)
     {
@@ -442,7 +441,7 @@ void esp_wifi_scan_event_parse(void)
                * in pointer field.
                */
 
-              iwe->u.essid.pointer = (FAR void *)sizeof(iwe->u.essid);
+              iwe->u.essid.pointer = (void *)sizeof(iwe->u.essid);
               memcpy(&iwe->u.essid + 1,
                     ap_list_buffer[bss_count].ssid, essid_len);
               wlinfo("INFO: ssid %s\n", ap_list_buffer[bss_count].ssid);
@@ -548,7 +547,7 @@ scan_result_full:
  * Name: esp_wifi_scan_init
  *
  * Description:
- *   Initialize ESP32 WiFi scan parameter.
+ *   Initialize ESP32 Wi-Fi scan parameter.
  *
  * Input Parameters:
  *   None

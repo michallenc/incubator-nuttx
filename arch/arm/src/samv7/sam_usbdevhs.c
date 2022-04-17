@@ -69,7 +69,6 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "barriers.h"
 
@@ -632,7 +631,7 @@ static const struct usb_epdesc_s g_ep0desc =
 /* This is a properly aligned pool of preallocated DMA transfer descriptors */
 
 static struct sam_dtd_s g_dtdpool[CONFIG_SAMV7_USBDEVHS_NDTDS]
-                        __attribute__ ((aligned(16)));
+                        aligned_data(16);
 #endif
 #endif
 

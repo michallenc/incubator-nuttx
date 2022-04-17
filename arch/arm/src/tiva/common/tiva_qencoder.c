@@ -50,7 +50,7 @@
 
 #include <nuttx/sensors/qencoder.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "tiva_gpio.h"
 #include "tiva_qencoder.h"
 #include "tiva_enablepwr.h"
@@ -107,11 +107,13 @@ static int tiva_qe_resetatindex(FAR struct tiva_qe_s *qe);
 
 static const struct qe_ops_s g_qe_ops =
 {
-  .setup    = tiva_qe_setup,
-  .shutdown = tiva_qe_shutdown,
-  .position = tiva_qe_position,
-  .reset    = tiva_qe_reset,
-  .ioctl    = tiva_qe_ioctl,
+  .setup     = tiva_qe_setup,
+  .shutdown  = tiva_qe_shutdown,
+  .position  = tiva_qe_position,
+  .setposmax = NULL,            /* not supported yet */
+  .reset     = tiva_qe_reset,
+  .setindex  = NULL,            /* not supported yet */
+  .ioctl     = tiva_qe_ioctl,
 };
 
 #ifdef CONFIG_TIVA_QEI0
@@ -344,7 +346,7 @@ static int tiva_qe_reset(FAR struct qe_lowerhalf_s *lower)
  * Name: tiva_qe_position
  *
  * Description:
- *   Return the position mesaured by QEI.
+ *   Return the position measured by QEI.
  *
  * Input Parameters:
  *   lower - A reference to the lower half QEI driver state structure
@@ -424,7 +426,7 @@ static int tiva_qe_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
  * Name: tiva_qe_direction
  *
  * Description:
- *   Return the direction mesaured by QEI.
+ *   Return the direction measured by QEI.
  *
  * Input Parameters:
  *   qe - A reference to the TIVA QEI structure
@@ -455,7 +457,7 @@ static int tiva_qe_direction(FAR struct tiva_qe_s *qe, unsigned long *dir)
  * Name: tiva_qe_direction
  *
  * Description:
- *   Return the velocity (A/B pulses per second) mesaured by QEI.
+ *   Return the velocity (A/B pulses per second) measured by QEI.
  *
  * Input Parameters:
  *   qe - A reference to the TIVA QEI structure

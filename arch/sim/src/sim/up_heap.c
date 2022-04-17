@@ -50,11 +50,7 @@ struct mm_delaynode_s
 
 struct mm_heap_s
 {
-#ifdef CONFIG_SMP
   struct mm_delaynode_s *mm_delaylist[CONFIG_SMP_NCPUS];
-#else
-  struct mm_delaynode_s *mm_delaylist[1];
-#endif
 
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
   struct procfs_meminfo_entry_s mm_procfs;
@@ -152,8 +148,7 @@ FAR struct mm_heap_s *mm_initialize(FAR const char *name,
 
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
   heap->mm_procfs.name = name;
-  heap->mm_procfs.mallinfo = (FAR void *)mm_mallinfo;
-  heap->mm_procfs.user_data = heap;
+  heap->mm_procfs.heap = heap;
   procfs_register_meminfo(&heap->mm_procfs);
 #endif
 
@@ -391,6 +386,18 @@ int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
   memset(info, 0, sizeof(struct mallinfo));
   host_mallinfo(&info->aordblks, &info->uordblks);
   return 0;
+}
+
+/****************************************************************************
+ * Name: mm_memdump
+ *
+ * Description:
+ *   mm_memdump returns a memory info about specified pid of task/thread.
+ *
+ ****************************************************************************/
+
+void mm_memdump(FAR struct mm_heap_s *heap, pid_t pid)
+{
 }
 
 #ifdef CONFIG_DEBUG_MM

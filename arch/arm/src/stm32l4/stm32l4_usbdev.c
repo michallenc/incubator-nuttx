@@ -41,7 +41,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l4.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_usbdev.h"
@@ -3192,6 +3192,7 @@ static int stm32l4_epstall(struct usbdev_ep_s *ep, bool resume)
           priv->ep0state = EP0STATE_STALLED;
         }
 
+      leave_critical_section(flags);
       return -ENODEV;
     }
 

@@ -49,9 +49,7 @@
 #include "chip.h"             /* Includes default GPIO settings */
 #include <arch/board/board.h> /* May redefine GPIO settings */
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "stm32l4_usbhost.h"
 
 #if defined(CONFIG_USBHOST) && defined(CONFIG_STM32L4_OTGFS)
@@ -431,7 +429,7 @@ static int stm32l4_ep0configure(FAR struct usbhost_driver_s *drvr,
                                 usbhost_ep_t ep0, uint8_t funcaddr,
                                 uint8_t speed, uint16_t maxpacketsize);
 static int stm32l4_epalloc(FAR struct usbhost_driver_s *drvr,
-                           FAR const FAR struct usbhost_epdesc_s *epdesc,
+                           FAR const struct usbhost_epdesc_s *epdesc,
                            FAR usbhost_ep_t *ep);
 static int stm32l4_epfree(FAR struct usbhost_driver_s *drvr,
                           usbhost_ep_t ep);
@@ -768,7 +766,7 @@ static inline void stm32l4_chan_freeall(FAR struct stm32l4_usbhost_s *priv)
 
   /* Free all host channels */
 
-  for (chidx = 2; chidx < STM32L4_NHOST_CHANNELS; chidx ++)
+  for (chidx = 2; chidx < STM32L4_NHOST_CHANNELS; chidx++)
     {
       stm32l4_chan_free(priv, chidx);
     }
@@ -4724,7 +4722,7 @@ static ssize_t stm32l4_transfer(FAR struct usbhost_driver_s *drvr,
                                 usbhost_ep_t ep, FAR uint8_t *buffer,
                                 size_t buflen)
 {
-  FAR struct stm32l4_usbhost_s *priv  = (FAR struct stm32l4_usbhost_s *)drvr;
+  FAR struct stm32l4_usbhost_s *priv = (FAR struct stm32l4_usbhost_s *)drvr;
   unsigned int chidx = (unsigned int)ep;
   ssize_t nbytes;
   int ret;
@@ -4797,7 +4795,7 @@ static int stm32l4_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
                           FAR uint8_t *buffer, size_t buflen,
                           usbhost_asynch_t callback, FAR void *arg)
 {
-  FAR struct stm32l4_usbhost_s *priv  = (FAR struct stm32l4_usbhost_s *)drvr;
+  FAR struct stm32l4_usbhost_s *priv = (FAR struct stm32l4_usbhost_s *)drvr;
   unsigned int chidx = (unsigned int)ep;
   int ret;
 
@@ -4850,7 +4848,7 @@ static int stm32l4_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
 
 static int stm32l4_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 {
-  FAR struct stm32l4_usbhost_s *priv  = (FAR struct stm32l4_usbhost_s *)drvr;
+  FAR struct stm32l4_usbhost_s *priv = (FAR struct stm32l4_usbhost_s *)drvr;
   FAR struct stm32l4_chan_s *chan;
   unsigned int chidx = (unsigned int)ep;
   irqstate_t flags;

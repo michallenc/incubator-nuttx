@@ -44,11 +44,15 @@
 #endif
 
 #ifdef CONFIG_SENSORS_QENCODER
-#include "board_qencoder.h"
+#  include "board_qencoder.h"
+#endif
+
+#ifdef CONFIG_SENSORS_HALL3PHASE
+#  include "board_hall3ph.h"
 #endif
 
 #ifdef CONFIG_VIDEO_FB
-#include <nuttx/video/fb.h>
+#  include <nuttx/video/fb.h>
 #endif
 
 #include "nucleo-f446re.h"
@@ -66,7 +70,7 @@
  *   CONFIG_BOARD_LATE_INITIALIZE=y :
  *     Called from board_late_initialize().
  *
- *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_LIB_BOARDCTL=y :
+ *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_BOARDCTL=y :
  *     Called from the NSH library
  *
  ****************************************************************************/
@@ -74,6 +78,17 @@
 int stm32_bringup(void)
 {
   int ret = OK;
+
+#ifdef CONFIG_FS_PROCFS
+  /* Mount the procfs file system */
+
+  ret = nx_mount(NULL, STM32_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to mount the PROC filesystem: %d\n",  ret);
+    }
+#endif /* CONFIG_FS_PROCFS */
 
 #ifdef CONFIG_INPUT_BUTTONS
   /* Register the BUTTON driver */
@@ -136,13 +151,23 @@ int stm32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
   /* Initialize CAN and register the CAN driver. */
 
   ret = stm32_can_setup();
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: stm32_can_setup failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_STM32_CAN_SOCKET
+  /* Initialize CAN socket interface */
+
+  ret = stm32_cansock_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_cansock_setup failed: %d\n", ret);
     }
 #endif
 
@@ -164,6 +189,20 @@ int stm32_bringup(void)
     {
       syslog(LOG_ERR,
              "ERROR: Failed to register the qencoder: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_HALL3PHASE
+  /* Initialize and register the 3-phase Hall effect sensor driver */
+
+  ret = board_hall3ph_initialize(0, GPIO_HALL_PHA, GPIO_HALL_PHB,
+                                 GPIO_HALL_PHC);
+  if (ret != OK)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to register the hall : %d\n",
              ret);
       return ret;
     }

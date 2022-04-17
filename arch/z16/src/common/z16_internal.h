@@ -70,6 +70,18 @@
 #  define USE_SERIALDRIVER 1
 #endif
 
+/* Align the stack to word (4 byte) boundaries.  This is probablya greater
+ * alignment than is required.
+ */
+
+#define STACK_ALIGNMENT     4
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
 /* Macros for portability */
 
 #define IN_INTERRUPT             (g_current_regs != NULL)
@@ -78,6 +90,15 @@
 #define SAVE_USERCONTEXT(tcb)    z16_saveusercontext((tcb)->xcp.regs)
 #define RESTORE_USERCONTEXT(tcb) z16_restoreusercontext((tcb)->xcp.regs)
 #define SIGNAL_RETURN(regs)      z16_restoreusercontext(regs)
+
+/* Register access macros ***************************************************/
+
+#define getreg8(a)              (*(uint8_t volatile _Near*)(a))
+#define putreg8(v,a)            (*(uint8_t volatile _Near*)(a) = (v))
+#define getreg16(a)             (*(uint16_t volatile _Near*)(a))
+#define putreg16(v,a)           (*(uint16_t volatile _Near*)(a) = (v))
+#define getreg32(a)             (*(uint32_t volatile _Near*)(a))
+#define putreg32(v,a)           (*(uint32_t volatile _Near*)(a) = (v))
 
 /****************************************************************************
  * Public Types
@@ -136,10 +157,6 @@ void z16_serialinit(void);
 void z16_earlyserialinit(void);
 #endif
 
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#endif
-
 /* Defined in xyz_irq.c */
 
 void z16_ack_irq(int irq);
@@ -151,10 +168,6 @@ void z16_netinitialize(void);
 #else
 # define z16_netinitialize()
 #endif
-
-/* Return the current value of the stack pointer (used in stack dump logic) */
-
-chipreg_t up_getsp(void);
 
 /* Dump stack and registers */
 

@@ -40,13 +40,12 @@
 #include <nuttx/config.h>
 
 #include <arch/xtensa/core.h>
+#include <arch/xtensa/xtensa_abi.h>
 #include <arch/xtensa/xtensa_coproc.h>
 #include <arch/xtensa/xtensa_specregs.h>
 #include <arch/chip/core-isa.h>
 #include <arch/chip/tie.h>
 #include <arch/chip/tie-asm.h>
-
-#include "xtensa_abi.h"
 
 #if XCHAL_CP_NUM > 0
 
@@ -122,13 +121,13 @@ _xtensa_coproc_savestate:
 
 	s16i	a2, a15, XTENSA_CPSTORED		/* Save mask of CPs being stored */
 	movi	a13, _xtensa_coproc_saoffsets	/* Array of CP save offsets */
-	l32i	a15, a15, XTENSA_CPASA			/* a15 = base of aligned save area */
+	addi	a15, a15, XTENSA_CPASA			/* a15 = base of aligned save area */
 
 #if XCHAL_CP0_SA_SIZE > 0
 	bbci.l	a2, 0, 2f						/* CP 0 not enabled */
 	l32i	a14, a13, 0						/* a14 = _xtensa_coproc_saoffsets[0] */
 	add		a3, a14, a15					/* a3 = save area for CP 0 */
-	xchal_ncp_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp0_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -152,7 +151,7 @@ _xtensa_coproc_savestate:
 	bbci.l	a2, 3, 2f
 	l32i	a14, a13, 12
 	add		a3, a14, a15
-	xchal_cp3store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp3_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -160,7 +159,7 @@ _xtensa_coproc_savestate:
 	bbci.l	a2, 4, 2f
 	l32i	a14, a13, 16
 	add		a3, a14, a15
-	xchal_cp4store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp4_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -168,7 +167,7 @@ _xtensa_coproc_savestate:
 	bbci.l	a2, 5, 2f
 	l32i	a14, a13, 20
 	add		a3, a14, a15
-	xchal_cp5store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp5_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -176,7 +175,7 @@ _xtensa_coproc_savestate:
 	bbci.l	a2, 6, 2f
 	l32i	a14, a13, 24
 	add		a3, a14, a15
-	xchal_cp6store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp6_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -184,7 +183,7 @@ _xtensa_coproc_savestate:
 	bbci.l	a2, 7, 2f
 	l32i	a14, a13, 28
 	add		a3, a14, a15
-	xchal_cp7store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp7_store	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -223,11 +222,10 @@ _xtensa_coproc_savestate:
 xtensa_coproc_savestate:
 
 #ifdef __XTENSA_CALL0_ABI__
-
 	/* Need to preserve a8-11.  _xtensa_coproc_savestate modifies a2-a7,
-   * a13-a15. a12-a15 are callee saved registers so a13-a14 must be
-   * preserved.
-   */
+	 * a13-a15. a12-a15 are callee saved registers so a13-a14 must be
+	 * preserved.
+	 */
 
 	ENTRY(16)
 	s32i	a13, sp, LOCAL_OFFSET(1)		/* Save clobbered registers */
@@ -235,8 +233,8 @@ xtensa_coproc_savestate:
 	s32i	a15, sp, LOCAL_OFFSET(3)
 
 	/* Call _xtensa_coproc_savestate() with A2=address of co-processor
-   * save area.
-   */
+	 * save area.
+	 */
 
 	call0 _xtensa_coproc_savestate
 
@@ -248,23 +246,24 @@ xtensa_coproc_savestate:
 	RET(16)
 
 #else
-	/* Need to preserve a8-15.  _xtensa_coproc_savestate modifies a2-a7,
-   * a13-a15.  So a13-a15 may need to be preserved.
-   */
+	/* Allocate the stack frame.  This function needs to allocate the usual 16
+	 * byte for the base save area + space for one variable.
+	 * NOTE: entry works in multiples of 8 bytes.
+	 */
 
-	ENTRY(32 /*16*/)						/* REVISIT: Why 32? */
+	ENTRY(24)
 	s32i	a0,  sp, LOCAL_OFFSET(1)		/* Save return address */
 
 	/* Call _xtensa_coproc_savestate() with A2=address of co-processor
-   * save area.
-   */
+	 * save area.
+	 */
 
 	call0 _xtensa_coproc_savestate
 
 	/* Restore a0 and return */
 
 	l32i	a0,  sp, LOCAL_OFFSET(1)		/* Recover return address */
-	RET(32 /*16*/)							/* REVISIT: Why 32? */
+	RET(24)
 
 #endif
 
@@ -321,13 +320,13 @@ _xtensa_coproc_restorestate:
 	s16i	a3, a15, XTENSA_CPSTORED		/* Clear saved CP mask */
 
 	movi	a13, _xtensa_coproc_saoffsets	/* Array of CP save offsets */
-	l32i	a15, a15, XTENSA_CPASA			/* a15 = base of aligned save area */
+	addi	a15, a15, XTENSA_CPASA			/* a15 = base of aligned save area */
 
 #if XCHAL_CP0_SA_SIZE
 	bbci.l	a2, 0, 2f						/* CP 0 not enabled */
 	l32i	a14, a13, 0						/* a14 = _xtensa_coproc_saoffsets[0] */
 	add		a3, a14, a15					/* a3 = save area for CP 0 */
-	xchal_ncp_load	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
+	xchal_cp0_load	a3, a4, a5, a6, a7 continue=0 ofs=-1 select=XTHAL_SAS_TIE|XTHAL_SAS_NOCC|XTHAL_SAS_CALE alloc=XTHAL_SAS_ALL
 2:
 #endif
 
@@ -422,11 +421,10 @@ _xtensa_coproc_restorestate:
 xtensa_coproc_restorestate:
 
 #ifdef __XTENSA_CALL0_ABI__
-
 	/* Need to preserve a8-11.  _xtensa_coproc_restorestate modifies a2-a7,
-   * a13-a15. a12-a15 are callee saved registers so a13-a14 must be
-   * preserved.
-   */
+	 * a13-a15. a12-a15 are callee saved registers so a13-a14 must be
+	 * preserved.
+	 */
 
 	ENTRY(16)
 	s32i	a13, sp, LOCAL_OFFSET(1)		/* Save clobbered values */
@@ -434,8 +432,8 @@ xtensa_coproc_restorestate:
 	s32i	a15, sp, LOCAL_OFFSET(3)
 
 	/* Call _xtensa_coproc_restorestate() with A2=address of co-processor
-   * save area.   Registers a0, a2-a7, a13-a15 have been trashed.
-   */
+	 * save area.   Registers a0, a2-a7, a13-a15 have been trashed.
+	 */
 
 	call0 _xtensa_coproc_restorestate
 
@@ -447,23 +445,24 @@ xtensa_coproc_restorestate:
 	RET(16)
 
 #else
-	/* Need to preserve a8-15.  _xtensa_coproc_savestate modifies a2-a7,
-   * a13-a15.  So a13-a15 may need to be preserved.
-   */
+	/* Allocate the stack frame.  This function needs to allocate the usual 16
+	 * byte for the base save area + space for one variable.
+	 * NOTE: entry works in multiples of 8 bytes.
+	 */
 
-	ENTRY(32 /*16*/)						/* REVISIT: Why 32? */
+	ENTRY(24)
 	s32i	a0,  sp, LOCAL_OFFSET(1)		/* Save return address */
 
 	/* Call _xtensa_coproc_restorestate() with A2=address of co-processor
-   * save area.   Registers a0, a2-a7, a13-a15 have been trashed.
-   */
+	 * save area.   Registers a0, a2-a7, a13-a15 have been trashed.
+	 */
 
-  call0 _xtensa_coproc_restorestate
+	call0 _xtensa_coproc_restorestate
 
 	/* Restore a0 and return */
 
-  l32i	a0,  sp, LOCAL_OFFSET(1)		/* Recover return address */
-  RET(32 /*16*/)							/* REVISIT: Why 32? */
+	l32i	a0,  sp, LOCAL_OFFSET(1)		/* Recover return address */
+	RET(24)
 
 #endif
 

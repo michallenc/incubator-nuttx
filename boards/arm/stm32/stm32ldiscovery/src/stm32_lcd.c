@@ -50,7 +50,7 @@
 #include <nuttx/lcd/slcd_codec.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32_gpio.h"
 #include "stm32_rcc.h"
 #include "hardware/stm32_lcd.h"
@@ -67,8 +67,8 @@
 
 /* Define CONFIG_DEBUG_LCD_INFO to enable detailed LCD debug output. */
 
-#ifndef CONFIG_LIB_SLCDCODEC
-#  error "This SLCD driver requires CONFIG_LIB_SLCDCODEC"
+#ifndef CONFIG_LIBC_SLCDCODEC
+#  error "This SLCD driver requires CONFIG_LIBC_SLCDCODEC"
 #endif
 
 /* The ever-present MIN/MAX macros ******************************************/
@@ -350,13 +350,16 @@ static int slcd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
 static const struct file_operations g_slcdops =
 {
-  0,             /* open */
-  0,             /* close */
+  NULL,          /* open */
+  NULL,          /* close */
   slcd_read,     /* read */
   slcd_write,    /* write */
-  0,             /* seek */
+  NULL,          /* seek */
   slcd_ioctl,    /* ioctl */
   slcd_poll      /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL         /* unlink */
+#endif
 };
 
 /* LCD state data */

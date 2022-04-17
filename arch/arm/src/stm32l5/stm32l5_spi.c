@@ -71,8 +71,6 @@
 #include <nuttx/power/pm.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32l5.h"
 #include "stm32l5_gpio.h"
@@ -1905,7 +1903,6 @@ FAR struct spi_dev_s *stm32l5_spibus_initialize(int bus)
 #endif
     {
       spierr("ERROR: Unsupported SPI bus: %d\n", bus);
-      return NULL;
     }
 
   leave_critical_section(flags);

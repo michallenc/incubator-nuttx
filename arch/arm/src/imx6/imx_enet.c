@@ -51,7 +51,7 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "gic.h"
 #include "chip.h"
 #include "imx_config.h"
@@ -260,7 +260,7 @@
  * the contents of the Ethernet header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 #define IMX_BUF_SIZE  ENET_ALIGN_UP(CONFIG_NET_ETH_PKTSIZE)
 
@@ -306,7 +306,7 @@ static struct imx_driver_s g_enet[CONFIG_IMX_ENET_NETHIFS];
  */
 
 static uint8_t g_desc_pool[NENET_NBUFFERS * sizeof(struct enet_desc_s)]
-               __attribute__((aligned(ENET_ALIGN)));
+               aligned_data(ENET_ALIGN);
 
 /* The DMA buffers.  Again, A unaligned uint8_t is used to allocate the
  * memory; 16 is added to assure that we can meet the descriptor alignment
@@ -314,7 +314,7 @@ static uint8_t g_desc_pool[NENET_NBUFFERS * sizeof(struct enet_desc_s)]
  */
 
 static uint8_t g_buffer_pool[NENET_NBUFFERS * IMX_BUF_SIZE]
-               __attribute__((aligned(ENET_ALIGN)));
+               aligned_data(ENET_ALIGN);
 
 /****************************************************************************
  * Private Function Prototypes
@@ -817,7 +817,7 @@ static inline void imx_dispatch(FAR struct imx_driver_s *priv)
 #ifdef CONFIG_NET_ARP
   /* Check for an ARP packet */
 
-  if (BUF->type == htons(ETHTYPE_ARP))
+  if (BUF->type == HTONS(ETHTYPE_ARP))
     {
       NETDEV_RXARP(&priv->dev);
       arp_arpin(&priv->dev);
@@ -2668,7 +2668,7 @@ int imx_netinitialize(int intf)
 }
 
 /****************************************************************************
- * Name: up_netinitialize
+ * Name: arm_netinitialize
  *
  * Description:
  *   Initialize the first network interface.  If there are more than one

@@ -28,8 +28,10 @@
 #include <nuttx/userspace.h>
 
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
+
+#ifdef CONFIG_MM_KERNEL_HEAP
+#include <arch/board/board_memorymap.h>
+#endif
 
 #include "mpfs.h"
 
@@ -37,7 +39,15 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define KRAM_END CONFIG_RAM_END
+#ifdef CONFIG_MM_KERNEL_HEAP
+#define KRAM_END    KSRAM_END
+#else
+#define KRAM_END    CONFIG_RAM_END
+#endif
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -76,7 +86,11 @@
  *
  ****************************************************************************/
 
+#ifdef CONFIG_BUILD_KERNEL
+void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
+#else
 void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
+#endif /* CONFIG_BUILD_KERNEL */
 {
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
   /* Get the size and position of the user-space heap.
@@ -88,7 +102,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 
   /* Return the user-space heap settings */
 
-  *heap_start = (FAR void *)ubase;
+  *heap_start = (void *)ubase;
   *heap_size  = usize;
 
   /* Allow user-mode access to the user heap memory in PMP
@@ -98,9 +112,9 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 #else
   /* Return the heap settings */
 
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size = KRAM_END - g_idle_topstack;
-#endif
+#endif /* CONFIG_BUILD_PROTECTED && CONFIG_MM_KERNEL_HEAP */
 }
 
 /****************************************************************************
@@ -113,15 +127,16 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
  *
  ****************************************************************************/
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
-void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP) && \
+    defined(__KERNEL__)
+void up_allocate_kheap(void **heap_start, size_t *heap_size)
 {
   /* Return the kernel heap settings. */
 
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size = KRAM_END - g_idle_topstack;
 }
-#endif
+#endif /* CONFIG_BUILD_PROTECTED && CONFIG_MM_KERNEL_HEAP */
 
 /****************************************************************************
  * Name: up_addregion

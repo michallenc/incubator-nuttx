@@ -35,7 +35,6 @@
 #include <nuttx/irq.h>
 #include <arch/irq.h>
 
-#include "esp32_cpuint.h"
 #include "esp32_gpio.h"
 
 #include "esp32-ethernet-kit.h"
@@ -103,7 +102,7 @@ uint32_t board_buttons(void)
       b0 = b1;
     }
 
-  iinfo("b=%d n=%d \n", b0, n);
+  iinfo("b=%d n=%d\n", b0, n);
 
   /* Low value means that the button is pressed */
 

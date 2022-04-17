@@ -35,17 +35,9 @@ PASS1_LINKLIBS += $(PASS1_LIBBOARD)
 # Get the paths to the libraries and the links script path in format that
 # is appropriate for the host OS
 
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-  # Windows-native toolchains
-  PASS1_LIBPATHS += -L"${shell cygpath -w "$(TOPDIR)$(DELIM)staging"}"
-  PASS1_LIBPATHS += -L"${shell cygpath -w "$(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)src"}"
-  PASS1_LDSCRIPT = -T "${shell cygpath -w $(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)locked$(DELIM)ld-locked.inc}"
-else
-  # Linux/Cygwin-native toolchain
-  PASS1_LIBPATHS += -L"$(TOPDIR)$(DELIM)staging"
-  PASS1_LIBPATHS += -L"$(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)src"
-  PASS1_LDSCRIPT = -T$(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)locked$(DELIM)ld-locked.inc
-endif
+PASS1_LIBPATHS += -L $(call CONVERT_PATH,$(TOPDIR)$(DELIM)staging)
+PASS1_LIBPATHS += -L $(call CONVERT_PATH,$(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)src)
+PASS1_LDSCRIPT = -T $(call CONVERT_PATH,$(TOPDIR)$(DELIM)boards$(DELIM)arm$(DELIM)lpc31xx$(DELIM)ea3131$(DELIM)locked$(DELIM)ld-locked.inc)
 
 PASS1_LDFLAGS = -r $(PASS1_LDSCRIPT)
 PASS1_LDLIBS = $(patsubst %.a,%,$(patsubst lib%,-l%,$(PASS1_LINKLIBS)))
@@ -76,7 +68,7 @@ $(PASS1_LIBBOARD):
 
 locked.r: ld-locked.inc $(PASS1_LIBBOARD)
 	@echo "LD:  locked.r"
-	$(Q) $(LD) -o $@ $(PASS1_LDFLAGS) $(PASS1_LIBPATHS) -Wl,--start-group $(PASS1_LDLIBS) -Wl,--end-group $(PASS1_LIBGCC)
+	$(Q) $(LD) -o $@ $(PASS1_LDFLAGS) $(PASS1_LIBPATHS) --start-group $(PASS1_LDLIBS) --end-group $(PASS1_LIBGCC)
 	$(Q) $(NM) $@ > locked.map
 	$(Q) fgrep " U " locked.map | grep -v nx_start
 	$(Q) $(CROSSDEV)size $@

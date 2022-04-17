@@ -54,11 +54,11 @@
 #  include <nuttx/spinlock.h>
 #endif
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_BUILTIN)
 #  include <nuttx/lib/builtin.h>
 #endif
 
-#ifdef CONFIG_LIB_BOARDCTL
+#ifdef CONFIG_BOARDCTL
 
 /****************************************************************************
  * Private Functions
@@ -325,7 +325,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        *                data read from a file or serial FLASH, or whatever
        *                you would like to do with it.  Every implementation
        *                should accept zero/NULL as a default configuration.
-       * CONFIGURATION: CONFIG_LIB_BOARDCTL
+       * CONFIGURATION: CONFIG_BOARDCTL
        * DEPENDENCIES:  Board logic must provide board_app_initialization
        */
 
@@ -452,6 +452,31 @@ int boardctl(unsigned int cmd, uintptr_t arg)
         break;
 #endif
 
+#ifdef CONFIG_BOARDCTL_BOOT_IMAGE
+      /* CMD:           BOARDIOC_BOOT_IMAGE
+       * DESCRIPTION:   Boot a new application firmware image.
+       *                Execute the required actions for booting a new
+       *                application firmware image (e.g. deinitialize
+       *                peripherals, load the Program Counter register with
+       *                the application firmware image entry point address).
+       * ARG:           Pointer to a read-only instance of struct
+       *                boardioc_boot_info_s.
+       * DEPENDENCIES:  Board logic must provide the board_boot_image()
+       *                interface.
+       */
+
+      case BOARDIOC_BOOT_IMAGE:
+        {
+          FAR const struct boardioc_boot_info_s *info =
+            (FAR const struct boardioc_boot_info_s *)arg;
+
+          DEBUGASSERT(info != NULL);
+
+          ret = board_boot_image(info->path, info->header_size);
+        }
+        break;
+#endif
+
 #ifdef CONFIG_BOARDCTL_MKRD
       /* CMD:           BOARDIOC_MKRD
        * DESCRIPTION:   Create a RAM disk
@@ -567,13 +592,13 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        * ARG:           A pointer to an instance of struct boardioc_builtin_s
        * CONFIGURATION: This BOARDIOC command is always available when
        *                CONFIG_BUILTIN is enabled, but does nothing unless
-       *                CONFIG_BUILD_KERNEL and CONFIG_FS_BINFS are selected.
+       *                CONFIG_BUILD_KERNEL is selected.
        * DEPENDENCIES:  None
        */
 
       case BOARDIOC_BUILTINS:
         {
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS)
+#if defined(CONFIG_BUILD_PROTECTED)
           FAR const struct boardioc_builtin_s *builtin =
             (FAR const struct boardioc_builtin_s *)arg;
 
@@ -590,7 +615,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        * DESCRIPTION:   Manage USB device classes
        * ARG:           A pointer to an instance of struct
        *                boardioc_usbdev_ctrl_s
-       * CONFIGURATION: CONFIG_LIB_BOARDCTL && CONFIG_BOARDCTL_USBDEVCTRL
+       * CONFIGURATION: CONFIG_BOARDCTL && CONFIG_BOARDCTL_USBDEVCTRL
        * DEPENDENCIES:  Board logic must provide board_<usbdev>_initialize()
        */
 
@@ -632,7 +657,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        * ARG:           A reference readable instance of struct
        *                boardioc_vncstart_s
        * CONFIGURATION: CONFIG_VNCSERVER
-       * DEPENDENCIES:  VNC server provides vnc_default_fbinitialize()
+       * DEPENDENCIES:  VNC server provides nx_vnc_fbinitialize()
        */
 
       case BOARDIOC_VNC_START:
@@ -648,7 +673,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
             {
               /* Setup the VNC server to support keyboard/mouse inputs */
 
-              ret = vnc_default_fbinitialize(vnc->display, vnc->handle);
+              ret = nx_vnc_fbinitialize(vnc->display, vnc->handle);
             }
         }
         break;
@@ -752,6 +777,27 @@ int boardctl(unsigned int cmd, uintptr_t arg)
         break;
 #endif
 
+#ifdef CONFIG_BOARDCTL_RESET_CAUSE
+      /* CMD:           BOARDIOC_RESET_CAUSE
+       * DESCRIPTION:   Get the cause of last-time board reset
+       * ARG:           A pointer to an instance of struct
+       *                boardioc_reset_cause_s
+       * CONFIGURATION: CONFIG_BOARDCTL_RESET_CAUSE
+       * DEPENDENCIES:  Board logic must provide the
+       *                board_reset_cause() interface.
+       */
+
+      case BOARDIOC_RESET_CAUSE:
+        {
+          FAR struct boardioc_reset_cause_s *cause =
+            (FAR struct boardioc_reset_cause_s *)arg;
+
+          DEBUGASSERT(cause != NULL);
+          ret = board_reset_cause(cause);
+        }
+        break;
+#endif
+
        default:
          {
 #ifdef CONFIG_BOARDCTL_IOCTL
@@ -780,4 +826,4 @@ int boardctl(unsigned int cmd, uintptr_t arg)
   return OK;
 }
 
-#endif /* CONFIG_LIB_BOARDCTL */
+#endif /* CONFIG_BOARDCTL */

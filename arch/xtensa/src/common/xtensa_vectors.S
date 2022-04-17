@@ -40,10 +40,10 @@
 
 #include <arch/irq.h>
 #include <arch/chip/core-isa.h>
+#include <arch/xtensa/xtensa_abi.h>
 #include <arch/xtensa/xtensa_specregs.h>
 
 #include "xtensa.h"
-#include "xtensa_abi.h"
 
 /****************************************************************************
  * Public Functions
@@ -109,13 +109,13 @@ _xtensa_level3_vector:
 
 _xtensa_level4_vector:
 	wsr			a0, EXCSAVE_4			/* Preserve a0 */
-	call0		_xtensa_level4_handler	/* Call level 5 interrupt handling */
+	call0		_xtensa_level4_handler	/* Call level 4 interrupt handling */
 
 	/* Never returns here - call0 is used as a jump */
 
 	.end		literal_prefix
 
-	.size	_xtensa_level5_vector, . - _xtensa_level5_vector
+	.size	_xtensa_level4_vector, . - _xtensa_level4_vector
 #endif
 
 #if XCHAL_EXCM_LEVEL >= 5
@@ -193,7 +193,7 @@ _xtensa_nmi_vector:
 	wsr		a0, EXCSAVE + XCHAL_NMILEVEL	/* Preserve a0 */
 
 	mov		a0, sp							/* sp == a1 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, EPS + XCHAL_NMILEVEL		/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)
@@ -233,9 +233,9 @@ _xtensa_nmi_vector:
 	.align		4
 
 _debug_exception_vector:
-
+	wsr		a0, EXCSAVE + XCHAL_DEBUGLEVEL   /* Preserve a0 */
 	mov		a0, sp							/* sp == a1 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, EPS + XCHAL_DEBUGLEVEL		/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)
@@ -273,14 +273,16 @@ _double_exception_vector:
 	break	1, 4							/* Unhandled double exception */
 #endif
 
+	wsr		a0, EXCSAVE_1		/* Preserve a0 */
+
 	mov		a0, sp							/* sp == a1 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, PS							/* Save interruptee's PS -- REVISIT */
 	s32i	a0, sp, (4 * REG_PS)
 	rsr		a0, DEPC						/* Save interruptee's PC */
 	s32i	a0, sp, (4 * REG_PC)
-	rsr		a0, EXCSAVE						/* Save interruptee's a0 -- REVISIT */
+	rsr		a0, EXCSAVE_1				/* Save interruptee's a0 -- REVISIT */
 	s32i	a0, sp, (4 * REG_A0)
 
 	rsr		a0, EXCCAUSE					/* Save the EXCCAUSE register */
@@ -315,8 +317,10 @@ _kernel_exception_vector:
 	break	1, 0							/* Unhandled kernel exception */
 #endif
 
+	wsr		a0, EXCSAVE_1					/* Preserve a0 */
+
 	mov		a0, sp							/* sp == a1 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, PS							/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)

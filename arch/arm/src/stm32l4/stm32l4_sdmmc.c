@@ -43,8 +43,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32l4_dma.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_sdmmc.h"
@@ -78,7 +77,7 @@
  *     4 SD data lines).
  *   CONFIG_SDMMC_DMAPRIO - SDMMC DMA priority.  This can be selected if
  *     CONFIG_STM32L4_SDMMC_DMA is enabled.
- *   CONFIG_CONFIG_STM32L4_SDMMC_XFRDEBUG - Enables some very low-level
+ *   CONFIG_STM32L4_SDMMC_XFRDEBUG - Enables some very low-level
  *     debug output.  This also requires CONFIG_DEBUG_FS and
  *     CONFIG_DEBUG_INFO
  */
@@ -125,7 +124,7 @@
 #endif
 
 #if !defined(CONFIG_DEBUG_FS) || !defined(CONFIG_DEBUG_FEATURES)
-#  undef CONFIG_CONFIG_STM32L4_SDMMC_XFRDEBUG
+#  undef CONFIG_STM32L4_SDMMC_XFRDEBUG
 #endif
 
 /* Friendly CLKCR bit re-definitions ****************************************/
@@ -782,19 +781,18 @@ static void stm32_configwaitints(struct stm32_dev_s *priv, uint32_t waitmask,
       pinset = priv->d0_gpio & (GPIO_PORT_MASK | GPIO_PIN_MASK);
       pinset |= (GPIO_INPUT | GPIO_FLOAT | GPIO_EXTI);
 
-      /* Arm the SDMMC_D Ready and install ISR */
+      /* Arm the SDMMC_D0 Ready and install ISR */
 
       stm32_gpiosetevent(pinset, true, false, false,
                          stm32_sdmmc_rdyinterrupt, priv);
     }
 
-  /* Disarm SDMMC_D ready */
+  /* Disarm SDMMC_D0 ready and return it to SDMMC D0 */
 
   if ((wkupevent & SDIOWAIT_WRCOMPLETE) != 0)
     {
       stm32_gpiosetevent(priv->d0_gpio, false, false, false,
                          NULL, NULL);
-      stm32_configgpio(priv->d0_gpio);
     }
 #endif
 

@@ -72,9 +72,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc23xx_pinsel.h"
 #include "lpc23xx_scb.h"
 #include "lpc23xx_i2c.h"
@@ -573,6 +571,7 @@ struct i2c_master_s *lpc2378_i2cbus_initialize(int port)
   else
 #endif
     {
+      leave_critical_section(flags);
       return NULL;
     }
 

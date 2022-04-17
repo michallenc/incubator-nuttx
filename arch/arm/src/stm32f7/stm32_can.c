@@ -1,39 +1,20 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/stm32_can.c
  *
- *   Copyright (C) 2011, 2016-2017, 2019 Gregory Nutt.
- *   All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- *   Copyright (C) 2016 Omni Hoverboards Inc. All rights reserved.
- *   Author: Paul Alexander Patience <paul-a.patience@polymtl.ca>
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -58,8 +39,6 @@
 #include <nuttx/can/can.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 
 #include "stm32_rcc.h"
@@ -254,7 +233,7 @@ static struct stm32_can_s g_can3priv =
                       STM32_IRQ_CAN3RX1,
   },
   .cantx            = STM32_IRQ_CAN3TX,
-  .filter           = CAN_NFILTERS / 2,
+  .filter           = 0,
   .base             = STM32_CAN3_BASE,
   .fbase            = STM32_CAN3_BASE,
   .baud             = CONFIG_STM32F7_CAN3_BAUD,
@@ -2022,10 +2001,11 @@ static int stm32can_cellinit(FAR struct stm32_can_s *priv)
  *      more filters;  The advantage of 32-bit filters is that you get
  *      finer control of the filtering.
  *
- *   One filter is set up for each CAN.  The filter resources are shared
- *   between the two CAN modules:  CAN1 uses only filter 0 (but reserves
+ *   One filter is set up for each CAN. The filter resources are shared
+ *   between CAN1 and CAN2 modules: CAN1 uses only filter 0 (but reserves
  *   0 through CAN_NFILTERS/2-1); CAN2 uses only filter CAN_NFILTERS/2
  *   (but reserves CAN_NFILTERS/2 through CAN_NFILTERS-1).
+ *   CAN3 works in single peripheral configuration and uses only filter 0.
  *
  *   32-bit IdMask mode is configured.  However, both the ID and the MASK
  *   are set to zero thus suppressing all filtering because anything masked
@@ -2056,12 +2036,17 @@ static int stm32can_filterinit(FAR struct stm32_can_s *priv)
   regval |= CAN_FMR_FINIT;
   stm32can_putfreg(priv, STM32_CAN_FMR_OFFSET, regval);
 
-  /* Assign half the filters to CAN1, half to CAN2 */
+#if defined(CONFIG_STM32F7_CAN1) || defined(CONFIG_STM32F7_CAN2)
+  if (priv->port == 1 || priv->port == 2)
+    {
+      /* Assign half the filters to CAN1, half to CAN2 */
 
-  regval  = stm32can_getfreg(priv, STM32_CAN_FMR_OFFSET);
-  regval &= CAN_FMR_CAN2SB_MASK;
-  regval |= (CAN_NFILTERS / 2) << CAN_FMR_CAN2SB_SHIFT;
-  stm32can_putfreg(priv, STM32_CAN_FMR_OFFSET, regval);
+      regval  = stm32can_getfreg(priv, STM32_CAN_FMR_OFFSET);
+      regval &= CAN_FMR_CAN2SB_MASK;
+      regval |= (CAN_NFILTERS / 2) << CAN_FMR_CAN2SB_SHIFT;
+      stm32can_putfreg(priv, STM32_CAN_FMR_OFFSET, regval);
+    }
+#endif
 
   /* Disable the filter */
 
@@ -2339,4 +2324,4 @@ FAR struct can_dev_s *stm32_caninitialize(int port)
   return dev;
 }
 
-#endif /* CONFIG_CAN && (CONFIG_STM32_CAN1 || CONFIG_STM32_CAN2) */
+#endif /* CONFIG_CAN && (CONFIG_STM32_CAN1 || CONFIG_STM32_CAN2 || CONFIG_STM32_CAN3) */

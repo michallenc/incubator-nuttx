@@ -44,9 +44,7 @@
 #  include <termios.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "hardware/stm32_pinmap.h"
@@ -379,7 +377,7 @@
 
 #if defined(CONFIG_ARMV7M_DCACHE)
 #  define TXDMA_BUF_SIZE(b) (((b) + TXDMA_BUFFER_MASK) & ~TXDMA_BUFFER_MASK)
-#  define TXDMA_BUF_ALIGN   aligned_data(ARMV7M_DCACHE_LINESIZE);
+#  define TXDMA_BUF_ALIGN   aligned_data(ARMV7M_DCACHE_LINESIZE)
 #else
 #  define TXDMA_BUF_SIZE(b)  (b)
 #  define TXDMA_BUF_ALIGN
@@ -467,7 +465,8 @@
                DMA_SCR_MSIZE_8BITS    | \
                DMA_SCR_PBURST_SINGLE  | \
                DMA_SCR_MBURST_SINGLE  | \
-               CONFIG_USART_TXDMAPRIO)
+               CONFIG_USART_TXDMAPRIO | \
+               DMA_SCR_TRBUFF)
 
 #endif /* SERIAL_HAVE_TXDMA */
 
@@ -685,7 +684,9 @@ static bool up_rxflowcontrol(struct uart_dev_s *dev, unsigned int nbuffered,
                              bool upper);
 #endif
 static void up_send(struct uart_dev_s *dev, int ch);
+#ifndef SERIAL_HAVE_ONLY_TXDMA
 static void up_txint(struct uart_dev_s *dev, bool enable);
+#endif
 static bool up_txready(struct uart_dev_s *dev);
 
 #ifdef SERIAL_HAVE_TXDMA
@@ -1573,6 +1574,8 @@ static inline void up_setusartint(struct up_dev_s *priv, uint16_t ie)
  * Name: up_restoreusartint
  ****************************************************************************/
 
+#if !defined(SERIAL_HAVE_ONLY_DMA) || defined(CONFIG_PM) || \
+    defined(HAVE_RS485)
 static void up_restoreusartint(struct up_dev_s *priv, uint16_t ie)
 {
   irqstate_t flags;
@@ -1583,6 +1586,7 @@ static void up_restoreusartint(struct up_dev_s *priv, uint16_t ie)
 
   leave_critical_section(flags);
 }
+#endif
 
 /****************************************************************************
  * Name: up_disableusartint
@@ -2586,7 +2590,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
     || defined(CONFIG_STM32H7_SERIALBRK_BSDCOMPAT)
   struct up_dev_s   *priv  = (struct up_dev_s *)dev->priv;
 #endif
-  int                ret    = OK;
+  int                ret   = OK;
 
   switch (cmd)
     {
@@ -3486,6 +3490,7 @@ static void up_dma_txint(struct uart_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
+#if defined(SERIAL_HAVE_RXDMA_OPS) || defined(SERIAL_HAVE_NODMA_OPS)
 static void up_txint(struct uart_dev_s *dev, bool enable)
 {
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
@@ -3524,12 +3529,14 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 #  ifdef CONFIG_STM32_SERIALBRK_BSDCOMPAT
       if (priv->ie & USART_CR1_IE_BREAK_INPROGRESS)
         {
+          leave_critical_section(flags);
           return;
         }
 #  endif
 
       up_restoreusartint(priv, ie);
 
+#else
       /* Fake a TX interrupt here by just calling uart_xmitchars() with
        * interrupts disabled (note this may recurse).
        */
@@ -3546,6 +3553,7 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 
   leave_critical_section(flags);
 }
+#endif
 
 /****************************************************************************
  * Name: up_txready

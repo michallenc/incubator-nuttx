@@ -44,7 +44,7 @@
 #include <nuttx/lcd/slcd_codec.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_gpio.h"
 #include "sam4l_periphclks.h"
 #include "hardware/sam4l_lcdca.h"
@@ -59,8 +59,8 @@
 
 /* Configuration ************************************************************/
 
-#ifndef CONFIG_LIB_SLCDCODEC
-#  error This SLCD driver requires CONFIG_LIB_SLCDCODEC
+#ifndef CONFIG_LIBC_SLCDCODEC
+#  error This SLCD driver requires CONFIG_LIBC_SLCDCODEC
 #endif
 
 #if !defined(CONFIG_SAM34_OSC32K) && !defined(CONFIG_SAM34_RC32K)
@@ -300,13 +300,16 @@ static int slcd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
 static const struct file_operations g_slcdops =
 {
-  0,             /* open */
-  0,             /* close */
+  NULL,          /* open */
+  NULL,          /* close */
   slcd_read,     /* read */
   slcd_write,    /* write */
-  0,             /* seek */
+  NULL,          /* seek */
   slcd_ioctl,    /* ioctl */
   slcd_poll      /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL         /* unlink */
+#endif
 };
 
 /* LCD state data */

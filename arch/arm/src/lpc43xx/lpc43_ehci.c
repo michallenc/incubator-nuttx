@@ -47,8 +47,7 @@
 
 #include "chip.h"
 #include "hardware/lpc43_usb0.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lpc43_cgu.h"
 #include "hardware/lpc43_creg.h"
 #include "hardware/lpc43_evntrtr.h"
@@ -518,7 +517,8 @@ static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
          usbhost_ep_t ep0, uint8_t funcaddr, uint8_t speed,
          uint16_t maxpacketsize);
 static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
-         const FAR struct usbhost_epdesc_s *epdesc, usbhost_ep_t *ep);
+                         FAR const struct usbhost_epdesc_s *epdesc,
+                         FAR usbhost_ep_t *ep);
 static int lpc43_epfree(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep);
 static int lpc43_alloc(FAR struct usbhost_driver_s *drvr,
          FAR uint8_t **buffer, FAR size_t *maxlen);
@@ -575,17 +575,17 @@ static const uint8_t g_ehci_speed[4] =
 
 /* The head of the asynchronous queue */
 
-static struct lpc43_qh_s g_asynchead __attribute__ ((aligned(32)));
+static struct lpc43_qh_s g_asynchead aligned_data(32);
 
 #ifndef CONFIG_USBHOST_INT_DISABLE
 /* The head of the periodic queue */
 
-static struct lpc43_qh_s g_intrhead   __attribute__ ((aligned(32)));
+static struct lpc43_qh_s g_intrhead   aligned_data(32);
 
 /* The frame list */
 
 #ifdef CONFIG_LPC43_EHCI_PREALLOCATE
-static uint32_t g_framelist[FRAME_LIST_SIZE] __attribute__ ((aligned(4096)));
+static uint32_t g_framelist[FRAME_LIST_SIZE] aligned_data(4096);
 #else
 static uint32_t *g_framelist;
 #endif
@@ -599,12 +599,12 @@ static uint32_t *g_framelist;
 /* Queue Head (QH) pool */
 
 static struct lpc43_qh_s g_qhpool[CONFIG_LPC43_EHCI_NQHS]
-                       __attribute__ ((aligned(32)));
+                       aligned_data(32);
 
 /* Queue Element Transfer Descriptor (qTD) pool */
 
 static struct lpc43_qtd_s g_qtdpool[CONFIG_LPC43_EHCI_NQTDS]
-                        __attribute__ ((aligned(32)));
+                        aligned_data(32);
 
 #else
 /* Pools of dynamically data structures.  These will all be linked into the
@@ -3830,8 +3830,8 @@ static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
  ****************************************************************************/
 
 static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
-                         const FAR struct usbhost_epdesc_s *epdesc,
-                         usbhost_ep_t *ep)
+                         FAR const struct usbhost_epdesc_s *epdesc,
+                         FAR usbhost_ep_t *ep)
 {
   struct lpc43_epinfo_s *epinfo;
   struct usbhost_hubport_s *hport;

@@ -33,8 +33,7 @@
 
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_pwm.h"
 #include "stm32_adc.h"
 #include "stm32_dma.h"
@@ -169,7 +168,8 @@
 #  define FOC1_PWM           (8)
 #  define FOC1_PWM_NCHANNELS (PWM_TIM8_NCHANNELS)
 #  define FOC1_PWM_BASE      (STM32_TIM8_BASE)
-#  if defined(CONFIG_STM32_HAVE_IP_DBGMCU_V2)
+#  if defined(CONFIG_STM32_HAVE_IP_DBGMCU_V2) ||  \
+      defined(CONFIG_STM32_HAVE_IP_DBGMCU_V3)
 #    define FOC1_PWM_FZ_BIT    (DBGMCU_APB2_TIM8STOP)
 #  elif defined(CONFIG_STM32_HAVE_IP_DBGMCU_V1)
 #    define FOC1_PWM_FZ_BIT    (DBGMCU_CR_TIM8STOP)
@@ -1637,7 +1637,7 @@ static int stm32_foc_adc_handler(int irq, FAR void *context, FAR void *arg)
 
       if (dev != NULL)
         {
-          priv  = STM32_FOC_PRIV_FROM_DEV_GET(dev);
+          priv = STM32_FOC_PRIV_FROM_DEV_GET(dev);
           DEBUGASSERT(priv);
 
           foc_dev = STM32_FOC_DEV_FROM_DEV_GET(dev);
@@ -2036,15 +2036,6 @@ static int stm32_foc_bind(FAR struct foc_dev_s *dev,
   DEBUGASSERT(cb);
   DEBUGASSERT(priv);
 
-  /* Do we support given FOC instance? */
-
-  if (dev->devno > CONFIG_MOTOR_FOC_INST)
-    {
-      mtrerr("Unsupported STM32 FOC instance %d\n", dev->devno);
-      ret = -EINVAL;
-      goto errout;
-    }
-
   /* Validate callbacks */
 
   DEBUGASSERT(cb->notifier);
@@ -2052,8 +2043,6 @@ static int stm32_foc_bind(FAR struct foc_dev_s *dev,
   /* Bind upper-half FOC device callbacks */
 
   priv->cb = cb;
-
-errout:
   return ret;
 }
 

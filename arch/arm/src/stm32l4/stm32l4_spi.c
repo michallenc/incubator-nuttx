@@ -70,8 +70,6 @@
 #include <nuttx/power/pm.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32l4.h"
 #include "stm32l4_gpio.h"
@@ -1901,7 +1899,6 @@ FAR struct spi_dev_s *stm32l4_spibus_initialize(int bus)
 #endif
     {
       spierr("ERROR: Unsupported SPI bus: %d\n", bus);
-      return NULL;
     }
 
   leave_critical_section(flags);

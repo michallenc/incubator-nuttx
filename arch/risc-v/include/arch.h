@@ -35,44 +35,63 @@
 #  include <stdint.h>
 #endif
 
-#include <arch/csr.h>
-
-#ifdef CONFIG_ARCH_RV32IM
-#  include <arch/rv32im/arch.h>
-#endif
-
-#ifdef CONFIG_ARCH_RV64GC
-#  include <arch/rv64gc/arch.h>
-#endif
-
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Macros to get the core and vendor ID, HART, arch and ISA codes, etc.
- */
-
-#ifdef CONFIG_RV32IM_SYSTEM_CSRRS_SUPPORT
-
-uint32_t up_getmisa(void);
-uint32_t up_getarchid(void);
-uint32_t up_getimpid(void);
-uint32_t up_getvendorid(void);
-uint32_t up_gethartid(void);
-
+#ifdef __ASSEMBLY__
+#  define __STR(s)  s
 #else
-
-#define up_getmisa() 0
-#define up_getarchid() 0
-#define up_getimpid() 0
-#define up_getvendorid() 0
-#define up_gethartid() 0
-
+#  define __STR(s)  #s
 #endif
+#define __XSTR(s)   __STR(s)
+
+#if defined(CONFIG_ARCH_QPFPU)
+#  define FLOAD     __STR(flq)
+#  define FSTORE    __STR(fsq)
+#elif defined(CONFIG_ARCH_DPFPU)
+#  define FLOAD     __STR(fld)
+#  define FSTORE    __STR(fsd)
+#else
+#  define FLOAD     __STR(flw)
+#  define FSTORE    __STR(fsw)
+#endif
+
+#ifdef CONFIG_ARCH_RV32
+#  define REGLOAD   __STR(lw)
+#  define REGSTORE  __STR(sw)
+#else
+#  define REGLOAD   __STR(ld)
+#  define REGSTORE  __STR(sd)
+#endif
+
+/* RISC-V requires a 16-byte stack alignment. */
+
+#define STACK_ALIGNMENT     16
+#define STACK_FRAME_SIZE    __XSTR(STACK_ALIGNMENT)
 
 /****************************************************************************
  * Inline functions
  ****************************************************************************/
+
+#ifndef __ASSEMBLY__
+
+/****************************************************************************
+ * Name: up_getsp
+ ****************************************************************************/
+
+static inline uintptr_t up_getsp(void)
+{
+  register uintptr_t sp;
+  __asm__
+  (
+    "\tadd  %0, x0, x2\n"
+    : "=r"(sp)
+  );
+  return sp;
+}
+
+#endif
 
 /****************************************************************************
  * Public Types
@@ -81,18 +100,6 @@ uint32_t up_gethartid(void);
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
-
-#ifdef CONFIG_RV32IM_HW_MULDIV
-uint32_t up_hard_mul(uint32_t a, uint32_t b);
-uint32_t up_hard_mulh(uint32_t a, uint32_t b);
-uint32_t up_hard_mulhsu(uint32_t a, uint32_t b);
-uint32_t up_hard_mulhu(uint32_t a, uint32_t b);
-uint32_t up_hard_div(uint32_t a, uint32_t b);
-uint32_t up_hard_rem(uint32_t a, uint32_t b);
-uint32_t up_hard_divu(uint32_t a, uint32_t b);
-uint32_t up_hard_remu(uint32_t a, uint32_t b);
-uint32_t time_hard_mul(uint32_t a, uint32_t b, uint32_t *t);
-#endif
 
 #ifdef __cplusplus
 #define EXTERN extern "C"

@@ -349,8 +349,23 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
               geo->erasesize, geo->neraseblocks);
         break;
 
-      case MTDIOC_XIPBASE:
-        finfo("MTDIOC_XIPBASE\n");
+      case BIOC_PARTINFO:
+        {
+          FAR struct partition_info_s *info =
+            (FAR struct partition_info_s *)arg;
+          if (info != NULL)
+            {
+              info->numsectors  = priv->nblocks;
+              info->sectorsize  = priv->blocksize;
+              info->startsector = 0;
+              info->parent[0]   = '\0';
+              ret               = OK;
+            }
+        }
+        break;
+
+      case BIOC_XIPBASE:
+        finfo("BIOC_XIPBASE\n");
         ppv = (FAR void**)arg;
         if (ppv)
           {
@@ -437,7 +452,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
       /* Try to change to High Speed DDR mode */
 
       ret = lc823450_sdc_changespeedmode(dev->channel, 4);
-      finfo("ch=%" PRId32 " DDR mode ret=%d \n", dev->channel, ret);
+      finfo("ch=%" PRId32 " DDR mode ret=%d\n", dev->channel, ret);
     }
   else
     {
@@ -448,7 +463,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
 
       if (0 == ret)
         {
-          lldbg("ch=%d DDR50 mode ret=%d \n", dev->channel, ret);
+          lldbg("ch=%d DDR50 mode ret=%d\n", dev->channel, ret);
           goto get_card_size;
         }
 #endif
@@ -460,7 +475,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
       if (0 == ret)
         {
           ret = lc823450_sdc_setclock(dev->channel, 40000000, sysclk);
-          finfo("ch=%" PRId32 " HS mode ret=%d \n", dev->channel, ret);
+          finfo("ch=%" PRId32 " HS mode ret=%d\n", dev->channel, ret);
         }
     }
 
@@ -489,7 +504,7 @@ get_card_size:
       lc823450_sdc_cachectl(dev->channel, 1);
     }
 
-  finfo("ch=%" PRId32 " size=%" PRId64 " \n",
+  finfo("ch=%" PRId32 " size=%" PRId64 "\n",
         dev->channel, (uint64_t)blocksize * (uint64_t)nblocks);
 
 exit_with_error:
@@ -630,7 +645,6 @@ int lc823450_mtd_initialize(uint32_t devno)
 
 #ifdef CONFIG_DEBUG
   finfo("/dev/mtdblock%d created\n", devno);
-  fflush(stdout);
 #endif
 
   priv = (FAR struct lc823450_mtd_dev_s *)g_mtdmaster[ch];
@@ -679,8 +693,9 @@ int lc823450_mtd_initialize(uint32_t devno)
                                    partinfo[i].nblocks);
       if (!g_mtdpart[i])
         {
-          finfo("%s(): mtd_partition failed. startblock=%lu nblocks=%lu\n",
-                __func__, partinfo[i].startblock, partinfo[i].nblocks);
+          finfo("%s(): mtd_partition failed. startblock=%"
+                PRIuOFF " nblocks=%" PRIuOFF "\n", __func__,
+                partinfo[i].startblock, partinfo[i].nblocks);
           mtd_semgive(&g_sem);
           DEBUGASSERT(0);
           return -EIO;
@@ -829,7 +844,6 @@ int lc823450_mtd_uninitialize(uint32_t devno)
 
 #ifdef CONFIG_DEBUG
   finfo("/dev/mtdblock%d deleted\n", devno);
-  fflush(stdout);
 #endif
   return OK;
 }

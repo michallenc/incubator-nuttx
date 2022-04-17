@@ -44,9 +44,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/tms570_sci.h"
 #include "tms570_lowputc.h"
 
@@ -536,7 +534,7 @@ static int tms570_ioctl(struct file *filep, int cmd, unsigned long arg)
     case TCGETS:
       {
         struct termios  *termiosp = (struct termios *)arg;
-        struct tms570_dev_s *priv    = (struct tms570_dev_s *)dev->priv;
+        struct tms570_dev_s *priv = (struct tms570_dev_s *)dev->priv;
 
         if (!termiosp)
           {
@@ -588,7 +586,7 @@ static int tms570_ioctl(struct file *filep, int cmd, unsigned long arg)
     case TCSETS:
       {
         struct termios  *termiosp = (struct termios *)arg;
-        struct tms570_dev_s *priv    = (struct tms570_dev_s *)dev->priv;
+        struct tms570_dev_s *priv = (struct tms570_dev_s *)dev->priv;
         uint32_t baud;
         uint32_t ints;
         uint8_t parity;

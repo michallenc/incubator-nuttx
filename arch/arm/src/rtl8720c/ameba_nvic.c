@@ -32,7 +32,6 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -62,11 +61,8 @@
  * processing.  Access to g_current_regs[] must be through the macro
  * CURRENT_REGS for portability.
  */
-#ifdef CONFIG_SMP
+
 volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#else
-volatile uint32_t *g_current_regs[1];
-#endif
 
 /* extern int32_t    __StackLimit; */
 
@@ -85,21 +81,6 @@ static int (* __vectors[NR_IRQS - NVIC_IRQ_FIRST])(void);
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  uint32_t sp;
-  __asm__
-  (
-    "\tmov %0, sp\n\t"
-    : "=r"(sp)
-  );
-  return sp;
-}
 
 /****************************************************************************
  * Name: nvic_irqinfo
@@ -401,7 +382,7 @@ void up_irqinitialize(void)
    */
 
   modifyreg32(NVIC_AIRCR, NVIC_AIRCR_VECTKEY_MASK | NVIC_AIRCR_PRIGROUP_MASK,
-  (0x5fa << NVIC_AIRCR_VECTKEY_SHIFT) | (0x5 << NVIC_AIRCR_PRIGROUP_SHIFT));
+              NVIC_AIRCR_VECTKEY | (0x5 << NVIC_AIRCR_PRIGROUP_SHIFT));
 
   /* Set all interrupts (and exceptions) to the default priority */
 

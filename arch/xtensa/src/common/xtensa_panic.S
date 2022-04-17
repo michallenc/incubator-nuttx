@@ -64,7 +64,27 @@
 #include <arch/xtensa/core.h>
 #include <arch/xtensa/xtensa_specregs.h>
 
-#include "chip_macros.h"
+#include "chip.h"
+
+/****************************************************************************
+ * Assembly Language Macros
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: setintstack
+ *
+ * Description:
+ *   Set the current stack pointer to the "top" the interrupt stack.
+ *   Single CPU case.
+ *   Must be provided by MCU-specific logic in the SMP case.
+ *
+ ****************************************************************************/
+
+#if !defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
+	.macro	setintstack tmp1 tmp2
+	movi		a1, g_intstacktop
+	.endm
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -106,15 +126,24 @@ _xtensa_panic:
 	 * stack.
 	 */
 
-	mov		a2, sp							/* Address of state save on stack */
 	call0	_xtensa_context_save			/* Save full register state */
 
-	/* Save exc cause and vaddr into exception frame */
+	/* Save exception cause and vaddr into the user frame */
 
 	rsr		a0, EXCCAUSE
 	s32i	a0, sp, (4 * REG_EXCCAUSE)
 	rsr		a0, EXCVADDR
 	s32i	a0, sp, (4 * REG_EXCVADDR)
+
+	/* Dispatch the sycall as with other interrupts. */
+
+	mov		a12, sp							/* a12 = address of register save area */
+
+	/* Switch to an interrupt stack if we have one */
+
+#if CONFIG_ARCH_INTERRUPTSTACK > 15
+	setintstack a13 a14
+#endif
 
 	/* Set up PS for C, re-enable hi-pri interrupts, and clear EXCM. */
 
@@ -125,6 +154,7 @@ _xtensa_panic:
 #endif
 
 	wsr		a0, PS
+	rsync
 
 	/* Call C panic handler:  Arg1 (A2) = Exception code; Arg 2 (A3) = start
 	 * of the register save area.
@@ -132,11 +162,11 @@ _xtensa_panic:
 
 #ifdef __XTENSA_CALL0_ABI__
 	rsr		a2, EXCSAVE_1
-	mov		a3, sp
+	mov		a3, a12
 	call0	xtensa_panic					/* Call xtensa_panic. Should not return */
 #else
 	rsr		a6, EXCSAVE_1
-	mov		a7, sp
+	mov		a7, a12
 	call4	xtensa_panic					/* Call xtensa_panic. Should not return */
 #endif
 

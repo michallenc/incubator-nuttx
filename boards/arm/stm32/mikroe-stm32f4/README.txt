@@ -67,7 +67,6 @@ Default USART/UART Configuration
 USART2 is enabled in all configurations (see */defconfig).  RX and TX are
 configured on pins PD6 and PD5, respectively (see include/board.h).
 
-
 Timer Inputs/Outputs
 ====================
 
@@ -168,18 +167,6 @@ with the MIO283QT-2.  It uses a different LCD controller.  The default in
 all of these configurations is the MIO283QT-2.  But MIO283QT-9A is also
 supported and you can switch from the MIO283QT-2 to the MIO283QT-9A by simply
 modifying the NuttX configuration
-
-CFLAGS
-------
-
-Only recent GCC toolchains have built-in support for the Cortex-M4 FPU.  You will see
-the following lines in each Make.defs file:
-
-  ifeq ($(CONFIG_ARCH_FPU),y)
-    ARCHCPUFLAGS = -mcpu=cortex-m4 -mthumb -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-  else
-    ARCHCPUFLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-  endif
 
 Mikroe-STM32F4-specific Configuration Options
 ===============================================
@@ -554,7 +541,6 @@ Where <subdir> is one of the following:
        you do this a lot, you will probably want to invest a little time
        to develop a tool to automate these steps.
 
-
   nsh
   ---
   This is an NSH example that uses USART2 as the console.  Note that
@@ -566,7 +552,6 @@ Where <subdir> is one of the following:
 
   NOTE:  This demo doesn't quite work yet.  I can get output to the
          USART, but so far, I have not gotten nsh to actually come up.
-
 
   nx
   --

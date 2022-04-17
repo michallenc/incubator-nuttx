@@ -37,8 +37,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "kl_pwm.h"
 #include "kl_gpio.h"
@@ -642,6 +640,7 @@ static int pwm_stop(FAR struct pwm_lowerhalf_s *dev)
 
       default:
         pwmerr("ERROR: No such channel: %d\n", priv->channel);
+        leave_critical_section(flags);
         return -EINVAL;
     }
 

@@ -121,6 +121,8 @@
 #  define  MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
+#define NO_HOLDER               (INVALID_PROCESS_ID)
+
 /* Debug ********************************************************************/
 
 #define TR_FMT1 false
@@ -543,7 +545,7 @@ static int  max3421e_ep0configure(FAR struct usbhost_driver_s *drvr,
               usbhost_ep_t ep0, uint8_t funcaddr, uint8_t speed,
               uint16_t maxpacketsize);
 static int  max3421e_epalloc(FAR struct usbhost_driver_s *drvr,
-              FAR const FAR struct usbhost_epdesc_s *epdesc,
+              FAR const struct usbhost_epdesc_s *epdesc,
               FAR usbhost_ep_t *ep);
 static int  max3421e_epfree(FAR struct usbhost_driver_s *drvr,
               usbhost_ep_t ep);
@@ -1183,7 +1185,7 @@ static void max3421e_give_exclsem(FAR struct max3421e_usbhost_s *priv)
     {
       /* No.. give the semaphore */
 
-      priv->holder    = (pid_t)-1;
+      priv->holder    = NO_HOLDER;
       priv->exclcount = 0;
       max3421e_givesem(&priv->exclsem);
     }
@@ -1379,6 +1381,7 @@ static int max3421e_chan_wait(FAR struct max3421e_usbhost_s *priv,
       ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
+          leave_critical_section(flags);
           return ret;
         }
     }
@@ -4799,7 +4802,7 @@ static inline int max3421e_sw_initialize(FAR struct max3421e_usbhost_s *priv,
   priv->connected = false;
   priv->irqset    = 0;
   priv->change    = false;
-  priv->holder    = (pid_t)-1;
+  priv->holder    = NO_HOLDER;
 
   /* Put all of the channels back in their initial, allocated state */
 

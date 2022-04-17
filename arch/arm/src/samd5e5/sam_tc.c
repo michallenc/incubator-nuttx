@@ -43,8 +43,6 @@
 #include <nuttx/semaphore.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "sam_gclk.h"
 #include "sam_periphclks.h"
 #include "sam_port.h"
@@ -342,7 +340,7 @@ void tc_bridge_enable(int tc)
 
 static void tc_wait_synchronization(struct sam_tc_dev_s *priv)
 {
-  while ((getreg32(priv->attr->base +  SAM_TC_SYNCBUSY_OFFSET) & 0x7) != 0);
+  while ((getreg32(priv->attr->base + SAM_TC_SYNCBUSY_OFFSET) & 0x7) != 0);
 }
 
 /****************************************************************************
@@ -760,7 +758,7 @@ void sam_tc_free(TC_HANDLE handle)
    * is stopped and disabled.
    */
 
-  sam_tc_attach(handle, NULL, NULL, 0);
+  sam_tc_detach(handle);
   sam_tc_stop(handle);
 
   /* Mark the channel as available */

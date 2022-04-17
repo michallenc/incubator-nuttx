@@ -36,7 +36,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lc823450_i2c.h"
 #include "lc823450_i2s.h"
 #include "lc823450-xgevk.h"
@@ -75,7 +75,7 @@ int lc823450_wm8776initialize(int minor)
   char devname[12];
   int ret;
 
-  ainfo("Initializing WM8776 \n");
+  ainfo("Initializing WM8776\n");
 
   /* Initialize I2C */
 

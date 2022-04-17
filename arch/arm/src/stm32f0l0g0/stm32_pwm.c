@@ -56,8 +56,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_pwm.h"
@@ -2111,6 +2109,7 @@ static int stm32pwm_stop(FAR struct pwm_lowerhalf_s *dev)
 #endif
 
       default:
+        leave_critical_section(flags);
         return -EINVAL;
     }
 

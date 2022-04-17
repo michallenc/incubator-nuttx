@@ -75,7 +75,7 @@
 #include <nuttx/lcd/slcd_codec.h>
 #include <nuttx/semaphore.h>
 
-#include "mips_arch.h"
+#include "mips_internal.h"
 #include "pic32mx_ioport.h"
 #include "pic32mx_int.h"
 #include "pic32mx.h"
@@ -184,13 +184,16 @@ static int lcd_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
 static const struct file_operations g_lcdops =
 {
-  0,             /* open */
-  0,             /* close */
+  NULL,          /* open */
+  NULL,          /* close */
   lcd_read,      /* read */
   lcd_write,     /* write */
-  0,             /* seek */
+  NULL,          /* seek */
   lcd_ioctl,     /* ioctl */
   lcd_poll       /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL         /* unlink */
+#endif
 };
 
 /* This is the driver state structure */

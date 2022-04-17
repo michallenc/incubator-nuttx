@@ -63,7 +63,7 @@
  * Description:
  *   Perform architecture specific initialization
  *
- *   CONFIG_LIB_BOARDCTL=y:
+ *   CONFIG_BOARDCTL=y:
  *     If CONFIG_NSH_ARCHINITIALIZE=y:
  *       Called from the NSH library (or other application)
  *     Otherse, assumed to be called from some other application.
@@ -82,7 +82,7 @@ int stm32_bringup(void)
 #endif
   int ret;
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
   /* Initialize CAN and register the CAN driver. */
 
   ret = stm32_can_setup();

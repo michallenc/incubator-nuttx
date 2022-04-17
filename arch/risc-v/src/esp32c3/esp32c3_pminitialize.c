@@ -23,7 +23,6 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <nuttx/power/pm.h>
 
 #include "esp32c3_pm.h"
 
@@ -43,13 +42,6 @@
 
 void riscv_pminitialize(void)
 {
-  /* Initialize RTC parameters */
-
-  esp32c3_pminit();
-
-  /* Then initialize the NuttX power management subsystem proper */
-
-  pm_initialize();
 }
 
 #endif /* CONFIG_PM */

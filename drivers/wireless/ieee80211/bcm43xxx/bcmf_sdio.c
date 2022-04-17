@@ -37,8 +37,8 @@
 #include <nuttx/arch.h>
 #include <nuttx/kthread.h>
 #include <nuttx/wdog.h>
+#include <nuttx/sdio.h>
 
-#include <nuttx/wireless/ieee80211/mmc_sdio.h>
 #include <nuttx/wireless/ieee80211/bcmf_sdio.h>
 #include <nuttx/wireless/ieee80211/bcmf_board.h>
 
@@ -81,6 +81,9 @@
 #ifdef CONFIG_IEEE80211_BROADCOM_BCM43438
   extern const struct bcmf_sdio_chip bcmf_43438_config_sdio;
 #endif
+#ifdef CONFIG_IEEE80211_BROADCOM_BCM43455
+  extern const struct bcmf_sdio_chip bcmf_43455_config_sdio;
+#endif
 
 /****************************************************************************
  * Private Function Prototypes
@@ -116,7 +119,8 @@ FAR struct bcmf_dev_s *g_sdio_priv;
  * This pool is shared between all driver devices
  */
 
-static struct bcmf_sdio_frame g_pktframes[BCMF_PKT_POOL_SIZE];
+static struct bcmf_sdio_frame
+  g_pktframes[CONFIG_IEEE80211_BROADCOM_FRAME_POOL_SIZE];
 
 /* TODO free_queue should be static */
 
@@ -207,6 +211,9 @@ int bcmf_sdio_bus_sleep(FAR struct bcmf_sdio_dev_s *sbus, bool sleep)
 int bcmf_probe(FAR struct bcmf_sdio_dev_s *sbus)
 {
   int ret;
+#ifdef CONFIG_IEEE80211_BROADCOM_SDIO_EHS_MODE
+  uint8_t value;
+#endif
 
   /* Probe sdio card compatible device */
 
@@ -245,9 +252,35 @@ int bcmf_probe(FAR struct bcmf_sdio_dev_s *sbus)
       goto exit_error;
     }
 
-  /* Default device clock speed is up to 25 MHz
+#ifdef CONFIG_IEEE80211_BROADCOM_SDIO_EHS_MODE
+  /* Default device clock speed is up to 25 MHz.
    * We could set EHS bit to operate at a clock rate up to 50 MHz.
    */
+
+  ret = bcmf_read_reg(sbus, 0, SDIO_CCCR_HIGHSPEED, &value);
+  if (ret != OK)
+    {
+      goto exit_error;
+    }
+
+  if (value & SDIO_CCCR_HIGHSPEED_SHS)
+    {
+      /* If the chip confirms its High-Speed capability,
+       * enable the High-Speed mode.
+       */
+
+      ret = bcmf_write_reg(sbus, 0, SDIO_CCCR_HIGHSPEED,
+                           SDIO_CCCR_HIGHSPEED_EHS);
+      if (ret != OK)
+        {
+          goto exit_error;
+        }
+    }
+  else
+    {
+      wlwarn("High-Speed mode is not supported by the chip!\n");
+    }
+#endif
 
   SDIO_CLOCK(sbus->sdio_dev, CLOCK_SD_TRANSFER_4BIT);
   up_mdelay(BCMF_CLOCK_SETUP_DELAY_MS);
@@ -642,6 +675,7 @@ int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
   sbus->minor              = minor;
   sbus->ready              = false;
   sbus->sleeping           = true;
+  sbus->flow_ctrl          = false;
 
   sbus->bus.txframe        = bcmf_sdpcm_queue_frame;
   sbus->bus.rxframe        = bcmf_sdpcm_get_rx_frame;
@@ -664,7 +698,7 @@ int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
 
   /* FIXME this should be static to driver */
 
-  for (ret = 0; ret < BCMF_PKT_POOL_SIZE; ret++)
+  for (ret = 0; ret < CONFIG_IEEE80211_BROADCOM_FRAME_POOL_SIZE; ret++)
     {
       bcmf_dqueue_push(&sbus->free_queue, &g_pktframes[ret].list_entry);
     }
@@ -747,7 +781,7 @@ int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
       goto exit_uninit_hw;
     }
 
-  sbus->thread_id = ret;
+  sbus->thread_id = (pid_t)ret;
 
   /* SDIO bus is up and running */
 
@@ -790,6 +824,13 @@ int bcmf_chipinitialize(FAR struct bcmf_sdio_dev_s *sbus)
       case SDIO_DEVICE_ID_BROADCOM_43430:
         wlinfo("bcm43438 chip detected\n");
         sbus->chip = (struct bcmf_sdio_chip *)&bcmf_43438_config_sdio;
+        break;
+#endif
+
+#ifdef CONFIG_IEEE80211_BROADCOM_BCM43455
+      case SDIO_DEVICE_ID_BROADCOM_43455:
+        wlinfo("bcm43455 chip detected\n");
+        sbus->chip = (struct bcmf_sdio_chip *)&bcmf_43455_config_sdio;
         break;
 #endif
 
@@ -931,7 +972,9 @@ struct bcmf_sdio_frame *bcmf_sdio_allocate_frame(FAR struct bcmf_dev_s *priv,
         }
 
 #if 0
-      if (!tx || sbus->tx_queue_count < BCMF_PKT_POOL_SIZE - 1)
+      if (!tx ||
+          sbus->tx_queue_count <
+            CONFIG_IEEE80211_BROADCOM_FRAME_POOL_SIZE - 1)
 #endif
         {
           if ((entry = bcmf_dqueue_pop_tail(&sbus->free_queue)) != NULL)

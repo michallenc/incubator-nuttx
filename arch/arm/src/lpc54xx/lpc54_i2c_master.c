@@ -65,9 +65,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/lpc54_pinmux.h"
 #include "hardware/lpc54_syscon.h"
 #include "hardware/lpc54_flexcomm.h"
@@ -1187,6 +1185,7 @@ struct i2c_master_s *lpc54_i2cbus_initialize(int port)
 #endif
     {
       i2cerr("ERROR: Unsupported port=%d\n", port);
+      leave_critical_section(flags);
       return NULL;
     }
 

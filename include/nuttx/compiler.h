@@ -47,11 +47,23 @@
 #  define CONFIG_HAVE_FUNCTIONNAME 1 /* Has __FUNCTION__ */
 #  define CONFIG_HAVE_FILENAME     1 /* Has __FILE__ */
 
-/* Indicate that a local variable is not used */
-
-#  define UNUSED(a) ((void)(1 || (a)))
-
 /* Built-in functions */
+
+/* The <stddef.h> header shall define the following macros:
+ *
+ * offsetof(type, member-designator)
+ *   Integer constant expression of type size_t, the value of which is the
+ *   offset in bytes to the structure member (member-designator), from the
+ *   beginning of its structure (type).
+ *
+ *     NOTE: This version of offsetof() depends on behaviors that could be
+ *     undefined for some compilers.  It would be better to use a builtin
+ *     function if one exists.
+ *
+ * Reference: Opengroup.org
+ */
+
+#  define offsetof(a, b) __builtin_offsetof(a, b)
 
 /* GCC 4.x have __builtin_ctz(|l|ll) and __builtin_clz(|l|ll). These count
  * trailing/leading zeros of input number and typically will generate few
@@ -143,6 +155,40 @@
 #  define inline_function __attribute__ ((always_inline,no_instrument_function))
 #  define noinline_function __attribute__ ((noinline))
 
+/* The noinstrument_function attribute informs GCC don't instrument it */
+
+#  define noinstrument_function __attribute__ ((no_instrument_function))
+
+/* The nostackprotect_function attribute disables stack protection in
+ * sensitive functions, e.g., stack coloration routines.
+ */
+
+#if defined(__has_attribute)
+#  if __has_attribute(no_stack_protector)
+#    define nostackprotect_function __attribute__ ((no_stack_protector))
+#  endif
+#endif
+
+/* nostackprotect_function definition for older versions of GCC and Clang.
+ * Note that Clang does not support setting per-function optimizations,
+ * simply disable the entire optimization pass for the required function.
+ */
+
+#ifndef nostackprotect_function
+#  if defined(__clang__)
+#    define nostackprotect_function __attribute__ ((optnone))
+#  else
+#    define nostackprotect_function __attribute__ ((__optimize__("-fno-stack-protector")))
+#  endif
+#endif
+
+/* The unused code or data */
+
+#  define unused_code __attribute__((unused))
+#  define unused_data __attribute__((unused))
+#  define used_code __attribute__((used))
+#  define used_data __attribute__((used))
+
 /* Some versions of GCC have a separate __syslog__ format.
  * http://mail-index.netbsd.org/source-changes/2015/10/14/msg069435.html
  * Use it if available. Otherwise, assume __printf__ accepts %m.
@@ -152,6 +198,7 @@
 #    define __syslog__ __printf__
 #  endif
 
+#  define formatlike(a) __attribute__((__format_arg__ (a)))
 #  define printflike(a, b) __attribute__((__format__ (__printf__, a, b)))
 #  define sysloglike(a, b) __attribute__((__format__ (__syslog__, a, b)))
 #  define scanflike(a, b) __attribute__((__format__ (__scanf__, a, b)))
@@ -330,6 +377,12 @@
 
 #  define UNUSED(a) ((void)(1 || (a)))
 
+#  if defined(__clang__)
+#    define no_builtin(n) __attribute__((no_builtin(n)))
+#  else
+#    define no_builtin(n) __attribute__((__optimize__("-fno-tree-loop-distribute-patterns")))
+#endif
+
 /* SDCC-specific definitions ************************************************/
 
 #elif defined(SDCC) || defined(__SDCC)
@@ -398,7 +451,15 @@
 
 #  define inline_function
 #  define noinline_function
+#  define noinstrument_function
+#  define nostackprotect_function
 
+#  define unused_code
+#  define unused_data
+#  define used_code
+#  define used_data
+
+#  define formatlike(a)
 #  define printflike(a, b)
 #  define sysloglike(a, b)
 #  define scanflike(a, b)
@@ -472,9 +533,9 @@
 #  undef  CONFIG_HAVE_DOUBLE
 #  undef  CONFIG_HAVE_LONG_DOUBLE
 
-/* Indicate that a local variable is not used */
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define no_builtin(n)
 
 /* Zilog-specific definitions ***********************************************/
 
@@ -530,6 +591,13 @@
 #  define naked_function
 #  define inline_function
 #  define noinline_function
+#  define noinstrument_function
+#  define nostackprotect_function
+#  define unused_code
+#  define unused_data
+#  define used_code
+#  define used_data
+#  define formatlike(a)
 #  define printflike(a, b)
 #  define sysloglike(a, b)
 #  define scanflike(a, b)
@@ -592,6 +660,10 @@
 #  undef CONFIG_HAVE_ANONYMOUS_STRUCT
 #  undef  CONFIG_HAVE_ANONYMOUS_UNION
 
+/* Indicate that a local variable is not used */
+
+#  define UNUSED(a) ((void)(1 || (a)))
+
 /* Older Zilog compilers support both types double and long long, but the
  * size is 32-bits (same as long and single precision) so it is safer to say
  * that they are not supported.  Later versions are more ANSII compliant and
@@ -603,21 +675,13 @@
 #  undef  CONFIG_HAVE_DOUBLE
 #  undef  CONFIG_HAVE_LONG_DOUBLE
 
-/* Indicate that a local variable is not used */
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define no_builtin(n)
 
 /* ICCARM-specific definitions **********************************************/
 
 #elif defined(__ICCARM__)
-
-#  define CONFIG_CPP_HAVE_VARARGS 1 /* Supports variable argument macros */
-#  define CONFIG_HAVE_FILENAME 1    /* Has __FILE__ */
-#  define CONFIG_HAVE_FLOAT 1
-
-/* Indicate that a local variable is not used */
-
-#  define UNUSED(a) ((void)(1 || (a)))
 
 #  define weak_alias(name, aliasname)
 #  define weak_data            __weak
@@ -634,6 +698,13 @@
 #  define naked_function
 #  define inline_function
 #  define noinline_function
+#  define noinstrument_function
+#  define nostackprotect_function
+#  define unused_code
+#  define unused_data
+#  define used_code
+#  define used_data
+#  define formatlike(a)
 #  define printflike(a, b)
 #  define sysloglike(a, b)
 #  define scanflike(a, b)
@@ -667,6 +738,18 @@
 #  undef CONFIG_HAVE_ANONYMOUS_STRUCT
 #  undef  CONFIG_HAVE_ANONYMOUS_UNION
 
+/* Indicate that a local variable is not used */
+
+#  define UNUSED(a) ((void)(1 || (a)))
+
+#  define CONFIG_CPP_HAVE_VARARGS 1 /* Supports variable argument macros */
+#  define CONFIG_HAVE_FILENAME 1    /* Has __FILE__ */
+#  define CONFIG_HAVE_FLOAT 1
+
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
+
+#  define no_builtin(n)
+
 /* Unknown compiler *********************************************************/
 
 #else
@@ -676,7 +759,7 @@
 #  undef  CONFIG_HAVE_FUNCTIONNAME
 #  undef  CONFIG_HAVE_FILENAME
 #  undef  CONFIG_HAVE_WEAKFUNCTIONS
-#  undef CONFIG_HAVE_CXX14
+#  undef  CONFIG_HAVE_CXX14
 #  define weak_alias(name, aliasname)
 #  define weak_data
 #  define weak_function
@@ -693,6 +776,13 @@
 #  define naked_function
 #  define inline_function
 #  define noinline_function
+#  define noinstrument_function
+#  define nostackprotect_function
+#  define unused_code
+#  define unused_data
+#  define used_code
+#  define used_data
+#  define formatlike(a)
 #  define printflike(a, b)
 #  define sysloglike(a, b)
 #  define scanflike(a, b)
@@ -714,6 +804,10 @@
 #  undef  CONFIG_HAVE_ANONYMOUS_UNION
 
 #  define UNUSED(a) ((void)(1 || (a)))
+
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
+
+#  define no_builtin(n)
 
 #endif
 

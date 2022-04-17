@@ -47,8 +47,6 @@
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "hardware/lpc54_pinmux.h"
 #include "hardware/lpc54_syscon.h"
 #include "hardware/lpc54_flexcomm.h"
@@ -2006,6 +2004,7 @@ FAR struct spi_dev_s *lpc54_spibus_initialize(int port)
   else
 #endif
     {
+      leave_critical_section(flags);
       return NULL;
     }
 

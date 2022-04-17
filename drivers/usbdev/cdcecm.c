@@ -56,6 +56,10 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
+#ifdef CONFIG_CDCECM_BOARD_SERIALSTR
+#include <nuttx/board.h>
+#endif
+
 #include "cdcecm.h"
 
 #ifdef CONFIG_NET_CDCECM
@@ -98,7 +102,7 @@
 
 /* This is a helper pointer for accessing the contents of Ethernet header */
 
-#define BUF ((struct eth_hdr_s *)self->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)self->dev.d_buf)
 
 /****************************************************************************
  * Private Types
@@ -120,8 +124,8 @@ struct cdcecm_driver_s
   FAR struct usbdev_ep_s      *epbulkout;   /* Bulk OUT endpoint */
   uint8_t                      config;      /* Selected configuration number */
 
-  uint8_t                      pktbuf[CONFIG_NET_ETH_PKTSIZE +
-                                      CONFIG_NET_GUARDSIZE];
+  uint16_t                     pktbuf[(CONFIG_NET_ETH_PKTSIZE +
+                                       CONFIG_NET_GUARDSIZE + 1) / 2];
 
   struct usbdev_req_s         *rdreq;       /* Single read request */
   bool                         rxpending;   /* Packet available in rdreq */
@@ -532,7 +536,7 @@ static void cdcecm_receive(FAR struct cdcecm_driver_s *self)
   else
 #endif
 #ifdef CONFIG_NET_ARP
-  if (BUF->type == htons(ETHTYPE_ARP))
+  if (BUF->type == HTONS(ETHTYPE_ARP))
     {
       /* Dispatch ARP packet to the network layer */
 
@@ -1361,7 +1365,8 @@ static int cdcecm_setinterface(FAR struct cdcecm_driver_s *self,
 
 static int cdcecm_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
 {
-  const char *str;
+  FAR uint8_t *data = (FAR uint8_t *)(strdesc + 1);
+  FAR const char *str;
   int len;
   int ndata;
   int i;
@@ -1373,10 +1378,10 @@ static int cdcecm_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
       {
         /* Descriptor 0 is the language id */
 
-        strdesc->len     = 4;
-        strdesc->type    = USB_DESC_TYPE_STRING;
-        strdesc->data[0] = LSBYTE(CDCECM_STR_LANGUAGE);
-        strdesc->data[1] = MSBYTE(CDCECM_STR_LANGUAGE);
+        strdesc->len  = 4;
+        strdesc->type = USB_DESC_TYPE_STRING;
+        data[0] = LSBYTE(CDCECM_STR_LANGUAGE);
+        data[1] = MSBYTE(CDCECM_STR_LANGUAGE);
         return 4;
       }
 
@@ -1389,7 +1394,11 @@ static int cdcecm_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
       break;
 
     case CDCECM_SERIALSTRID:
+#ifdef CONFIG_CDCECM_BOARD_SERIALSTR
+      str = board_usbdev_serialstr();
+#else
       str = "0";
+#endif
       break;
 
     case CDCECM_CONFIGSTRID:
@@ -1418,8 +1427,8 @@ static int cdcecm_mkstrdesc(uint8_t id, FAR struct usb_strdesc_s *strdesc)
 
   for (i = 0, ndata = 0; i < len; i++, ndata += 2)
     {
-      strdesc->data[ndata]     = str[i];
-      strdesc->data[ndata + 1] = 0;
+      data[ndata]     = str[i];
+      data[ndata + 1] = 0;
     }
 
   strdesc->len  = ndata + 2;
@@ -2095,7 +2104,7 @@ static int cdcecm_classobject(int minor,
 
   /* Network device initialization */
 
-  self->dev.d_buf     = self->pktbuf;
+  self->dev.d_buf     = (uint8_t *)self->pktbuf;
   self->dev.d_ifup    = cdcecm_ifup;     /* I/F up (new IP address) callback */
   self->dev.d_ifdown  = cdcecm_ifdown;   /* I/F down callback */
   self->dev.d_txavail = cdcecm_txavail;  /* New TX data callback */

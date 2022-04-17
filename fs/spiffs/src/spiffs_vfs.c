@@ -140,6 +140,7 @@ const struct mountpt_operations spiffs_operations =
   spiffs_sync,       /* sync */
   spiffs_dup,        /* dup */
   spiffs_fstat,      /* fstat */
+  NULL,              /* fchstat */
   spiffs_truncate,   /* truncate */
 
   spiffs_opendir,    /* opendir */
@@ -156,6 +157,7 @@ const struct mountpt_operations spiffs_operations =
   spiffs_rmdir,      /* rmdir */
   spiffs_rename,     /* rename */
   spiffs_stat,       /* stat */
+  NULL               /* chstat */
 };
 
 /****************************************************************************
@@ -340,9 +342,9 @@ static int spiffs_readdir_callback(FAR struct spiffs_s *fs,
         }
 #endif
 
-      strncpy(entryp->d_name,
+      strlcpy(entryp->d_name,
               (FAR char *)objhdr.name + SPIFFS_LEADING_SLASH_SIZE,
-              NAME_MAX);
+              sizeof(entryp->d_name));
       entryp->d_type = objhdr.type;
       return OK;
     }

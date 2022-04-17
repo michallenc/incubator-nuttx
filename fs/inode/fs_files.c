@@ -71,6 +71,11 @@ static int files_extend(FAR struct filelist *list, size_t row)
       return 0;
     }
 
+  if (row * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK > OPEN_MAX)
+    {
+      return -EMFILE;
+    }
+
   tmp = kmm_realloc(list->fl_files, sizeof(FAR struct file *) * row);
   DEBUGASSERT(tmp);
   if (tmp == NULL)
@@ -98,6 +103,12 @@ static int files_extend(FAR struct filelist *list, size_t row)
 
   list->fl_files = tmp;
   list->fl_rows = row;
+
+  /* Note: If assertion occurs, the fl_rows has a overflow.
+   * And there may be file descriptors leak in system.
+   */
+
+  DEBUGASSERT(list->fl_rows == row);
   return 0;
 }
 

@@ -32,7 +32,7 @@ ifeq ($(CONFIG_ARCH_BUTTONS),y)
 CSRCS +=  stm32_buttons.c
 endif
 
-ifeq ($(CONFIG_LIB_BOARDCTL),y)
+ifeq ($(CONFIG_BOARDCTL),y)
 CSRCS += stm32_appinitialize.c
 endif
 
@@ -64,11 +64,11 @@ ifeq ($(CONFIG_MTD_N25QXXX),y)
 CSRCS += stm32_n25q.c
 endif
 
-ifeq ($(CONFIG_STM32F7_SDMMC), y)
+ifeq ($(CONFIG_STM32F7_SDMMC),y)
 CSRCS += stm32_sdmmc.c
 endif
 
-ifeq ($(CONFIG_AUDIO_WM8994), y)
+ifeq ($(CONFIG_AUDIO_WM8994),y)
 CSRCS += stm32_wm8994.c
 endif
 

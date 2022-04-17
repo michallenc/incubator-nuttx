@@ -36,8 +36,6 @@
 #include "nvic.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "lc823450_gpio.h"
 #ifdef CONFIG_LC823450_MTM0_TICK
@@ -711,7 +709,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
 
   spin_unlock_irqrestore(NULL, flags);
 
-  tmrinfo("elapsed = %lld \n", elapsed);
+  tmrinfo("elapsed = %lld\n", elapsed);
 
   /* Convert the elapsed time in seconds and nanoseconds. */
 

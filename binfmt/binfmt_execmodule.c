@@ -160,6 +160,9 @@ int exec_module(FAR const struct binary_s *binp,
       binfmt_freeargv(argv);
       goto errout_with_tcb;
     }
+
+  binfo("Initialize the user heap (heapsize=%d)\n", binp->addrenv.heapsize);
+  umm_initialize((FAR void *)CONFIG_ARCH_HEAP_VBASE, binp->addrenv.heapsize);
 #endif
 
   /* Note that tcb->flags are not modified.  0=normal task */
@@ -186,7 +189,7 @@ int exec_module(FAR const struct binary_s *binp,
       goto errout_with_addrenv;
     }
 
-#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
+#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_ARCH_KERNEL_STACK)
   /* Allocate the kernel stack */
 
   ret = up_addrenv_kstackalloc(&tcb->cmn);

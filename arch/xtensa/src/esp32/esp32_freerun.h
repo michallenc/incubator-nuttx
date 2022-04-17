@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_XTENSA_SRC_ESP32_FREERUN_H
-#define __ARCH_XTENSA_SRC_ESP32_FREERUN_H
+#ifndef __ARCH_XTENSA_SRC_ESP32_ESP32_FREERUN_H
+#define __ARCH_XTENSA_SRC_ESP32_ESP32_FREERUN_H
 
 /****************************************************************************
  * Included Files
@@ -46,11 +46,11 @@
 
 struct esp32_freerun_s
 {
-  uint8_t chan;                    /* The timer/counter in use */
-  uint32_t overflow;               /* Timer counter overflow */
-  uint16_t resolution;             /* Timer resolution */
-  uint64_t max_timeout;            /* Maximum timeout to overflow */
-  FAR struct esp32_tim_dev_s *tch; /* Handle returned by esp32_tim_init() */
+  uint8_t chan;                /* The timer/counter in use */
+  uint32_t overflow;           /* Timer counter overflow */
+  uint16_t resolution;         /* Timer resolution */
+  uint64_t max_timeout;        /* Maximum timeout to overflow */
+  struct esp32_tim_dev_s *tch; /* Handle returned by esp32_tim_init() */
 };
 
 /****************************************************************************
@@ -139,4 +139,4 @@ int esp32_freerun_uninitialize(struct esp32_freerun_s *freerun);
 #endif
 
 #endif /* CONFIG_ESP32_FREERUN */
-#endif /* __ARCH_XTENSA_SRC_ESP32_FREERUN_H */
+#endif /* __ARCH_XTENSA_SRC_ESP32_ESP32_FREERUN_H */

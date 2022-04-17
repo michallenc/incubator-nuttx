@@ -45,9 +45,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "rp2040_config.h"
 #include "rp2040_serial.h"
 
@@ -650,7 +648,7 @@ static int up_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode *inode    = filep->f_inode;
   FAR struct uart_dev_s *dev = inode->i_private;
   FAR struct up_dev_s *priv  = (FAR struct up_dev_s *)dev->priv;
-  int ret                = OK;
+  int ret                    = OK;
 
   switch (cmd)
     {

@@ -42,8 +42,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "imxrt_lpi2c.h"
 #include "imxrt_gpio.h"
 
@@ -1686,7 +1685,7 @@ static int imxrt_lpi2c_transfer(FAR struct i2c_master_s *dev,
   priv->msgc  = count;
   priv->flags = msgs->flags;
 
-  i2cinfo("Flags %x, len %d \n", msgs->flags, msgs->length);
+  i2cinfo("Flags %x, len %d\n", msgs->flags, msgs->length);
 
   /* Reset I2C trace logic */
 

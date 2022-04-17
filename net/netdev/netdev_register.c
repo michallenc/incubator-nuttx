@@ -364,6 +364,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
       /* There are no clients of the device yet */
 
       dev->d_conncb = NULL;
+      dev->d_conncb_tail = NULL;
       dev->d_devcb = NULL;
 
       /* We need exclusive access for the following operations */
@@ -374,6 +375,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
       ifindex = get_ifindex();
       if (ifindex < 0)
         {
+          net_unlock();
           return ifindex;
         }
 
@@ -397,7 +399,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
            */
 
           dev->d_ifname[IFNAMSIZ - 1] = '\0';
-          strncpy(devfmt_str, dev->d_ifname, IFNAMSIZ);
+          strlcpy(devfmt_str, dev->d_ifname, IFNAMSIZ);
 
           /* Then use the content of the temporary buffer as the format
            * string.

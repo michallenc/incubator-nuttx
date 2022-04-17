@@ -51,7 +51,7 @@
 
 #include <nuttx/irq.h>
 
-#include "mips_arch.h"
+#include "mips_internal.h"
 #include "pic32mx.h"
 #include "pic32mx_usbotg.h"
 
@@ -576,7 +576,7 @@ static const struct usbdev_ops_s g_devops =
  */
 
 static volatile struct usbotg_bdtentry_s g_bdt[4*PIC32MX_NENDPOINTS]
-  __attribute__ ((aligned(512)));
+  aligned_data(512);
 
 /****************************************************************************
  * Private Functions

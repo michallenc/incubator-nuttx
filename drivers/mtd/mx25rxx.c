@@ -605,8 +605,8 @@ int mx25rxx_erase(FAR struct mtd_dev_s *dev,
           /* Erase each sector */
 
           mx25rxx_erase_sector(priv, startblock);
-          startblock ++;
-          blocksleft --;
+          startblock++;
+          blocksleft--;
         }
     }
 #endif
@@ -711,7 +711,7 @@ int mx25rxx_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
   FAR struct mx25rxx_dev_s *priv = (FAR struct mx25rxx_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -749,6 +749,28 @@ int mx25rxx_ioctl(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg)
                     " erasesize: %" PRId32
                     " neraseblocks: %" PRId32 "\n",
                     geo->blocksize, geo->erasesize, geo->neraseblocks);
+            }
+        }
+        break;
+
+      case BIOC_PARTINFO:
+        {
+          FAR struct partition_info_s *info =
+            (FAR struct partition_info_s *)arg;
+          if (info != NULL)
+            {
+#ifdef CONFIG_MX25RXX_SECTOR512
+              info->numsectors  = priv->nsectors <<
+                               (priv->sectorshift - MX25RXX_SECTOR512_SHIFT);
+              info->sectorsize  = 1 << MX25RXX_SECTOR512_SHIFT;
+#else
+              info->numsectors  = priv->nsectors <<
+                                  (priv->sectorshift - priv->pageshift);
+              info->sectorsize  = 1 << priv->pageshift;
+#endif
+              info->startsector = 0;
+              info->parent[0]   = '\0';
+              ret               = OK;
             }
         }
         break;

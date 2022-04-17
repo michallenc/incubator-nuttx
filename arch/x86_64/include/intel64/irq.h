@@ -34,7 +34,6 @@
 #  include <stdbool.h>
 #  include <arch/arch.h>
 #  include <time.h>
-#  include <debug.h>
 #  include <nuttx/config.h>
 #endif
 
@@ -184,7 +183,7 @@ struct xcptcontext
 
   /* Register save area */
 
-  uint64_t regs[XCPTCONTEXT_REGS] __attribute__((aligned (16)));
+  uint64_t regs[XCPTCONTEXT_REGS] aligned_data(16);
 };
 #endif
 

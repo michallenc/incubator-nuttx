@@ -36,7 +36,6 @@
 #include <nuttx/arch.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 
@@ -1662,7 +1661,7 @@ static inline int sam_multiple(struct sam_xdmach_s *xdmach)
    *    (CNDA) Register with the first descriptor address and bit NDAIF
    *    with the master interface identifier.
    *
-   * REVIST:  Using NDAIF=0.  Is that correct?
+   * REVISIT:  Using NDAIF=0.  Is that correct?
    */
 
   paddr = sam_physramaddr((uintptr_t)llhead);

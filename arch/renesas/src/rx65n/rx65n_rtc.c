@@ -35,8 +35,7 @@
 #include <nuttx/compiler.h>
 #include <arch/board/board.h>
 #include <rx65n_rtc.h>
-#include "up_arch.h"
-
+#include "up_internal.h"
 #include "nuttx/compiler.h"
 #ifdef CONFIG_RX65N_RTC
 
@@ -912,7 +911,6 @@ int rx65n_rtc_setalarm(FAR struct alm_setalarm_s *alminfo)
   uint8_t dummy_byte;
   uint8_t dummy_word;
   uint8_t i;
-  int ret = -EBUSY;
 
   /* Is there already something waiting on the ALARM? */
 
@@ -1068,11 +1066,10 @@ int rx65n_rtc_setalarm(FAR struct alm_setalarm_s *alminfo)
   /* Set Priority of ALM interrupt */
 
   IPR(RTC, ALM) = _0F_RTC_PRIORITY_LEVEL15;
-  ret = OK;
   leave_critical_section(flags);
   UNUSED(dummy_byte);
   UNUSED(dummy_word);
-  return ret;
+  return OK;
 }
 #endif
 
@@ -1117,8 +1114,8 @@ int rx65n_rtc_setperiodic(FAR const struct timespec *period,
   /* Set PRD priority level */
 
   IPR(RTC, PRD) = _0F_RTC_PRIORITY_LEVEL15;
-  return OK;
   leave_critical_section(flags);
+  return OK;
 }
 #endif
 

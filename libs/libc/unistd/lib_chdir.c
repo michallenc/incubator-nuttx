@@ -100,6 +100,7 @@ int chdir(FAR const char *path)
   struct stat buf;
   char *oldpwd;
   char *alloc;
+  char *abspath;
   int errcode;
   int ret;
 
@@ -114,7 +115,7 @@ int chdir(FAR const char *path)
   /* Verify that 'path' refers to a directory */
 
   ret = stat(path, &buf);
-  if (ret != 0)
+  if (ret < 0)
     {
       errcode = ENOENT;
       goto errout;
@@ -142,7 +143,7 @@ int chdir(FAR const char *path)
   oldpwd = getenv("PWD");
   if (!oldpwd)
     {
-      oldpwd = CONFIG_LIB_HOMEDIR;
+      oldpwd = CONFIG_LIBC_HOMEDIR;
     }
 
   alloc = strdup(oldpwd);  /* kludge needed because environment is realloc'ed */
@@ -151,7 +152,15 @@ int chdir(FAR const char *path)
 
   /* Set the cwd to the input 'path' */
 
-  setenv("PWD", path, TRUE);
+  abspath = realpath(path, NULL);
+  if (abspath == NULL)
+    {
+      errcode = ENOENT;
+      goto errout;
+    }
+
+  setenv("PWD", abspath, TRUE);
+  lib_free(abspath);
   sched_unlock();
   return OK;
 

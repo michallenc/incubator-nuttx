@@ -59,7 +59,6 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 
@@ -171,7 +170,7 @@ static sq_queue_t g_tcd_free;
 /* This is a pool of pre-allocated TCDs */
 
 static struct imxrt_edmatcd_s g_tcd_pool[CONFIG_IMXRT_EDMA_NTCD]
-              __attribute__((aligned(EDMA_ALIGN)));
+              aligned_data(EDMA_ALIGN);
 #endif
 
 /****************************************************************************

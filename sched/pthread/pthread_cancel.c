@@ -24,13 +24,14 @@
 
 #include <nuttx/config.h>
 
-#include <nuttx/arch.h>
-
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
 #include <errno.h>
+
+#include <nuttx/tls.h>
+#include <nuttx/pthread.h>
 
 #include "sched/sched.h"
 #include "task/task.h"
@@ -46,7 +47,7 @@ int pthread_cancel(pthread_t thread)
 
   /* First, make sure that the handle references a valid thread */
 
-  if (thread == 0)
+  if ((pid_t)thread == IDLE_PROCESS_ID)
     {
       /* pid == 0 is the IDLE task (in a single CPU configuration).  Callers
        * cannot cancel the IDLE task.
@@ -85,15 +86,14 @@ int pthread_cancel(pthread_t thread)
 
   if (tcb == this_task())
     {
-      tcb->flags &= ~TCB_FLAG_CANCEL_PENDING;
-      tcb->flags |= TCB_FLAG_CANCEL_DOING;
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__)
-      up_pthread_exit(((FAR struct pthread_tcb_s *)tcb)->exit,
-                      PTHREAD_CANCELED);
-#else
       pthread_exit(PTHREAD_CANCELED);
-#endif
     }
+
+  /* Refer to up_tls_info() */
+
+#ifdef CONFIG_PTHREAD_CLEANUP
+  pthread_cleanup_popall(tcb->stack_alloc_ptr);
+#endif
 
   /* Complete pending join operations */
 

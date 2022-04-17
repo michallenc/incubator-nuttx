@@ -37,8 +37,6 @@
 
 #include "chip.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "stm32l4.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_tim.h"
@@ -247,8 +245,8 @@ static int stm32l4_shutdown(FAR struct qe_lowerhalf_s *lower);
 static int stm32l4_position(FAR struct qe_lowerhalf_s *lower,
                             FAR int32_t *pos);
 static int stm32l4_reset(FAR struct qe_lowerhalf_s *lower);
-static int stm32l4_ioctl(FAR struct qe_lowerhalf_s *lower,
-                         int cmd, unsigned long arg);
+static int stm32l4_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
+                         unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -258,11 +256,13 @@ static int stm32l4_ioctl(FAR struct qe_lowerhalf_s *lower,
 
 static const struct qe_ops_s g_qecallbacks =
 {
-  .setup    = stm32l4_setup,
-  .shutdown = stm32l4_shutdown,
-  .position = stm32l4_position,
-  .reset    = stm32l4_reset,
-  .ioctl    = stm32l4_ioctl,
+  .setup     = stm32l4_setup,
+  .shutdown  = stm32l4_shutdown,
+  .position  = stm32l4_position,
+  .setposmax = NULL,            /* not supported yet */
+  .reset     = stm32l4_reset,
+  .setindex  = NULL,            /* not supported yet */
+  .ioctl     = stm32l4_ioctl,
 };
 
 /* Per-timer state structures */
@@ -975,6 +975,7 @@ static int stm32l4_shutdown(FAR struct qe_lowerhalf_s *lower)
         break;
 #endif
       default:
+        leave_critical_section(flags);
         return -EINVAL;
     }
 

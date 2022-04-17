@@ -36,9 +36,7 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "nrf52_irq.h"
 #ifdef CONFIG_NRF52_GPIOTE
 #  include "nrf52_gpiote.h"
@@ -102,7 +100,7 @@ static void nrf52_dumpnvic(const char *msg, int irq)
   irqinfo("  INTCTRL:    %08x VECTAB: %08x\n",
           getreg32(NVIC_INTCTRL), getreg32(NVIC_VECTAB));
 #if 0
-  irqinfo("  SYSH ENABLE MEMFAULT: %08x BUSFAULT: %08x \n",
+  irqinfo("  SYSH ENABLE MEMFAULT: %08x BUSFAULT: %08x\n",
           getreg32(NVIC_SYSHCON_MEMFAULTENA),
           getreg32(NVIC_SYSHCON_BUSFAULTENA));
   irqinfo("  USGFAULT: %08x SYSTICK: %08x\n",

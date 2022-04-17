@@ -85,6 +85,7 @@
 #include <nuttx/compiler.h>
 #include <nuttx/cache.h>
 #include <nuttx/sched.h>
+#include <nuttx/tls.h>
 
 /****************************************************************************
  * Pre-processor definitions
@@ -449,8 +450,7 @@ void up_release_pending(void);
  *   1) The priority of the currently running task drops and the next
  *      task in the ready to run list has priority.
  *   2) An idle, ready to run task's priority has been raised above the
- *      the priority of the current, running task and it now has the
- *      priority.
+ *      priority of the current, running task and it now has the priority.
  *
  *   This function is called only from the NuttX scheduling
  *   logic.  Interrupts will always be disabled when this
@@ -492,6 +492,37 @@ void up_exit() noreturn_function;
  ****************************************************************************/
 
 void up_assert(FAR const char *filename, int linenum);
+
+#ifdef CONFIG_ARCH_HAVE_BACKTRACE
+
+/****************************************************************************
+ * Name: up_backtrace
+ *
+ * Description:
+ *  up_backtrace()  returns  a backtrace for the TCB, in the array
+ *  pointed to by buffer.  A backtrace is the series of currently active
+ *  function calls for the program.  Each item in the array pointed to by
+ *  buffer is of type void *, and is the return address from the
+ *  corresponding stack frame.  The size argument specifies the maximum
+ *  number of addresses that can be stored in buffer.   If  the backtrace is
+ *  larger than size, then the addresses corresponding to the size most
+ *  recent function calls are returned; to obtain the complete backtrace,
+ *  make sure that buffer and size are large enough.
+ *
+ * Input Parameters:
+ *   tcb    - Address of the task's TCB, NULL means dump the running task
+ *   buffer - Return address from the corresponding stack frame
+ *   size   - Maximum number of addresses that can be stored in buffer
+ *   skip   - number of addresses to be skipped
+ *
+ * Returned Value:
+ *   up_backtrace() returns the number of addresses returned in buffer
+ *
+ ****************************************************************************/
+
+int up_backtrace(FAR struct tcb_s *tcb,
+                 FAR void **buffer, int size, int skip);
+#endif /* CONFIG_ARCH_HAVE_BACKTRACE */
 
 /****************************************************************************
  * Name: up_schedule_sigaction
@@ -558,8 +589,6 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
        noreturn_function;
 #endif
 
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
-    !defined(CONFIG_DISABLE_PTHREAD)
 /****************************************************************************
  * Name: up_pthread_start
  *
@@ -585,28 +614,11 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
  *
  ****************************************************************************/
 
+#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
+    !defined(CONFIG_DISABLE_PTHREAD)
 void up_pthread_start(pthread_trampoline_t startup,
-                      pthread_startroutine_t entrypt, pthread_addr_t arg);
+                      pthread_startroutine_t entrypt, pthread_addr_t arg)
        noreturn_function;
-
-/****************************************************************************
- * Name: up_pthread_exit
- *
- * Description:
- *   In this kernel mode build, this function will be called to execute a
- *   pthread in user-space. This kernel-mode stub will then be called
- *   transfer control to the user-mode pthread_exit.
- *
- * Input Parameters:
- *   exit       - The user-space pthread_exit function
- *   exit_value - The pointer of the pthread exit parameter
- *
- * Returned Value:
- *   None
- ****************************************************************************/
-
-void up_pthread_exit(pthread_exitroutine_t exit, FAR void *exit_value);
-        noreturn_function;
 #endif
 
 /****************************************************************************
@@ -1763,9 +1775,51 @@ int up_timer_start(FAR const struct timespec *ts);
 /* struct tls_info_s;
  * FAR struct tls_info_s *up_tls_info(void);
  *
- * The actual declaration or definition is provided in arch/tls.h.  The
- * actual implementation may be a MACRO or an inline function.
+ * The actual definition is provided in arch/arch.h as a macro. The default
+ * implementation provided here assume the arch has a "push down" stack.
  */
+
+#ifndef up_tls_info
+#  if defined(CONFIG_TLS_ALIGNED) && !defined(__KERNEL__)
+#    define up_tls_info() TLS_INFO((uintptr_t)up_getsp())
+#  else
+#    define up_tls_info() tls_get_info()
+#  endif
+#endif
+
+/****************************************************************************
+ * Name: up_tls_size
+ *
+ * Description:
+ *   Get TLS (sizeof(struct tls_info_s) + tdata + tbss) section size.
+ *
+ * Returned Value:
+ *   Size of (sizeof(struct tls_info_s) + tdata + tbss).
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_THREAD_LOCAL
+int up_tls_size(void);
+#else
+#define up_tls_size() sizeof(struct tls_info_s) 
+#endif
+
+/****************************************************************************
+ * Name: up_tls_initialize
+ *
+ * Description:
+ *   Initialize thread local region
+ *
+ * Input Parameters:
+ *   tls_data - The memory region to initialize
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_THREAD_LOCAL
+void up_tls_initialize(FAR struct tls_info_s *info);
+#else
+#define up_tls_initialize(x)
+#endif
 
 /****************************************************************************
  * Multiple CPU support
@@ -1910,14 +1964,14 @@ int up_cpu_idlestack(int cpu, FAR struct tcb_s *tcb, size_t stack_size);
  * Name: up_cpu_start
  *
  * Description:
- *   In an SMP configution, only one CPU is initially active (CPU 0). System
- *   initialization occurs on that single thread. At the completion of the
- *   initialization of the OS, just before beginning normal multitasking,
+ *   In an SMP configuration, only one CPU is initially active (CPU 0).
+ *   System initialization occurs on that single thread. At the completion of
+ *   the initialization of the OS, just before beginning normal multitasking,
  *   the additional CPUs would be started by calling this function.
  *
- *   Each CPU is provided the entry point to is IDLE task when started.  A
+ *   Each CPU is provided the entry point to its IDLE task when started.  A
  *   TCB for each CPU's IDLE task has been initialized and placed in the
- *   CPU's g_assignedtasks[cpu] list.  A stack has also been allocateded and
+ *   CPU's g_assignedtasks[cpu] list.  No stack has been allocated or
  *   initialized.
  *
  *   The OS initialization logic calls this function repeatedly until each
@@ -1925,8 +1979,8 @@ int up_cpu_idlestack(int cpu, FAR struct tcb_s *tcb, size_t stack_size);
  *
  * Input Parameters:
  *   cpu - The index of the CPU being started.  This will be a numeric
- *         value in the range of from one to (CONFIG_SMP_NCPUS-1).  (CPU
- *         0 is already active)
+ *         value in the range of one to (CONFIG_SMP_NCPUS-1).
+ *         (CPU 0 is already active)
  *
  * Returned Value:
  *   Zero on success; a negated errno value on failure.
@@ -2248,7 +2302,7 @@ size_t  up_check_intstack_remain(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_RTC) && !defined(CONFIG_RTC_EXTERNAL)
+#if defined(CONFIG_RTC)
 int up_rtc_initialize(void);
 #endif
 
@@ -2485,7 +2539,7 @@ void arch_sporadic_resume(FAR struct tcb_s *tcb);
 #endif
 
 /****************************************************************************
- * Name: up_critmon_*
+ * Name: up_perf_*
  *
  * Description:
  *   The first interface simply provides the current time value in unknown
@@ -2501,12 +2555,13 @@ void arch_sporadic_resume(FAR struct tcb_s *tcb);
  *
  *   The second interface simple converts an elapsed time into well known
  *   units.
+ *
  ****************************************************************************/
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-uint32_t up_critmon_gettime(void);
-void up_critmon_convert(uint32_t elapsed, FAR struct timespec *ts);
-#endif
+void up_perf_init(FAR void *arg);
+uint32_t up_perf_gettime(void);
+uint32_t up_perf_getfreq(void);
+void up_perf_convert(uint32_t elapsed, FAR struct timespec *ts);
 
 #undef EXTERN
 #if defined(__cplusplus)

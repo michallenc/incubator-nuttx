@@ -35,7 +35,6 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/drivers/drivers.h>
 
-#include "arm_arch.h"
 #include "hardware/stm32l4_rng.h"
 #include "arm_internal.h"
 
@@ -82,7 +81,7 @@ static const struct file_operations g_rngops =
   NULL,            /* ioctl */
   NULL             /* poll */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , 0              /* unlink */
+  , NULL           /* unlink */
 #endif
 };
 

@@ -336,18 +336,6 @@ There are two version of the FPU support built into the STM32 port.
      CONFIG_ARCH_FPU=y
      CONFIG_ARMV7M_LAZYFPU=y
 
-CFLAGS
-------
-
-Only recent GCC toolchains have built-in support for the Cortex-M4 FPU.  You will see
-the following lines in each Make.defs file:
-
-  ifeq ($(CONFIG_ARCH_FPU),y)
-    ARCHCPUFLAGS = -mcpu=cortex-m4 -mthumb -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-  else
-    ARCHCPUFLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-  endif
-
 STM32F4DIS-BB
 =============
 
@@ -1189,7 +1177,6 @@ Press Reset pin of the board and you will see:
 
     nsh>
 
-
 Just type helloxx:
 
     nsh> helloxx
@@ -1394,7 +1381,7 @@ Configuration Sub-directories
 
        CONFIG_UCLIBCXX=y
        CONFIG_CXX_EXCEPTION=y
-       CONFIG_CXX_LIBSUPCXX=y
+       CONFIG_LIBSUPCXX=y
        CONFIG_UCLIBCXX_BUFSIZE=32
 
        CONFIG_EXAMPLES_ELF_CXX=y
@@ -1928,7 +1915,7 @@ Configuration Sub-directories
          CONFIG_FS_FAT=y          : Needed by the USB host mass storage class.
 
        Board Selection ->
-         CONFIG_LIB_BOARDCTL=y    : Needed for CONFIG_NSH_ARCHINIT
+         CONFIG_BOARDCTL=y    : Needed for CONFIG_NSH_ARCHINIT
 
        Application Configuration -> NSH Library
          CONFIG_NSH_ARCHINIT=y    : Architecture specific USB initialization
@@ -2327,7 +2314,7 @@ Configuration Sub-directories
        Further, the configuration assumes that executable files reside on the
        remotely mounted file system:
 
-       CONFIG_LIB_ENVPATH=y
+       CONFIG_LIBC_ENVPATH=y
        CONFIG_PATH_INITIAL="/mnt/nfs/bin"
 
     3 'ping' support
@@ -2415,7 +2402,7 @@ Configuration Sub-directories
        usable as of this writing.  The windows native build logic is currently
        separate and must be started by:
 
-        make -f Makefile.win
+        make -f Win.mk
 
       This build:
 

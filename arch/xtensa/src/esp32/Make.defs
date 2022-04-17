@@ -18,6 +18,8 @@
 #
 ############################################################################
 
+include chip/Bootloader.mk
+
 # The start-up, "head", file.  May be either a .S or a .c file.
 
 HEAD_ASRC  = xtensa_vectors.S xtensa_window_vector.S xtensa_windowspill.S
@@ -37,13 +39,12 @@ CMN_CSRCS += xtensa_modifyreg8.c xtensa_modifyreg16.c xtensa_modifyreg32.c
 CMN_CSRCS += xtensa_puts.c xtensa_releasepending.c xtensa_releasestack.c
 CMN_CSRCS += xtensa_reprioritizertr.c xtensa_schedsigaction.c
 CMN_CSRCS += xtensa_sigdeliver.c xtensa_stackframe.c xtensa_udelay.c
-CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c
-CMN_CSRCS += esp32_systemreset.c esp32_resetcause.c
+CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c xtensa_swint.c xtensa_switchcontext.c
 
 # Configuration-dependent common XTENSA files
 
-ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
-  CMN_CSRCS += esp32_idle.c
+ifeq ($(CONFIG_DEBUG_TCBINFO),y)
+  CMN_CSRCS += xtensa_tcbinfo.c
 endif
 
 ifeq ($(CONFIG_DEBUG_ALERT),y)
@@ -62,17 +63,22 @@ ifeq ($(CONFIG_STACK_COLORATION),y)
   CMN_CSRCS += xtensa_checkstack.c
 endif
 
-ifeq ($(CONFIG_FS_HOSTFS),y)
+ifeq ($(CONFIG_XTENSA_SEMIHOSTING_HOSTFS),y)
   CMN_ASRCS += xtensa_simcall.S
   CMN_CSRCS += xtensa_hostfs.c
 endif
 
 # Required ESP32 files (arch/xtensa/src/lx6)
 
-CHIP_CSRCS  = esp32_allocateheap.c esp32_clockconfig.c esp32_cpuint.c
-CHIP_CSRCS += esp32_gpio.c esp32_intdecode.c esp32_irq.c esp32_region.c
+CHIP_CSRCS  = esp32_allocateheap.c esp32_clockconfig.c esp32_gpio.c
+CHIP_CSRCS += esp32_systemreset.c esp32_resetcause.c
+CHIP_CSRCS += esp32_irq.c esp32_region.c
 CHIP_CSRCS += esp32_user.c
 CHIP_CSRCS += esp32_dma.c
+
+ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
+CHIP_CSRCS += esp32_idle.c
+endif
 
 ifeq ($(CONFIG_SCHED_TICKLESS),y)
 CHIP_CSRCS += esp32_tickless.c
@@ -93,15 +99,23 @@ ifeq ($(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP),y)
 CHIP_CSRCS += esp32_imm.c
 endif
 
+ifeq ($(CONFIG_ESP32_LEDC),y)
+CHIP_CSRCS += esp32_ledc.c
+endif
+
 ifeq ($(CONFIG_ESP32_I2C),y)
 CHIP_CSRCS += esp32_i2c.c
 endif
 
+ifeq ($(CONFIG_ESP32_TWAI),y)
+CHIP_CSRCS += esp32_twai.c
+endif
+
 ifeq ($(CONFIG_ESP32_SPI),y)
 CHIP_CSRCS += esp32_spi.c
-  ifeq ($(CONFIG_SPI_SLAVE),y)
-    CHIP_CSRCS += esp32_spi_slave.c
-  endif
+ifeq ($(CONFIG_SPI_SLAVE),y)
+CHIP_CSRCS += esp32_spi_slave.c
+endif
 endif
 
 # SPIFLASH and SPIRAM need spicache.c
@@ -136,15 +150,15 @@ endif
 
 ifeq ($(CONFIG_SMP),y)
 CHIP_ASRCS  = esp32_cpuindex.S
-CMN_CSRCS  += esp32_cpuidlestack.c esp32_cpustart.c esp32_intercpu_interrupt.c
+CHIP_CSRCS += esp32_cpuidlestack.c esp32_cpustart.c esp32_intercpu_interrupt.c
 endif
 
 ifeq ($(CONFIG_ESP32_UART),y)
-CMN_CSRCS += esp32_serial.c
+CHIP_CSRCS += esp32_serial.c
 endif
 
 ifeq ($(CONFIG_ESP32_RNG),y)
-CMN_CSRCS += esp32_rng.c
+CHIP_CSRCS += esp32_rng.c
 endif
 
 ifeq ($(CONFIG_ESP32_TIMER),y)
@@ -165,7 +179,7 @@ ifeq ($(CONFIG_ESP32_FREERUN),y)
 CHIP_CSRCS += esp32_freerun.c
 endif
 
-ifeq ($(CONFIG_ESP32_PARTITION),y)
+ifeq ($(CONFIG_ESP32_PARTITION_TABLE),y)
 CHIP_CSRCS += esp32_partition.c
 endif
 
@@ -187,7 +201,7 @@ endif
 
 ifeq ($(CONFIG_ARCH_USE_TEXT_HEAP),y)
 CHIP_CSRCS += esp32_textheap.c
-CMN_ASRCS += xtensa_loadstore.S
+CMN_ASRCS  += xtensa_loadstore.S
 endif
 
 ifeq ($(CONFIG_ESP32_RT_TIMER),y)
@@ -204,7 +218,7 @@ endif
 
 ifeq ($(CONFIG_ESP32_WIRELESS),y)
 WIRELESS_DRV_UNPACK  = esp-wireless-drivers-3rdparty
-WIRELESS_DRV_ID      = 2b53111
+WIRELESS_DRV_ID      = 45701c0
 WIRELESS_DRV_ZIP     = $(WIRELESS_DRV_ID).zip
 WIRELESS_DRV_URL     = https://github.com/espressif/esp-wireless-drivers-3rdparty/archive
 
@@ -229,10 +243,22 @@ INCLUDES += $(shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)esp-wire
 CHIP_CSRCS += esp32_wlan.c esp32_wifi_utils.c esp32_wifi_adapter.c
 
 EXTRA_LIBPATHS += -L $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)esp-wireless-drivers-3rdparty$(DELIM)libs$(DELIM)esp32
-EXTRA_LIBS += -lcore -lrtc -lnet80211 -lpp -lsmartconfig -lcoexist -lespnow -lphy -lwpa_supplicant
+EXTRA_LIBS += -lcore -lrtc -lnet80211 -lpp -lsmartconfig -lespnow -lphy -lwpa_supplicant
+
+ifeq ($(CONFIG_ESP32_BLE),y)
+CHIP_CSRCS += esp32_ble_adapter.c esp32_ble.c
+EXTRA_LIBS += -lbtdm_app
+  ifeq ($(CONFIG_ESP32_WIFI_BT_COEXIST),y)
+    EXTRA_LIBS += -lcoexist
+  endif
+endif
 
 # Due to some Wi-Fi related libraries, the option is need to avoid linking too much
 # unused functions.
 
 LDFLAGS += --gc-sections
+
+# Wireless interfaces.
+
+CHIP_CSRCS += esp32_wireless.c
 endif

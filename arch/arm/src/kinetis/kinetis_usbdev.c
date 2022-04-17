@@ -53,7 +53,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "kinetis.h"
 #include "kinetis_usbotg.h"
 #include "hardware/kinetis_sim.h"
@@ -674,7 +674,7 @@ static const struct usbdev_ops_s g_devops =
  */
 
 static volatile struct usbotg_bdtentry_s g_bdt[4*KHCI_NENDPOINTS]
-  __attribute__ ((aligned(512)));
+  aligned_data(512);
 
 /****************************************************************************
  * Private Private Functions
@@ -4412,7 +4412,7 @@ static void khci_hwinitialize(struct khci_usbdev_s *priv)
   khci_putreg((uint8_t)(((uint32_t)g_bdt >> 8) & USB_BDTPAGE1_MASK),
       KINETIS_USB0_BDTPAGE1);
 
-  uinfo("BDT Address %p \n", (const void *)&g_bdt);
+  uinfo("BDT Address %p\n", (const void *)&g_bdt);
   uinfo("BDTPAGE3 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE3));
   uinfo("BDTPAGE2 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE2));
   uinfo("BDTPAGE1 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE1));

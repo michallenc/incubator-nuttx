@@ -1,12 +1,5 @@
 /****************************************************************************
  * wireless/bluetooth/bt_hcicore.c
- * HCI core Bluetooth handling.
- *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the Intel/Zephyr arduino101_firmware_source-v1.tar package
- * where the code was released with a compatible 3-clause BSD license:
  *
  *   Copyright (c) 2016, Intel Corporation
  *   All rights reserved.
@@ -1445,7 +1438,6 @@ static int hci_initialize(void)
 
 static void cmd_queue_init(void)
 {
-  pid_t pid;
   int ret;
 
   /* When there is a command to be sent to the Bluetooth driver, it queued on
@@ -1455,17 +1447,16 @@ static void cmd_queue_init(void)
   ret = bt_queue_open(BT_HCI_TX, O_RDWR | O_CREAT,
                       CONFIG_BLUETOOTH_TXCMD_NMSGS, &g_btdev.tx_queue);
   DEBUGASSERT(ret >= 0);
-  UNUSED(ret);
 
   nxsem_init(&g_btdev.ncmd_sem, 0, 1);
   nxsem_set_protocol(&g_btdev.ncmd_sem, SEM_PRIO_NONE);
 
   g_btdev.ncmd = 1;
-  pid = kthread_create("BT HCI Tx", CONFIG_BLUETOOTH_TXCMD_PRIORITY,
+  ret = kthread_create("BT HCI Tx", CONFIG_BLUETOOTH_TXCMD_PRIORITY,
                        CONFIG_BLUETOOTH_TXCMD_STACKSIZE,
                        hci_tx_kthread, NULL);
-  DEBUGASSERT(pid > 0);
-  UNUSED(pid);
+  DEBUGASSERT(ret > 0);
+  UNUSED(ret);
 }
 
 /****************************************************************************
@@ -1629,7 +1620,7 @@ int bt_receive(FAR struct bt_driver_s *btdev, enum bt_buf_type_e type,
    * queue.
    */
 
-  buf = bt_buf_alloc(type, NULL, 0);
+  buf = bt_buf_alloc(type, NULL, BLUETOOTH_H4_HDRLEN);
   if (buf == NULL)
     {
       return -ENOMEM;

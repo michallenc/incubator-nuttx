@@ -818,6 +818,7 @@ static int slip_ifup(FAR struct net_driver_s *dev)
   /* Mark the interface up */
 
   priv->bifup = true;
+  netdev_carrier_on(dev);
   return OK;
 }
 
@@ -841,6 +842,8 @@ static int slip_ifdown(FAR struct net_driver_s *dev)
 {
   FAR struct slip_driver_s *priv =
     (FAR struct slip_driver_s *)dev->d_private;
+
+  netdev_carrier_off(dev);
 
   /* Mark the device "down" */
 
@@ -1010,14 +1013,16 @@ int slip_initialize(int intf, FAR const char *devname)
   argv[0] = buffer;
   argv[1] = NULL;
 
-  priv->rxpid = kthread_create("rxslip", CONFIG_NET_SLIP_DEFPRIO,
-                               CONFIG_NET_SLIP_STACKSIZE, slip_rxtask,
-                               (FAR char * const *)argv);
-  if (priv->rxpid < 0)
+  ret = kthread_create("rxslip", CONFIG_NET_SLIP_DEFPRIO,
+                       CONFIG_NET_SLIP_STACKSIZE, slip_rxtask,
+                       (FAR char * const *)argv);
+  if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
-      return priv->rxpid;
+      return ret;
     }
+
+  priv->rxpid = (pid_t)ret;
 
   /* Wait and make sure that the receive task is started. */
 
@@ -1025,14 +1030,16 @@ int slip_initialize(int intf, FAR const char *devname)
 
   /* Start the SLIP transmitter kernel thread */
 
-  priv->txpid = kthread_create("txslip", CONFIG_NET_SLIP_DEFPRIO,
-                               CONFIG_NET_SLIP_STACKSIZE, slip_txtask,
-                               (FAR char * const *)argv);
-  if (priv->txpid < 0)
+  ret = kthread_create("txslip", CONFIG_NET_SLIP_DEFPRIO,
+                       CONFIG_NET_SLIP_STACKSIZE, slip_txtask,
+                       (FAR char * const *)argv);
+  if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
-      return priv->txpid;
+      return ret;
     }
+
+  priv->txpid = (pid_t)ret;
 
   /* Wait and make sure that the transmit task is started. */
 

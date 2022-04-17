@@ -28,8 +28,6 @@
 #include <fixedmath.h>
 #include <assert.h>
 
-#include "arm_arch.h"
-
 #include "hardware/imxrt_iomuxc.h"
 #include "hardware/imxrt_pinmux.h"
 #include "hardware/imxrt_ccm.h"
@@ -39,7 +37,6 @@
 #include "imxrt_iomuxc.h"
 #include "imxrt_gpio.h"
 #include "imxrt_lowputc.h"
-
 #include "arm_internal.h"
 
 #include <arch/board/board.h> /* Include last:  has dependencies */
@@ -567,9 +564,10 @@ int imxrt_lpuart_configure(uint32_t base,
  *
  ****************************************************************************/
 
-#if defined(HAVE_LPUART_DEVICE) && defined(CONFIG_DEBUG_FEATURES)
+#if defined(HAVE_LPUART_DEVICE)
 void imxrt_lowputc(int ch)
 {
+#ifdef HAVE_LPUART_CONSOLE
   while ((getreg32(IMXRT_CONSOLE_BASE + IMXRT_LPUART_STAT_OFFSET) &
          LPUART_STAT_TDRE) == 0)
     {
@@ -599,5 +597,6 @@ void imxrt_lowputc(int ch)
   /* Send the character by writing it into the UART_TXD register. */
 
   putreg32((uint32_t)ch, IMXRT_CONSOLE_BASE + IMXRT_LPUART_DATA_OFFSET);
+#endif
 }
 #endif

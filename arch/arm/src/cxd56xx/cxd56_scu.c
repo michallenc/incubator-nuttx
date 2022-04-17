@@ -40,8 +40,7 @@
 #include <arch/chip/scu.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "cxd56_scufifo.h"
 #include "cxd56_clock.h"
 #include "cxd56_adc.h"
@@ -114,7 +113,7 @@
 struct ev_notify_s
 {
   int signo;               /* Signal number */
-  int pid;                 /* Target PID */
+  pid_t pid;               /* Target PID */
   struct scuev_arg_s *arg; /* Event argument */
   struct scufifo_s *fifo;  /* Reverse reference to FIFO */
 };
@@ -122,7 +121,7 @@ struct ev_notify_s
 struct wm_notify_s
 {
   int signo;                 /* Signal number */
-  int pid;                   /* Target PID */
+  pid_t pid;                 /* Target PID */
   struct scutimestamp_s *ts; /* Event argument */
   struct scufifo_s *fifo;    /* Reverse reference to FIFO */
 };
@@ -940,8 +939,11 @@ static void seq_setstartphase(int sid, int phase)
 static void seq_startseq(int sid)
 {
   uint32_t val;
+  irqstate_t flags;
+  flags = enter_critical_section();
   val = getreg32(SCU_START_MODE0);
   putreg32(val | (1 << sid), SCU_START_MODE0);
+  leave_critical_section(flags);
 }
 
 /****************************************************************************
@@ -958,8 +960,11 @@ static void seq_startseq(int sid)
 static void seq_stopseq(int sid)
 {
   uint32_t val;
+  irqstate_t flags;
+  flags = enter_critical_section();
   val = getreg32(SCU_START_MODE0);
   putreg32(val & ~(1 << sid), SCU_START_MODE0);
+  leave_critical_section(flags);
 }
 
 /****************************************************************************

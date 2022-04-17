@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_H
-#define __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_H
+#ifndef __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_H
+#define __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_H
 
 /****************************************************************************
  * Included Files
@@ -41,11 +41,9 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define HEADER_SIZE        0x12 /* Default sdpcm + bdc header size */
-
-/* TODO move to Kconfig */
-
-#define BCMF_PKT_POOL_SIZE 4    /* Frame pool size */
+#define HEADER_SIZE          0x12 /* Default sdpcm + bdc header size */
+#define FIRST_WORD_SIZE      4
+#define FC_UPDATE_PKT_LENGTH 12
 
 /****************************************************************************
  * Public Types
@@ -55,6 +53,7 @@
 
 struct bcmf_sdio_chip
 {
+  uint32_t ram_base;
   uint32_t ram_size;
   uint32_t core_base[MAX_CORE_ID];
 
@@ -88,7 +87,7 @@ struct bcmf_sdio_dev_s
   volatile bool ready;             /* Current device status */
   bool sleeping;                   /* Current sleep status */
 
-  int thread_id;                   /* Processing thread id */
+  pid_t thread_id;                 /* Processing thread id */
   sem_t thread_signal;             /* Semaphore for processing thread event */
   struct wdog_s waitdog;           /* Processing thread waitdog */
 
@@ -100,6 +99,7 @@ struct bcmf_sdio_dev_s
   uint8_t max_seq;                 /* Maximum transmit sequence allowed */
   uint8_t tx_seq;                  /* Transmit sequence number (next) */
   uint8_t rx_seq;                  /* Receive sequence number (expected) */
+  bool    flow_ctrl;               /* Current flow control status */
 
   sem_t queue_mutex;               /* Lock for TX/RX/free queues */
   dq_queue_t free_queue;           /* Queue of available frames */
@@ -115,6 +115,21 @@ struct bcmf_sdio_frame
   struct bcmf_frame_s header;
   bool                tx;
   dq_entry_t          list_entry;
+  uint8_t             pad[CONFIG_IEEE80211_BROADCOM_DMABUF_ALIGNMENT -
+                          FIRST_WORD_SIZE]
+  aligned_data(CONFIG_IEEE80211_BROADCOM_DMABUF_ALIGNMENT);
+
+  /* pad[] array is used and aligned in order to make the following data[]
+   * buffer aligned beginning from the offset of 4 bytes to the address
+   * boundary for SDIO DMA transfers.
+   * The first 4 bytes of data[] buffer are not directly used in DMA
+   * transfers. Instead, they are used as the initial phase just to get
+   * the length of the remaining long data to be read. Thus only
+   * the remaining part of data[] buffer beginning from the offset of 4 bytes
+   * is required to be aligned to the address boundary set by
+   * CONFIG_IEEE80211_BROADCOM_SDIO_DMA_BUF_ALIGNMENT parameter.
+   */
+
   uint8_t             data[HEADER_SIZE + MAX_NETDEV_PKTSIZE +
                            CONFIG_NET_GUARDSIZE];
 };
@@ -133,8 +148,8 @@ int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
  */
 
 int bcmf_transfer_bytes(FAR struct bcmf_sdio_dev_s *sbus, bool write,
-                         uint8_t function, uint32_t address,
-                         uint8_t *buf, unsigned int len);
+                        uint8_t function, uint32_t address,
+                        uint8_t *buf, unsigned int len);
 
 int bcmf_read_reg(FAR struct bcmf_sdio_dev_s *sbus, uint8_t function,
                   uint32_t address, uint8_t *reg);
@@ -148,4 +163,4 @@ struct bcmf_sdio_frame *bcmf_sdio_allocate_frame(FAR struct bcmf_dev_s *priv,
 void bcmf_sdio_free_frame(FAR struct bcmf_dev_s *priv,
                           struct bcmf_sdio_frame *sframe);
 
-#endif /* __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_H */
+#endif /* __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_H */

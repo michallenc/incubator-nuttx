@@ -61,13 +61,10 @@
 #include <nuttx/arch.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/spi/spi.h>
-#include <nuttx/power/pm.h>
 
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 
 #include "imxrt_lpspi.h"
@@ -1695,7 +1692,6 @@ FAR struct spi_dev_s *imxrt_lpspibus_initialize(int bus)
 #endif
     {
       spierr("ERROR: Unsupported SPI bus: %d\n", bus);
-      return NULL;
     }
 
   leave_critical_section(flags);

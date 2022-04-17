@@ -41,8 +41,6 @@
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "hardware/sam_pinmap.h"
 #include "sam_gclk.h"
 #include "sam_port.h"
@@ -1555,7 +1553,7 @@ struct spi_dev_s *sam_spibus_initialize(int port)
 
   /* Get the port state structure */
 
-  spiinfo("port: %d \n", port);
+  spiinfo("port: %d\n", port);
 
 #ifdef SAMD5E5_HAVE_SPI0
   if (port == 0)

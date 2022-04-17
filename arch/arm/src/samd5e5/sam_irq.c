@@ -35,7 +35,6 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 #ifdef CONFIG_SAMD5E5_EIC
@@ -71,11 +70,7 @@
  * CURRENT_REGS for portability.
  */
 
-#ifdef CONFIG_SMP
 volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#else
-volatile uint32_t *g_current_regs[1];
-#endif
 
 /* This is the address of the  exception vector table (determined by the
  * linker script).

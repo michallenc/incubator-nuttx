@@ -32,8 +32,7 @@
 #include <nuttx/clock.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
-
+#include "riscv_internal.h"
 #include "rv32m1.h"
 #include "hardware/rv32m1_lptmr.h"
 
@@ -58,7 +57,7 @@
  ****************************************************************************/
 
 LOCATE_ITCM
-static int rv32m1_timerisr(int irq, void *context, FAR void *arg)
+static int rv32m1_timerisr(int irq, void *context, void *arg)
 {
   /* Write '1' to clear the pending flag */
 

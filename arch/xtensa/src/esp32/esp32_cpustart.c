@@ -37,13 +37,14 @@
 
 #include "sched/sched.h"
 #include "xtensa.h"
+
 #include "hardware/esp32_dport.h"
 #include "hardware/esp32_rtccntl.h"
-#include "esp32_region.h"
-#include "esp32_cpuint.h"
-#include "esp32_smp.h"
 
-#ifdef CONFIG_SMP
+#include "esp32_region.h"
+#include "esp32_irq.h"
+#include "esp32_smp.h"
+#include "esp32_gpio.h"
 
 /****************************************************************************
  * Private Data
@@ -69,7 +70,7 @@ extern void ets_set_appcpu_boot_addr(uint32_t start);
  ****************************************************************************/
 
 #if 0 /* Was useful in solving some startup problems */
-static inline void xtensa_registerdump(FAR struct tcb_s *tcb)
+static inline void xtensa_registerdump(struct tcb_s *tcb)
 {
   _info("CPU%d:\n", up_cpu_index());
 
@@ -85,20 +86,14 @@ static inline void xtensa_registerdump(FAR struct tcb_s *tcb)
  * Name: xtensa_attach_fromcpu0_interrupt
  ****************************************************************************/
 
-#ifdef CONFIG_SMP
 static inline void xtensa_attach_fromcpu0_interrupt(void)
 {
   int cpuint;
 
-  /* Allocate a level-sensitive, priority 1 CPU interrupt for the UART */
-
-  cpuint = esp32_alloc_levelint(1);
-  DEBUGASSERT(cpuint >= 0);
-
   /* Connect all CPU peripheral source to allocated CPU interrupt */
 
-  up_disable_irq(cpuint);
-  esp32_attach_peripheral(1, ESP32_PERIPH_CPU_CPU0, cpuint);
+  cpuint = esp32_setup_irq(1, ESP32_PERIPH_CPU_CPU0, 1, ESP32_CPUINT_LEVEL);
+  DEBUGASSERT(cpuint >= 0);
 
   /* Attach the inter-CPU interrupt. */
 
@@ -106,9 +101,8 @@ static inline void xtensa_attach_fromcpu0_interrupt(void)
 
   /* Enable the inter 0 CPU interrupts. */
 
-  up_enable_irq(cpuint);
+  up_enable_irq(ESP32_IRQ_CPU_CPU0);
 }
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -118,8 +112,8 @@ static inline void xtensa_attach_fromcpu0_interrupt(void)
  * Name: xtensa_appcpu_start
  *
  * Description:
- *   This is the entry point used with the APP CPU was started  via
- *   up_cpu_start().  The actually start-up logic in in ROM and we boot up
+ *   This is the entry point used for the APP CPU when it's started  via
+ *   up_cpu_start().  The actual start-up logic is in ROM and we boot up
  *   in C code.
  *
  * Input Parameters:
@@ -130,9 +124,9 @@ static inline void xtensa_attach_fromcpu0_interrupt(void)
  *
  ****************************************************************************/
 
-void xtensa_appcpu_start(void)
+void IRAM_ATTR xtensa_appcpu_start(void)
 {
-  FAR struct tcb_s *tcb = this_task();
+  struct tcb_s *tcb = this_task();
   register uint32_t sp;
 
 #ifdef CONFIG_STACK_COLORATION
@@ -170,7 +164,9 @@ void xtensa_appcpu_start(void)
   sched_note_cpu_started(tcb);
 #endif
 
-  /* Handle interlock */
+  /* Release the spinlock to signal to the PRO CPU that the APP CPU has
+   * started.
+   */
 
   g_appcpu_started = true;
   spin_unlock(&g_appcpu_interlock);
@@ -193,11 +189,13 @@ void xtensa_appcpu_start(void)
 
   /* Attach and enable internal interrupts */
 
-#ifdef CONFIG_SMP
   /* Attach and enable the inter-CPU interrupt */
 
   xtensa_attach_fromcpu0_interrupt();
-#endif
+
+  /* Enable the software interrupt */
+
+  up_enable_irq(XTENSA_IRQ_SWINT);
 
 #if 0 /* Does it make since to have co-processors enabled on the IDLE thread? */
 #if XTENSA_CP_ALLSET != 0
@@ -210,6 +208,12 @@ void xtensa_appcpu_start(void)
   /* Dump registers so that we can see what is going to happen on return */
 
   xtensa_registerdump(tcb);
+
+#ifdef CONFIG_ESP32_GPIO_IRQ
+  /* Initialize GPIO interrupt support */
+
+  esp32_gpioirqinitialize(1);
+#endif
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* And Enable interrupts */
@@ -229,14 +233,14 @@ void xtensa_appcpu_start(void)
  * Name: up_cpu_start
  *
  * Description:
- *   In an SMP configution, only one CPU is initially active (CPU 0). System
- *   initialization occurs on that single thread. At the completion of the
- *   initialization of the OS, just before beginning normal multitasking,
+ *   In an SMP configuration, only one CPU is initially active (CPU 0).
+ *   System initialization occurs on that single thread. At the completion of
+ *   the initialization of the OS, just before beginning normal multitasking,
  *   the additional CPUs would be started by calling this function.
  *
- *   Each CPU is provided the entry point to is IDLE task when started.  A
+ *   Each CPU is provided the entry point to its IDLE task when started.  A
  *   TCB for each CPU's IDLE task has been initialized and placed in the
- *   CPU's g_assignedtasks[cpu] list.  Not stack has been allocated or
+ *   CPU's g_assignedtasks[cpu] list.  No stack has been allocated or
  *   initialized.
  *
  *   The OS initialization logic calls this function repeatedly until each
@@ -244,8 +248,8 @@ void xtensa_appcpu_start(void)
  *
  * Input Parameters:
  *   cpu - The index of the CPU being started.  This will be a numeric
- *         value in the range of from one to (CONFIG_SMP_NCPUS-1).  (CPU
- *         0 is already active)
+ *         value in the range of one to (CONFIG_SMP_NCPUS-1).
+ *         (CPU 0 is already active)
  *
  * Returned Value:
  *   Zero on success; a negated errno value on failure.
@@ -270,8 +274,9 @@ int up_cpu_start(int cpu)
       sched_note_cpu_start(this_task(), cpu);
 #endif
 
-      /* The waitsem semaphore is used for signaling and, hence, should not
-       * have priority inheritance enabled.
+      /* This spinlock will be used as a handshake between the two CPUs.
+       * It's first initialized to its locked state, later the PRO CPU will
+       * try to lock it but spins until the APP CPU starts and unlocks it.
        */
 
       spin_initialize(&g_appcpu_interlock, SP_LOCKED);
@@ -291,31 +296,39 @@ int up_cpu_start(int cpu)
       regval &= ~RTC_CNTL_SW_STALL_APPCPU_C0_M;
       putreg32(regval, RTC_CNTL_OPTIONS0_REG);
 
-      /* Enable clock gating for the APP CPU */
+      /* OpenOCD might have already enabled clock gating and taken APP CPU
+       * out of reset.  Don't reset the APP CPU if that's the case as this
+       * will clear the breakpoints that may have already been set.
+       */
 
-      regval  = getreg32(DPORT_APPCPU_CTRL_B_REG);
-      regval |= DPORT_APPCPU_CLKGATE_EN;
-      putreg32(regval, DPORT_APPCPU_CTRL_B_REG);
+      regval = getreg32(DPORT_APPCPU_CTRL_B_REG);
+      if ((regval & DPORT_APPCPU_CLKGATE_EN_M) == 0)
+        {
+          /* Enable clock gating for the APP CPU */
 
-      regval  = getreg32(DPORT_APPCPU_CTRL_C_REG);
-      regval &= ~DPORT_APPCPU_RUNSTALL;
-      putreg32(regval, DPORT_APPCPU_CTRL_C_REG);
+          regval |= DPORT_APPCPU_CLKGATE_EN;
+          putreg32(regval, DPORT_APPCPU_CTRL_B_REG);
 
-      /* Reset the APP CPU */
+          regval  = getreg32(DPORT_APPCPU_CTRL_C_REG);
+          regval &= ~DPORT_APPCPU_RUNSTALL;
+          putreg32(regval, DPORT_APPCPU_CTRL_C_REG);
 
-      regval  = getreg32(DPORT_APPCPU_CTRL_A_REG);
-      regval |= DPORT_APPCPU_RESETTING;
-      putreg32(regval, DPORT_APPCPU_CTRL_A_REG);
+          /* Reset the APP CPU */
 
-      regval  = getreg32(DPORT_APPCPU_CTRL_A_REG);
-      regval &= ~DPORT_APPCPU_RESETTING;
-      putreg32(regval, DPORT_APPCPU_CTRL_A_REG);
+          regval  = getreg32(DPORT_APPCPU_CTRL_A_REG);
+          regval |= DPORT_APPCPU_RESETTING;
+          putreg32(regval, DPORT_APPCPU_CTRL_A_REG);
+
+          regval  = getreg32(DPORT_APPCPU_CTRL_A_REG);
+          regval &= ~DPORT_APPCPU_RESETTING;
+          putreg32(regval, DPORT_APPCPU_CTRL_A_REG);
+        }
 
       /* Set the CPU1 start address */
 
       ets_set_appcpu_boot_addr((uint32_t)xtensa_appcpu_start);
 
-      /* And wait for the initial task to run on CPU1 */
+      /* And wait until the APP CPU starts and releases the spinlock. */
 
       spin_lock(&g_appcpu_interlock);
       DEBUGASSERT(g_appcpu_started);
@@ -324,4 +337,3 @@ int up_cpu_start(int cpu)
   return OK;
 }
 
-#endif /* CONFIG_SMP */

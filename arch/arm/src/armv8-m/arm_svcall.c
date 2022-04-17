@@ -28,13 +28,13 @@
 #include <string.h>
 #include <assert.h>
 #include <debug.h>
+#include <syscall.h>
 
 #include <arch/irq.h>
 #include <nuttx/sched.h>
 #include <nuttx/userspace.h>
 
 #include "signal/signal.h"
-#include "svcall.h"
 #include "exc_return.h"
 #include "arm_internal.h"
 
@@ -102,8 +102,9 @@ static void dispatch_syscall(void)
       " ldr r2, [sp, #16]\n"         /* Restore (orig_SP - new_SP) value */
       " add sp, sp, r2\n"            /* Restore SP */
       " mov r2, r0\n"                /* R2=Save return value in R2 */
-      " mov r0, #3\n"                /* R0=SYS_syscall_return */
-      " svc %0\n"::"i"(SYS_syscall)  /* Return from the SYSCALL */
+      " mov r0, %0\n"                /* R0=SYS_syscall_return */
+      " svc %1\n"::"i"(SYS_syscall_return),
+                   "i"(SYS_syscall)  /* Return from the SYSCALL */
     );
 }
 #endif
@@ -173,10 +174,10 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
       case SYS_save_context:
         {
           DEBUGASSERT(regs[REG_R1] != 0);
-          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
 #if defined(CONFIG_ARCH_FPU) && defined(CONFIG_ARMV8M_LAZYFPU)
-          arm_savefpu((uint32_t *)regs[REG_R1]);
+          arm_savefpu(regs);
 #endif
+          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
         }
         break;
 
@@ -206,7 +207,8 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
 
       /* R0=SYS_switch_context:  This a switch context command:
        *
-       *   void arm_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
+       *   void arm_switchcontext(uint32_t **saveregs,
+       *                          uint32_t *restoreregs);
        *
        * At this point, the following values are saved in context:
        *
@@ -223,10 +225,10 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
       case SYS_switch_context:
         {
           DEBUGASSERT(regs[REG_R1] != 0 && regs[REG_R2] != 0);
-          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
 #if defined(CONFIG_ARCH_FPU) && defined(CONFIG_ARMV8M_LAZYFPU)
-          arm_savefpu((uint32_t *)regs[REG_R1]);
+          arm_savefpu(regs);
 #endif
+          *(uint32_t **)regs[REG_R1] = regs;
           CURRENT_REGS = (uint32_t *)regs[REG_R2];
         }
         break;
@@ -311,21 +313,19 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
         break;
 #endif
 
-#if !defined(CONFIG_BUILD_FLAT) && !defined(CONFIG_DISABLE_PTHREAD)
-
       /* R0=SYS_pthread_start:  This a user pthread start
        *
-       *   void up_pthread_start(pthread_trampoline_t startup,
-       *          pthread_startroutine_t entrypt, pthread_addr_t arg)
+       *   void up_pthread_start(pthread_startroutine_t entrypt,
+       *                         pthread_addr_t arg) noreturn_function;
        *
        * At this point, the following values are saved in context:
        *
        *   R0 = SYS_pthread_start
-       *   R1 = startup
-       *   R2 = entrypt
-       *   R3 = arg
+       *   R1 = entrypt
+       *   R2 = arg
        */
 
+#if !defined(CONFIG_BUILD_FLAT) && !defined(CONFIG_DISABLE_PTHREAD)
       case SYS_pthread_start:
         {
           /* Set up to return to the user-space pthread start-up function in
@@ -340,36 +340,7 @@ int arm_svcall(int irq, FAR void *context, FAR void *arg)
            */
 
           regs[REG_R0]         = regs[REG_R2]; /* pthread entry */
-          regs[REG_R1]         = regs[REG_R3]; /* arg */
-        }
-        break;
-
-      /* R0=SYS_pthread_exit:  This pthread_exit call in user-space
-       *
-       *   void up_pthread_exit(pthread_exitroutine_t exit,
-       *                        FAR void *exit_value)
-       *
-       * At this point, the following values are saved in context:
-       *
-       *   R0 = SYS_pthread_exit
-       *   R1 = pthread_exit trampoline routine
-       *   R2 = exit_value
-       */
-
-      case SYS_pthread_exit:
-        {
-          /* Set up to return to the user-space pthread start-up function in
-           * unprivileged mode.
-           */
-
-          regs[REG_PC]         = (uint32_t)regs[REG_R1] & ~1;  /* startup */
-          regs[REG_EXC_RETURN] = EXC_RETURN_UNPRIVTHR;
-
-          /* Change the parameter ordering to match the expectation of the
-           * user space pthread_startup:
-           */
-
-          regs[REG_R0]         = regs[REG_R2]; /* exit_value */
+          regs[REG_R1]         = regs[REG_R2]; /* arg */
         }
         break;
 #endif

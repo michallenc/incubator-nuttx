@@ -49,16 +49,6 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Debug ********************************************************************/
-
-#ifdef CONFIG_CXD56_GAUGE_DEBUG
-#define baterr(fmt, ...)  _err(fmt, ## __VA_ARGS__)
-#define batinfo(fmt, ...) _info(fmt, ## __VA_ARGS__)
-#else
-#define baterr(fmt, ...)
-#define batinfo(fmt, ...)
-#endif
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -72,14 +62,12 @@ struct bat_gauge_dev_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int gauge_open(FAR struct file *filep);
-static int gauge_close(FAR struct file *filep);
 static ssize_t gauge_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen);
 static ssize_t gauge_write(FAR struct file *filep,
                              FAR const char *buffer, size_t buflen);
 static int gauge_ioctl(FAR struct file *filep, int cmd,
-                         unsigned long arg);
+                       unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -87,15 +75,13 @@ static int gauge_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_gaugeops =
 {
-  gauge_open,   /* open */
-  gauge_close,  /* close */
+  NULL,         /* open */
+  NULL,         /* close */
   gauge_read,   /* read */
   gauge_write,  /* write */
-  0,            /* seek */
-  gauge_ioctl   /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  , NULL        /* poll */
-#endif
+  NULL,         /* seek */
+  gauge_ioctl,  /* ioctl */
+  NULL          /* poll */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   , NULL        /* unlink */
 #endif
@@ -111,7 +97,7 @@ static struct bat_gauge_dev_s g_gaugedev;
  * Name: gauge_get_status
  ****************************************************************************/
 
-static int gauge_get_status(FAR enum battery_gauge_status_e *status)
+static int gauge_get_status(FAR enum battery_status_e *status)
 {
   uint8_t state;
   int ret;
@@ -260,32 +246,6 @@ static int gauge_online(FAR bool *online)
 }
 
 /****************************************************************************
- * Name: gauge_open
- *
- * Description:
- *   This function is called whenever the battery device is opened.
- *
- ****************************************************************************/
-
-static int gauge_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: gauge_close
- *
- * Description:
- *   This routine is called when the battery device is closed.
- *
- ****************************************************************************/
-
-static int gauge_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: gauge_read
  ****************************************************************************/
 
@@ -316,7 +276,7 @@ static ssize_t gauge_write(FAR struct file *filep,
 static int gauge_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct bat_gauge_dev_s *priv  = inode->i_private;
+  FAR struct bat_gauge_dev_s *priv = inode->i_private;
   int ret = -ENOTTY;
 
   nxsem_wait_uninterruptible(&priv->batsem);
@@ -325,8 +285,8 @@ static int gauge_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     {
       case BATIOC_STATE:
         {
-          FAR enum battery_gauge_status_e *status =
-            (FAR enum battery_gauge_status_e *)(uintptr_t)arg;
+          FAR enum battery_status_e *status =
+            (FAR enum battery_status_e *)(uintptr_t)arg;
           ret = gauge_get_status(status);
         }
         break;

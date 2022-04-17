@@ -22,25 +22,17 @@ include $(TOPDIR)/Make.defs
 
 # The entry point name (if none is provided in the .config file)
 
-CONFIG_USER_ENTRYPOINT ?= user_start
-ENTRYPT = $(patsubst "%",%,$(CONFIG_USER_ENTRYPOINT))
+CONFIG_INIT_ENTRYPOINT ?= user_start
+ENTRYPT = $(patsubst "%",%,$(CONFIG_INIT_ENTRYPOINT))
 
 # Get the paths to the libraries and the links script path in format that
 # is appropriate for the host OS
 
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-  # Windows-native toolchains
-  USER_LIBPATHS = ${shell for path in $(USERLIBS); do dir=`dirname $(TOPDIR)$(DELIM)$$path`;echo "-L\"`cygpath -w $$dir`\"";done}
-  USER_LDSCRIPT = -T "${shell cygpath -w $(BOARD_DIR)$(DELIM)scripts$(DELIM)memory.ld}"
-  USER_LDSCRIPT += -T "${shell cygpath -w $(BOARD_DIR)$(DELIM)scripts$(DELIM)user-space.ld}"
-else
-  # Linux/Cygwin-native toolchain
-  USER_LIBPATHS = $(addprefix -L$(TOPDIR)$(DELIM),$(dir $(USERLIBS)))
-  USER_LDSCRIPT = -T$(BOARD_DIR)$(DELIM)scripts$(DELIM)memory.ld
-  USER_LDSCRIPT += -T$(BOARD_DIR)$(DELIM)scripts$(DELIM)user-space.ld
-endif
+USER_LIBPATHS = $(addprefix -L,$(call CONVERT_PATH,$(addprefix $(TOPDIR)$(DELIM),$(dir $(USERLIBS)))))
+USER_LDSCRIPT = -T $(call CONVERT_PATH,$(BOARD_DIR)$(DELIM)scripts$(DELIM)memory.ld)
+USER_LDSCRIPT += -T $(call CONVERT_PATH,$(BOARD_DIR)$(DELIM)scripts$(DELIM)user-space.ld)
 
-USER_LDFLAGS = -Wl,--undefined=$(ENTRYPT) -Wl,--entry=$(ENTRYPT) $(USER_LDSCRIPT) -nostartfiles -nodefaultlibs
+USER_LDFLAGS = --undefined=$(ENTRYPT) --entry=$(ENTRYPT) $(USER_LDSCRIPT)
 USER_LDLIBS = $(patsubst lib%,-l%,$(basename $(notdir $(USERLIBS))))
 USER_LIBGCC = "${shell "$(CC)" $(ARCHCPUFLAGS) -print-libgcc-file-name}"
 
@@ -61,7 +53,7 @@ $(COBJS): %$(OBJEXT): %.c
 # Create the nuttx_user.elf file containing all of the user-mode code
 
 nuttx_user.elf: $(OBJS)
-	$(Q) $(LD) -o $@ $(USER_LDFLAGS) $(USER_LIBPATHS) $(OBJS) -Wl,--start-group $(USER_LDLIBS) -Wl,--end-group $(USER_LIBGCC)
+	$(Q) $(LD) -o $@ $(USER_LDFLAGS) $(USER_LIBPATHS) $(OBJS) --start-group $(USER_LDLIBS) --end-group $(USER_LIBGCC)
 
 $(TOPDIR)$(DELIM)nuttx_user.elf: nuttx_user.elf
 	@echo "LD: nuttx_user.elf"

@@ -32,8 +32,7 @@
 #include <nuttx/arch.h>
 #include <arch/samd5e5/chip.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/sam_memorymap.h"
 #include "hardware/sam_nvmctrl.h"
 
@@ -137,6 +136,8 @@
 #define SAMD5E5_PROGMEM_NSECTORS   (CONFIG_SAMD5E5_PROGMEM_NSECTORS)
 #define SAMD5E5_PROGMEM_ENDSEC     (SAMD5E5_TOTAL_NSECTORS)
 #define SAMD5E5_PROGMEM_STARTSEC   (SAMD5E5_PROGMEM_ENDSEC - CONFIG_SAMD5E5_PROGMEM_NSECTORS)
+
+#define SAMD5E5_PROGMEM_ERASEDVAL  (0xffu)
 
 /* Misc stuff */
 
@@ -609,7 +610,7 @@ ssize_t up_progmem_ispageerased(size_t cluster)
        nleft > 0;
        nleft--, address++)
     {
-      if (getreg8(address) != 0xff)
+      if (getreg8(address) != SAMD5E5_PROGMEM_ERASEDVAL)
         {
           nwritten++;
         }
@@ -806,7 +807,7 @@ ssize_t up_progmem_write(size_t address, const void *buffer, size_t buflen)
 
           /* Write the page buffer */
 
-          for (i = 0; i < (SAMD5E5_PAGE_SIZE / sizeof(uint32_t)); i++)
+          for (i = 0; i < SAMD5E5_PAGE_WORDS; i++)
             {
               *dest++ = *src++;
             }
@@ -830,7 +831,7 @@ ssize_t up_progmem_write(size_t address, const void *buffer, size_t buflen)
 
           /* Compare page data */
 
-          for (i = 0; i < (SAMD5E5_PAGE_SIZE / sizeof(uint32_t)); i++)
+          for (i = 0; i < SAMD5E5_PAGE_WORDS; i++)
             {
               if (*dest != *src)
                 {
@@ -852,7 +853,7 @@ ssize_t up_progmem_write(size_t address, const void *buffer, size_t buflen)
 
       address += xfrsize;
       dest     = (FAR uint32_t *)address;
-      buffer   = (FAR void *)((uint8_t *)buffer + xfrsize);
+      buffer   = (FAR void *)((uintptr_t)buffer + xfrsize);
       buflen  -= xfrsize;
       offset   = 0;
       page++;
@@ -865,6 +866,19 @@ ssize_t up_progmem_write(size_t address, const void *buffer, size_t buflen)
   leave_critical_section(flags);
   page_buffer_unlock();
   return written;
+}
+
+/****************************************************************************
+ * Name: up_progmem_erasestate
+ *
+ * Description:
+ *   Return value of erase state.
+ *
+ ****************************************************************************/
+
+uint8_t up_progmem_erasestate(void)
+{
+  return SAMD5E5_PROGMEM_ERASEDVAL;
 }
 
 /****************************************************************************

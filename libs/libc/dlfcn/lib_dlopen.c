@@ -258,7 +258,7 @@ errout_with_lock:
 /* In the FLAT build, a shared library is essentially the same as a kernel
  * module.
  *
- * REVIST:  Missing functionality:
+ * REVISIT:  Missing functionality:
  * - No automatic binding of symbols
  * - No dependencies
  * - mode is ignored.
@@ -410,7 +410,7 @@ FAR void *dlopen(FAR const char *file, int mode)
 {
   FAR void *handle = NULL;
 
-#ifdef CONFIG_LIB_ENVPATH
+#ifdef CONFIG_LIBC_ENVPATH
   if (file[0] != '/')
     {
       FAR const char *relpath;

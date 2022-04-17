@@ -39,7 +39,6 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
 
-#include "esp32_spiflash.h"
 #include "esp32_partition.h"
 
 #ifdef CONFIG_USERLED
@@ -60,6 +59,14 @@
 
 #ifdef CONFIG_ESP32_RT_TIMER
 #  include "esp32_rt_timer.h"
+#endif
+
+#ifdef CONFIG_ESP32_SPIFLASH
+#  include "esp32_board_spiflash.h"
+#endif
+
+#ifdef CONFIG_ESP32_BLE
+#  include "esp32_ble.h"
 #endif
 
 #ifdef CONFIG_ESP32_WIRELESS
@@ -89,7 +96,7 @@
  *   CONFIG_BOARD_LATE_INITIALIZE=y :
  *     Called from board_late_initialize().
  *
- *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_LIB_BOARDCTL=y :
+ *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_BOARDCTL=y :
  *     Called from the NSH library
  *
  ****************************************************************************/
@@ -133,31 +140,23 @@ int esp32_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "Failed to initialize SD slot: %d\n", ret);
-      return ret;
     }
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-
-#ifdef CONFIG_ESP32_SPIFLASH_ENCRYPTION_TEST
-  esp32_spiflash_encrypt_test();
-#endif
-
   ret = esp32_spiflash_init();
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
-      return ret;
     }
 #endif
 
-#ifdef CONFIG_ESP32_PARTITION
+#ifdef CONFIG_ESP32_PARTITION_TABLE
   ret = esp32_partition_init();
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize partition error=%d\n",
              ret);
-      return ret;
     }
 #endif
 
@@ -169,13 +168,20 @@ int esp32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_ESP32_BLE
+  ret = esp32_ble_initialize();
+  if (ret)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_ESP32_WIRELESS
   ret = board_wlan_init();
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize wireless subsystem=%d\n",
              ret);
-      return ret;
     }
 #endif
 
@@ -192,7 +198,6 @@ int esp32_bringup(void)
       syslog(LOG_ERR,
              "ERROR: Failed to initialize timer driver: %d\n",
              ret);
-      return ret;
     }
 #endif
 
@@ -203,7 +208,6 @@ int esp32_bringup(void)
       syslog(LOG_ERR,
              "ERROR: Failed to initialize timer driver: %d\n",
              ret);
-      return ret;
     }
 #endif
 
@@ -214,7 +218,6 @@ int esp32_bringup(void)
       syslog(LOG_ERR,
              "ERROR: Failed to initialize timer driver: %d\n",
              ret);
-      return ret;
     }
 #endif
 
@@ -225,7 +228,6 @@ int esp32_bringup(void)
       syslog(LOG_ERR,
              "ERROR: Failed to initialize timer driver: %d\n",
              ret);
-      return ret;
     }
 #endif
 

@@ -51,9 +51,7 @@
 #include <arch/irq.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mz_config.h"
 #include "hardware/pic32mz_ethernet.h"
 
@@ -254,7 +252,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->pd_dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->pd_dev.d_buf)
 
 /* PHYs *********************************************************************/
 
@@ -388,13 +386,13 @@ struct pic32mz_driver_s
 /* Descriptors and packet buffers */
 
 union pic32mz_rxdesc_u g_rxdesc[CONFIG_PIC32MZ_ETH_NRXDESC]
-  __attribute__((aligned(PIC32MZ_DCACHE_LINESIZE)));
+  aligned_data(PIC32MZ_DCACHE_LINESIZE);
 
 union pic32mz_txdesc_u g_txdesc[CONFIG_PIC32MZ_ETH_NTXDESC]
-  __attribute__((aligned(PIC32MZ_DCACHE_LINESIZE)));
+  aligned_data(PIC32MZ_DCACHE_LINESIZE);
 
 uint8_t g_buffers[PIC32MZ_NBUFFERS * PIC32MZ_ALIGNED_BUFSIZE]
-  __attribute__((aligned(PIC32MZ_DCACHE_LINESIZE)));
+  aligned_data(PIC32MZ_DCACHE_LINESIZE);
 
 /* Array of ethernet driver status structures */
 
@@ -1666,7 +1664,7 @@ static void pic32mz_rxdone(struct pic32mz_driver_s *priv)
           else
 #endif
 #ifdef CONFIG_NET_ARP
-          if (BUF->type == htons(ETHTYPE_ARP))
+          if (BUF->type == HTONS(ETHTYPE_ARP))
             {
               /* Handle the incoming ARP packet */
 
@@ -1689,7 +1687,7 @@ static void pic32mz_rxdone(struct pic32mz_driver_s *priv)
               /* Unrecognized... drop it. */
 
               nwarn("WARNING: Unrecognized packet type dropped: %04x\n",
-                    ntohs(BUF->type));
+                    NTOHS(BUF->type));
               NETDEV_RXDROPPED(&priv->pd_dev);
             }
 

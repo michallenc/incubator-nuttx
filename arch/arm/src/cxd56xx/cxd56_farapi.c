@@ -34,7 +34,6 @@
 
 #include <arch/chip/pm.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "chip.h"
 #include "cxd56_icc.h"
@@ -182,7 +181,7 @@ static int cxd56_farapidonehandler(int cpuid, int protoid,
  * Public Functions
  ****************************************************************************/
 
-__attribute__((used))
+used_code
 void farapi_main(int id, void *arg, struct modulelist_s *mlist)
 {
   struct farmsg_s msg;

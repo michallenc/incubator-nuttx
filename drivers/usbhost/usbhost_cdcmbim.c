@@ -331,21 +331,21 @@ static void cdcmbim_txpoll_work(void *arg);
 
 static const struct usbhost_id_s g_id =
 {
-  USB_CLASS_CDC,      /* base     */
+  USB_CLASS_CDC,      /* base */
   CDC_SUBCLASS_MBIM,  /* subclass */
-  0,                  /* proto    */
-  0,                  /* vid      */
-  0                   /* pid      */
+  0,                  /* proto */
+  0,                  /* vid */
+  0                   /* pid */
 };
 
 /* This is the USB host storage class's registry entry */
 
 static struct usbhost_registry_s g_cdcmbim =
 {
-  NULL,                   /* flink    */
-  usbhost_create,         /* create   */
-  1,                      /* nids     */
-  &g_id                   /* id[]     */
+  NULL,                   /* flink */
+  usbhost_create,         /* create */
+  1,                      /* nids */
+  &g_id                   /* id[] */
 };
 
 /* File operations for control channel */
@@ -418,7 +418,7 @@ static void usbhost_pollnotify(FAR struct usbhost_cdcmbim_s *priv)
           fds->revents |= (fds->events & POLLIN);
           if (fds->revents != 0)
             {
-              uinfo("Report events: %02x\n", fds->revents);
+              uinfo("Report events: %08" PRIx32 "\n", fds->revents);
               nxsem_post(fds->sem);
             }
         }
@@ -2271,7 +2271,7 @@ static void cdcmbim_receive(struct usbhost_cdcmbim_s *priv,
   priv->netdev.d_buf = buf;
   priv->netdev.d_len = len;
 
-  switch (((struct ipv4_hdr_s *)buf)->vhl & IP_VERSION_MASK)
+  switch (((FAR struct ipv4_hdr_s *)buf)->vhl & IP_VERSION_MASK)
     {
 #ifdef CONFIG_NET_IPv4
     case IPv4_VERSION:

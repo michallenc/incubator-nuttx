@@ -38,7 +38,7 @@
 
 #include "wqueue/wqueue.h"
 
-#if defined(CONFIG_LIB_USRWORK) && !defined(__KERNEL__)
+#if defined(CONFIG_LIBC_USRWORK) && !defined(__KERNEL__)
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -191,17 +191,18 @@ static void work_process(FAR struct usr_wqueue_s *wqueue)
     }
   else
     {
+      struct timespec now;
+      struct timespec delay;
       struct timespec rqtp;
-      time_t sec;
 
       /* Wait awhile to check the work list.  We will wait here until
        * either the time elapses or until we are awakened by a semaphore.
        * Interrupts will be re-enabled while we wait.
        */
 
-      sec          = next / 1000000;
-      rqtp.tv_sec  = sec;
-      rqtp.tv_nsec = (next - (sec * 1000000)) * 1000;
+      clock_gettime(CLOCK_REALTIME, &now);
+      clock_ticks2time(next, &delay);
+      clock_timespec_add(&now, &delay, &rqtp);
 
       _SEM_TIMEDWAIT(&wqueue->wake, &rqtp);
     }
@@ -294,8 +295,8 @@ int work_usrstart(void)
   /* Start a user-mode worker thread for use by applications. */
 
   ret = task_create("uwork",
-                    CONFIG_LIB_USRWORKPRIORITY,
-                    CONFIG_LIB_USRWORKSTACKSIZE,
+                    CONFIG_LIBC_USRWORKPRIORITY,
+                    CONFIG_LIBC_USRWORKSTACKSIZE,
                     (main_t)work_usrthread,
                     ((FAR char * const *)NULL));
   if (ret < 0)
@@ -310,10 +311,10 @@ int work_usrstart(void)
   /* Start a user-mode worker thread for use by applications. */
 
   pthread_attr_init(&attr);
-  pthread_attr_setstacksize(&attr, CONFIG_LIB_USRWORKSTACKSIZE);
+  pthread_attr_setstacksize(&attr, CONFIG_LIBC_USRWORKSTACKSIZE);
 
   pthread_attr_getschedparam(&attr, &param);
-  param.sched_priority = CONFIG_LIB_USRWORKPRIORITY;
+  param.sched_priority = CONFIG_LIBC_USRWORKPRIORITY;
   pthread_attr_setschedparam(&attr, &param);
 
   ret = pthread_create(&usrwork, &attr, work_usrthread, NULL);
@@ -332,4 +333,4 @@ int work_usrstart(void)
 #endif
 }
 
-#endif /* CONFIG_LIB_USRWORK && !__KERNEL__*/
+#endif /* CONFIG_LIBC_USRWORK && !__KERNEL__*/

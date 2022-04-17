@@ -66,8 +66,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_dma.h"
@@ -1841,7 +1839,7 @@ static void spi_exchange(FAR struct spi_dev_s *dev, FAR const void *txbuffer,
     {
       /* The dummy buffer is used to DMA with out increment into  */
 
-      static uint8_t rxdummy[4] __attribute__((aligned(4)));
+      static uint8_t rxdummy[4] aligned_data(4);
       static const uint16_t txdummy = 0xffff;
 
       spiinfo("txbuffer=%p rxbuffer=%p nwords=%d\n",
@@ -2391,7 +2389,6 @@ FAR struct spi_dev_s *stm32_spibus_initialize(int bus)
 #endif
     {
       spierr("ERROR: Unsupported SPI bus: %d\n", bus);
-      return NULL;
     }
 
   leave_critical_section(flags);

@@ -61,7 +61,7 @@ ifeq ($(EXTERNALDIR),external)
   KERNDEPDIRS += external
 endif
 
-CONTEXTDIRS = boards fs $(APPDIR) $(ARCH_SRC)
+CONTEXTDIRS = boards drivers fs $(APPDIR) $(ARCH_SRC)
 CLEANDIRS += pass1
 
 ifeq ($(CONFIG_BUILD_FLAT),y)
@@ -97,6 +97,9 @@ endif
 endif
 
 CONTEXTDIRS += libs$(DELIM)libc
+ifeq ($(CONFIG_HAVE_CXX),y)
+CONTEXTDIRS += libs$(DELIM)libxx
+endif
 
 ifeq ($(CONFIG_NX),y)
 KERNDEPDIRS += graphics
@@ -156,6 +159,7 @@ endif
 
 ifeq ($(CONFIG_OPENAMP),y)
 KERNDEPDIRS += openamp
+CONTEXTDIRS += openamp
 else
 CLEANDIRS += openamp
 endif

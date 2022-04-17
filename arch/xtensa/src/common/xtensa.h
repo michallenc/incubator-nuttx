@@ -28,6 +28,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
+#  include <nuttx/arch.h>
 #  include <stdint.h>
 #  include <sys/types.h>
 #  include <stdbool.h>
@@ -79,6 +80,16 @@
 #  define INTSTACK_ALIGNUP(s)   (((s) + INTSTACK_ALIGN_MASK) & ~INTSTACK_ALIGN_MASK)
 #  define INTSTACK_SIZE         INTSTACK_ALIGNUP(CONFIG_ARCH_INTERRUPTSTACK)
 #endif
+
+/* XTENSA requires at least a 16-byte stack alignment. */
+
+#define STACK_ALIGNMENT     16
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
 
 /* An IDLE thread stack size for CPU0 must be defined */
 
@@ -151,21 +162,12 @@
  * CURRENT_REGS for portability.
  */
 
-#ifdef CONFIG_SMP
 /* For the case of architectures with multiple CPUs, then there must be one
  * such value for each processor that can receive an interrupt.
  */
 
-int up_cpu_index(void); /* See include/nuttx/arch.h */
 extern volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#  define CURRENT_REGS (g_current_regs[up_cpu_index()])
-
-#else
-
-extern volatile uint32_t *g_current_regs[1];
-#  define CURRENT_REGS (g_current_regs[0])
-
-#endif
+#define CURRENT_REGS (g_current_regs[up_cpu_index()])
 
 #if !defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
 /* The (optional) interrupt stack */
@@ -186,7 +188,7 @@ extern uint32_t g_idlestack[IDLETHREAD_STACKWORDS];
  *  - The declaration extern uint32_t _sdata; makes C happy.  C will believe
  *    that the value _sdata is the address of a uint32_t variable _data (it
  *    is not!).
- *  - We can recoved the linker value then by simply taking the address of
+ *  - We can recover the linker value then by simply taking the address of
  *    of _data.  like:  uint32_t *pdata = &_sdata;
  */
 
@@ -231,7 +233,6 @@ void xtensa_copystate(uint32_t *dest, uint32_t *src);
 
 /* Serial output */
 
-void up_puts(const char *str);
 void up_lowputs(const char *str);
 
 /* Debug */
@@ -252,7 +253,16 @@ void xtensa_coproc_enable(struct xtensa_cpstate_s *cpstate, int cpset);
 void xtensa_coproc_disable(struct xtensa_cpstate_s *cpstate, int cpset);
 #endif
 
+/* Window Spill */
+
+void xtensa_window_spill(void);
+
 /* IRQs */
+
+#if defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
+uintptr_t xtensa_intstack_alloc(void);
+uintptr_t xtensa_intstack_top(void);
+#endif
 
 uint32_t *xtensa_int_decode(uint32_t cpuints, uint32_t *regs);
 uint32_t *xtensa_irq_dispatch(int irq, uint32_t *regs);
@@ -265,7 +275,6 @@ uint32_t *xtensa_user(int exccause, uint32_t *regs);
 /* Software interrupt handler */
 
 #ifdef CONFIG_SMP
-void __cpu1_start(void) noreturn_function;
 int xtensa_intercpu_interrupt(int tocpu, int intcode);
 void xtensa_pause_handler(void);
 #endif
@@ -274,6 +283,7 @@ void xtensa_pause_handler(void);
 
 int xtensa_context_save(uint32_t *regs);
 void xtensa_context_restore(uint32_t *regs) noreturn_function;
+void xtensa_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
 
 #if XCHAL_CP_NUM > 0
 void xtensa_coproc_savestate(struct xtensa_cpstate_s *cpstate);
@@ -308,13 +318,16 @@ void xtensa_add_region(void);
 # define xtensa_add_region()
 #endif
 
+/* Watchdog timer ***********************************************************/
+
+struct oneshot_lowerhalf_s *
+xtensa_oneshot_initialize(uint32_t irq, uint32_t freq);
+
 /* Serial output */
 
 void up_lowputc(char ch);
 void xtensa_earlyserialinit(void);
 void xtensa_serialinit(void);
-
-void rpmsg_serialinit(void);
 
 /* Network */
 
@@ -342,10 +355,16 @@ void xtensa_pminitialize(void);
 #  define xtensa_pminitialize()
 #endif
 
+/* Interrupt handling *******************************************************/
+
+/* Exception Handlers */
+
+int xtensa_swint(int irq, void *context, void *arg);
+
 /* Debug ********************************************************************/
 
 #ifdef CONFIG_STACK_COLORATION
-void up_stack_color(FAR void *stackbase, size_t nbytes);
+void xtensa_stack_color(void *stackbase, size_t nbytes);
 #endif
 
 #endif /* __ASSEMBLY__ */

@@ -74,9 +74,7 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/sam_pinmap.h"
 #include "sam_periphclks.h"
@@ -190,7 +188,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 /****************************************************************************
  * Private Types
@@ -257,12 +255,12 @@ static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 /* TX descriptors list */
 
 static struct gmac_txdesc_s g_txdesc[CONFIG_SAMD5E5_GMAC_NTXBUFFERS]
-              __attribute__((aligned(8)));
+              aligned_data(8);
 
 /* RX descriptors list */
 
 static struct gmac_rxdesc_s g_rxdesc[CONFIG_SAMD5E5_GMAC_NRXBUFFERS]
-              __attribute__((aligned(8)));
+              aligned_data(8);
 
 /* Transmit Buffers
  *
@@ -272,12 +270,12 @@ static struct gmac_rxdesc_s g_rxdesc[CONFIG_SAMD5E5_GMAC_NRXBUFFERS]
  */
 
 static uint8_t g_txbuffer[CONFIG_SAMD5E5_GMAC_NTXBUFFERS * GMAC_TX_UNITSIZE]
-               __attribute__((aligned(8)));
+               aligned_data(8);
 
 /* Receive Buffers */
 
 static uint8_t g_rxbuffer[CONFIG_SAMD5E5_GMAC_NRXBUFFERS * GMAC_RX_UNITSIZE]
-               __attribute__((aligned(8)));
+               aligned_data(8);
 #endif
 
 /****************************************************************************
@@ -1291,7 +1289,7 @@ static void sam_receive(struct sam_gmac_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 

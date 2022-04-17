@@ -594,7 +594,7 @@
  * header
  */
 
-#define BUF ((struct eth_hdr_s *)priv->dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->dev.d_buf)
 
 /****************************************************************************
  * Private Types
@@ -666,16 +666,16 @@ struct stm32_ethmac_s
 /* Descriptor allocations */
 
 static union stm32_rxdesc_u g_rxtable[RXTABLE_SIZE]
-  __attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+  aligned_data(ARMV7M_DCACHE_LINESIZE);
 static union stm32_txdesc_u g_txtable[TXTABLE_SIZE]
-  __attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+  aligned_data(ARMV7M_DCACHE_LINESIZE);
 
 /* Buffer allocations */
 
 static uint8_t g_rxbuffer[RXBUFFER_ALLOC]
-  __attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+  aligned_data(ARMV7M_DCACHE_LINESIZE);
 static uint8_t g_txbuffer[TXBUFFER_ALLOC]
-  __attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+  aligned_data(ARMV7M_DCACHE_LINESIZE);
 
 /* These are the pre-allocated Ethernet device structures */
 
@@ -1920,7 +1920,7 @@ static void stm32_receive(struct stm32_ethmac_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 

@@ -31,6 +31,8 @@
 
 #include <nuttx/irq.h>
 
+#include "riscv_internal.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -55,7 +57,7 @@
  * Private Data
  ****************************************************************************/
 
-static uint64_t g_saveregs[XCPTCONTEXT_REGS];
+static uintptr_t g_saveregs[XCPTCONTEXT_REGS];
 
 /****************************************************************************
  * Public Functions
@@ -76,7 +78,7 @@ void arch_getfpu(FAR uint32_t *fpusave)
 
   /* Return only the floating register values */
 
-  memcpy(fpusave, &g_saveregs[INT_XCPT_REGS], (8 * FPU_XCPT_REGS));
+  memcpy(fpusave, &g_saveregs[INT_XCPT_REGS], INT_REG_SIZE * FPU_XCPT_REGS);
   leave_critical_section(flags);
 }
 
@@ -86,7 +88,7 @@ void arch_getfpu(FAR uint32_t *fpusave)
 
 bool arch_cmpfpu(FAR const uint32_t *fpusave1, FAR const uint32_t *fpusave2)
 {
-  return memcmp(fpusave1, fpusave2, (8 * FPU_XCPT_REGS)) == 0;
+  return memcmp(fpusave1, fpusave2, INT_REG_SIZE * FPU_XCPT_REGS) == 0;
 }
 
 #endif /* HAVE_FPU */

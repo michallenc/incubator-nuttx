@@ -43,7 +43,7 @@
 #define IMXRT_ADC_ETC_DONE2_ERR_IRQ_OFFSET  0x0008  /* ETC DONE 2 and DONE ERR IRQ state register */
 #define IMXRT_ADC_ETC_DMA_CTRL_OFFSET       0x000c  /* DMA control register */
 #define IMXRT_ADC_ETC_TRIG_CTRL_OFFSET      0x0010  /* TRIG control register */
-#define IMXRT_ADC_ETC_TRIG_COUNTER_OFFSET   0x0014  /* TRIG counter register */ 
+#define IMXRT_ADC_ETC_TRIG_COUNTER_OFFSET   0x0014  /* TRIG counter register */
 #define IMXRT_ADC_ETC_TRIG_CHAIN_OFFSET     0x0018  /* TRIG chain register */
 #define IMXRT_ADC_ETC_TRIG_RESULT_OFFSET    0x0028  /* TRIG result data register */
 
@@ -68,7 +68,7 @@
                                                         /* Bits 24-28: Reserved */
 #define ADC_ETC_CTRL_DMA_MODE_SEL           (1 << 29)   /* Bit  29:    Trig DMA with pulsed signal */
 #define ADC_ETC_CTRL_TSC_BYPASS             (1 << 30)   /* Bit  30:    TSC is bypassed to ADC2 */
-#define ADC_ETC_CTRL_SOFTRST                (1 << 31)   /* Bit  31:    Software reset */     
+#define ADC_ETC_CTRL_SOFTRST                (1 << 31)   /* Bit  31:    Software reset */
 
 /* ADC_ETC DONE 0 and DONE 1 IRQ state register */
 

@@ -1518,9 +1518,7 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
       else
         {
           int_fast32_t theirstdoffset;
-          int_fast32_t theirdstoffset;
           int_fast32_t theiroffset;
-          int isdst;
           int i;
           int j;
 
@@ -1529,7 +1527,7 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
               return -1;
             }
 
-          /* Initial values of theirstdoffset and theirdstoffset */
+          /* Initial value of theirstdoffset */
 
           theirstdoffset = 0;
           for (i = 0; i < sp->timecnt; ++i)
@@ -1542,20 +1540,8 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
                 }
             }
 
-          theirdstoffset = 0;
-          for (i = 0; i < sp->timecnt; ++i)
-            {
-              j = sp->types[i];
-              if (sp->ttis[j].tt_isdst)
-                {
-                  theirdstoffset = -sp->ttis[j].tt_gmtoff;
-                  break;
-                }
-            }
-
           /* Initially we're assumed to be in standard time */
 
-          isdst = FALSE;
           theiroffset = theirstdoffset;
 
           /* Now juggle transition times and types
@@ -1578,29 +1564,13 @@ static int tzparse(FAR const char *name, FAR struct state_s *sp,
                    * offset to the transition time;
                    * otherwise, add the standard time
                    * offset to the transition time.
-                   *
-                   * Transitions from DST to DDST
-                   * will effectively disappear since
-                   * POSIX provides for only one DST
-                   * offset.
                    */
 
-                  if (isdst && !sp->ttis[j].tt_ttisstd)
-                    {
-                      sp->ats[i] += dstoffset - theirdstoffset;
-                    }
-                  else
-                    {
-                      sp->ats[i] += stdoffset - theirstdoffset;
-                    }
+                  sp->ats[i] += stdoffset - theirstdoffset;
                 }
 
               theiroffset = -sp->ttis[j].tt_gmtoff;
-              if (sp->ttis[j].tt_isdst)
-                {
-                  theirdstoffset = theiroffset;
-                }
-              else
+              if (!sp->ttis[j].tt_isdst)
                 {
                   theirstdoffset = theiroffset;
                 }
@@ -1817,19 +1787,28 @@ static FAR struct tm *localsub(FAR const time_t *timep,
 static FAR struct tm *gmtsub(FAR const time_t *timep,
                              int_fast32_t offset, FAR struct tm *tmp)
 {
-  tz_semtake(&g_gmt_sem);
-
   if (!g_gmt_isset)
     {
-      g_gmt_ptr = lib_malloc(sizeof *g_gmt_ptr);
-      if (g_gmt_ptr != NULL)
+#ifndef __KERNEL__
+      if (up_interrupt_context())
         {
-          gmtload(g_gmt_ptr);
-          g_gmt_isset = 1;
+          return NULL;
         }
-    }
+#endif
 
-  tz_semgive(&g_gmt_sem);
+      tz_semtake(&g_gmt_sem);
+      if (!g_gmt_isset)
+        {
+          g_gmt_ptr = lib_malloc(sizeof *g_gmt_ptr);
+          if (g_gmt_ptr != NULL)
+            {
+              gmtload(g_gmt_ptr);
+              g_gmt_isset = 1;
+            }
+        }
+
+      tz_semgive(&g_gmt_sem);
+    }
 
   tmp->tm_zone = GMT;
   return timesub(timep, offset, g_gmt_ptr, tmp);
@@ -1893,7 +1872,7 @@ static FAR struct tm *timesub(FAR const time_t *timep,
   y = EPOCH_YEAR;
   tdays = *timep / SECSPERDAY;
   rem = *timep - tdays * SECSPERDAY;
-  while (tdays < 0 || tdays >= g_year_lengths[isleap(y)])
+  while (tdays >= g_year_lengths[isleap(y)])
     {
       int newy;
       time_t tdelta;
@@ -2528,8 +2507,14 @@ void tzset(void)
 {
   FAR const char *name;
 
-  tz_semtake(&g_lcl_sem);
+#ifndef __KERNEL__
+  if (up_interrupt_context())
+    {
+      return;
+    }
+#endif
 
+  tz_semtake(&g_lcl_sem);
   name = getenv("TZ");
   if (name == NULL)
     {

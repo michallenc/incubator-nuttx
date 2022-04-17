@@ -60,7 +60,7 @@ void up_initial_state(struct tcb_s *tcb)
 
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       tcb->stack_alloc_ptr = g_idlestack;
       tcb->stack_base_ptr  = tcb->stack_alloc_ptr;
@@ -72,7 +72,7 @@ void up_initial_state(struct tcb_s *tcb)
        * water marks.
        */
 
-      up_stack_color(tcb->stack_alloc_ptr, 0);
+      xtensa_stack_color(tcb->stack_alloc_ptr, 0);
 #endif /* CONFIG_STACK_COLORATION */
     }
 
@@ -87,17 +87,15 @@ void up_initial_state(struct tcb_s *tcb)
   xcp->regs[REG_A1]   = (uint32_t)tcb->stack_base_ptr + /* Physical top of stack frame    */
                                   tcb->adj_stack_size;
 
-  /* Set initial PS to int level 0, EXCM disabled ('rfe' will enable), user
-   * mode.
-   */
+  /* Set initial PS to int level 0, user mode. */
 
 #ifdef __XTENSA_CALL0_ABI__
-  xcp->regs[REG_PS]   = PS_UM | PS_EXCM;
+  xcp->regs[REG_PS]   = PS_UM;
 
 #else
   /* For windowed ABI set WOE and CALLINC (pretend task was 'call4'd). */
 
-  xcp->regs[REG_PS]   = PS_UM | PS_EXCM | PS_WOE | PS_CALLINC(1);
+  xcp->regs[REG_PS]   = PS_UM | PS_WOE | PS_CALLINC(1);
 #endif
 
 #if XCHAL_CP_NUM > 0

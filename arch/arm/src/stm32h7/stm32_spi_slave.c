@@ -44,8 +44,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32_rcc.h"
 #include "stm32_gpio.h"
@@ -344,10 +342,10 @@ static const struct spi_slave_ctrlrops_s g_ctrlr_ops =
 
 static
 uint8_t SPI_SLAVE_OUTQ(1)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(1)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi1ctrlr = SPI_SLAVE_INIT(1);
 
 #endif
@@ -356,10 +354,10 @@ static struct stm32_spidev_s g_spi1ctrlr = SPI_SLAVE_INIT(1);
 
 static
 uint8_t SPI_SLAVE_OUTQ(2)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(2)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi2ctrlr = SPI_SLAVE_INIT(2);
 
 #endif
@@ -368,10 +366,10 @@ static struct stm32_spidev_s g_spi2ctrlr = SPI_SLAVE_INIT(2);
 
 static
 uint8_t SPI_SLAVE_OUTQ(3)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(3)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi3ctrlr = SPI_SLAVE_INIT(3);
 
 #endif
@@ -380,10 +378,10 @@ static struct stm32_spidev_s g_spi3ctrlr = SPI_SLAVE_INIT(3);
 
 static
 uint8_t SPI_SLAVE_OUTQ(4)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(4)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi4ctrlr = SPI_SLAVE_INIT(4);
 
 #endif
@@ -392,10 +390,10 @@ static struct stm32_spidev_s g_spi4ctrlr = SPI_SLAVE_INIT(4);
 
 static
 uint8_t SPI_SLAVE_OUTQ(5)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(5)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi5ctrlr = SPI_SLAVE_INIT(5);
 
 #endif
@@ -406,10 +404,10 @@ static struct stm32_spidev_s g_spi5ctrlr = SPI_SLAVE_INIT(5);
 
 static
 uint8_t SPI_SLAVE_OUTQ(6)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static
 uint8_t SPI_SLAVE_INQ(6)[DMA_ALIGN_UP(CONFIG_STM32H7_SPI_SLAVE_QSIZE)]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 static struct stm32_spidev_s g_spi6ctrlr = SPI_SLAVE_INIT(6);
 
 #endif
@@ -1810,6 +1808,7 @@ FAR struct spi_slave_ctrlr_s *stm32_spi_slave_initialize(int bus)
 #endif
     {
       spierr("ERROR: Unsupported SPI bus: %d\n", bus);
+      leave_critical_section(flags);
       return NULL;
     }
 

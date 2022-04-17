@@ -44,8 +44,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32.h"
 #include "stm32_dma.h"
 #include "stm32_sdio.h"
@@ -667,19 +666,18 @@ static void stm32_configwaitints(struct stm32_dev_s *priv, uint32_t waitmask,
       pinset = GPIO_SDIO_D0 & (GPIO_PORT_MASK | GPIO_PIN_MASK);
       pinset |= (GPIO_INPUT | GPIO_FLOAT | GPIO_EXTI);
 
-      /* Arm the SDIO_D Ready and install Isr */
+      /* Arm the SDIO_D0 Ready and install Isr */
 
       stm32_gpiosetevent(pinset, true, false, false,
                          stm32_rdyinterrupt, priv);
     }
 
-  /* Disarm SDIO_D ready */
+  /* Disarm SDIO_D0 ready and return it to SDIO D0 */
 
   if ((wkupevent & SDIOWAIT_WRCOMPLETE) != 0)
     {
       stm32_gpiosetevent(GPIO_SDIO_D0, false, false, false,
                          NULL, NULL);
-      stm32_configgpio(GPIO_SDIO_D0);
     }
 #endif
 

@@ -55,14 +55,12 @@
 
 /* Define the current format version */
 
-#define CONFIGDATA_FORMAT_VERSION       1
-#define CONFIGDATA_BLOCK_HDR_SIZE       3
-
-/* Define the erased state of the MTD device, if not already defined */
-
-#ifndef CONFIG_MTD_CONFIG_ERASEDVALUE
-#  define CONFIG_MTD_CONFIG_ERASEDVALUE 0xff
+#ifdef CONFIG_MTD_CONFIG_NAMED
+#  define CONFIGDATA_FORMAT_VERSION     1
+#else
+#  define CONFIGDATA_FORMAT_VERSION     2
 #endif
+#define CONFIGDATA_BLOCK_HDR_SIZE       3
 
 #define MTD_ERASED_ID     ((CONFIG_MTD_CONFIG_ERASEDVALUE << 8) | \
                             CONFIG_MTD_CONFIG_ERASEDVALUE)
@@ -77,8 +75,8 @@ struct mtdconfig_struct_s
 {
   FAR struct mtd_dev_s *mtd;  /* Contained MTD interface */
   sem_t        exclsem;       /* Supports mutual exclusion */
-  uint32_t     blocksize :14; /* Size of blocks in contained MTD */
-  uint32_t     erasesize :18; /* Size of erase block  in contained MTD */
+  uint32_t     blocksize;     /* Size of blocks in contained MTD */
+  uint32_t     erasesize;     /* Size of erase block  in contained MTD */
   size_t       nblocks;       /* Number of blocks available */
   size_t       neraseblocks;  /* Number of erase blocks available */
   off_t        readoff;       /* Read offset (for hexdump) */
@@ -104,11 +102,11 @@ begin_packed_struct struct mtdconfig_header_s
 static int     mtdconfig_open(FAR struct file *filep);
 static int     mtdconfig_close(FAR struct file *filep);
 static ssize_t mtdconfig_read(FAR struct file *filep, FAR char *buffer,
-                  size_t buflen);
+                              size_t buflen);
 static int     mtdconfig_ioctl(FAR struct file *filep, int cmd,
-                  unsigned long arg);
+                               unsigned long arg);
 static int     mtdconfig_poll(FAR struct file *filep, FAR struct pollfd *fds,
-                  bool setup);
+                              bool setup);
 
 /****************************************************************************
  * Private Data
@@ -119,10 +117,13 @@ static const struct file_operations mtdconfig_fops =
   mtdconfig_open,  /* open */
   mtdconfig_close, /* close */
   mtdconfig_read,  /* read */
-  0,               /* write */
-  0,               /* seek */
+  NULL,            /* write */
+  NULL,            /* seek */
   mtdconfig_ioctl, /* ioctl */
   mtdconfig_poll   /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL            /* unlink */
+#endif
 };
 
 /****************************************************************************
@@ -263,7 +264,7 @@ static int mtdconfig_writebytes(FAR struct mtdconfig_struct_s *dev,
       off_t     bytes_this_block;
       off_t     bytes_written = 0;
 
-      while (writelen)
+      while (writelen > 0)
         {
           /* Read existing data from the block into the buffer */
 
@@ -1164,7 +1165,7 @@ static int mtdconfig_setconfig(FAR struct mtdconfig_struct_s *dev,
 
   /* Allocate a temp block buffer */
 
-  dev->buffer = (FAR uint8_t *) kmm_malloc(dev->blocksize);
+  dev->buffer = (FAR uint8_t *)kmm_malloc(dev->blocksize);
   if (dev->buffer == NULL)
     {
       return -ENOMEM;
@@ -1643,10 +1644,7 @@ static int mtdconfig_ioctl(FAR struct file *filep, int cmd,
 
         /* Call the MTD's ioctl for this */
 
-        if (dev->mtd->ioctl)
-          {
-             dev->mtd->ioctl(dev->mtd, cmd, arg);
-          }
+        ret = MTD_IOCTL(dev->mtd, cmd, arg);
 
         break;
     }

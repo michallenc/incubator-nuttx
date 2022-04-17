@@ -283,18 +283,6 @@ There are two version of the FPU support built into the STM32 port.
      CONFIG_ARCH_FPU=y
      CONFIG_ARMV7M_LAZYFPU=y
 
-CFLAGS
-------
-
-Only recent GCC toolchains have built-in support for the Cortex-M4 FPU.  You will see
-the following lines in each Make.defs file:
-
-  ifeq ($(CONFIG_ARCH_FPU),y)
-    ARCHCPUFLAGS = -mcpu=cortex-m4 -mthumb -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-  else
-    ARCHCPUFLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-  endif
-
 FMC SDRAM
 =========
 
@@ -849,7 +837,7 @@ Where <subdir> is one of the following:
          CONFIG_FS_FAT=y          : Needed by the USB host mass storage class.
 
        Board Selection ->
-         CONFIG_LIB_BOARDCTL=y    : Needed for CONFIG_NSH_ARCHINIT
+         CONFIG_BOARDCTL=y    : Needed for CONFIG_NSH_ARCHINIT
 
        Application Configuration -> NSH Library
          CONFIG_NSH_ARCHINIT=y    : Architecture specific USB initialization

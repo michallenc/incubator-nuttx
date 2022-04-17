@@ -46,8 +46,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_dtcm.h"
 #include "stm32_dma.h"
 #include "stm32_gpio.h"
@@ -212,10 +211,21 @@
                                      STM32_SDMMC_CLKCR_EDGE       |     \
                                      STM32_SDMMC_CLKCR_PWRSAV     |     \
                                      STM32_SDMMC_CLKCR_WIDBUS_D1)
-#define STM32_SDMMC_CLCKR_SDWIDEXFR (STM32_SDMMC_SDXFR_CLKDIV     |     \
-                                     STM32_SDMMC_CLKCR_EDGE       |     \
-                                     STM32_SDMMC_CLKCR_PWRSAV     |     \
-                                     STM32_SDMMC_CLKCR_WIDBUS_D4)
+#ifdef HAVE_SDMMC_SDIO_MODE
+/* Do not enable power saving configuration bit (in SD 4-bit mode) because
+ * the SDIO clock is not enabled when the bus goes to the idle state.
+ * This condition breaks interrupts delivering mechanism over DAT[1]/IRQ
+ * SDIO line to the host.
+ */
+#  define STM32_SDMMC_CLCKR_SDWIDEXFR (STM32_SDMMC_SDXFR_CLKDIV     |     \
+                                       STM32_SDMMC_CLKCR_EDGE       |     \
+                                       STM32_SDMMC_CLKCR_WIDBUS_D4)
+#else
+#  define STM32_SDMMC_CLCKR_SDWIDEXFR (STM32_SDMMC_SDXFR_CLKDIV     |     \
+                                       STM32_SDMMC_CLKCR_EDGE       |     \
+                                       STM32_SDMMC_CLKCR_PWRSAV     |     \
+                                       STM32_SDMMC_CLKCR_WIDBUS_D4)
+#endif
 
 /* Timing */
 
@@ -372,7 +382,7 @@ struct stm32_dev_s
   struct work_s      cbfifo;          /* Monitor for Lame FIFO */
 #endif
   uint8_t            rxfifo[FIFO_SIZE_IN_BYTES] /* To offload with IDMA */
-                     __attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+                     aligned_data(ARMV7M_DCACHE_LINESIZE);
 #if defined(CONFIG_ARMV7M_DCACHE) && defined(CONFIG_STM32H7_SDMMC_IDMA)
   bool               unaligned_rx; /* read buffer is not cache-line aligned */
 #endif
@@ -649,7 +659,7 @@ static struct stm32_sampleregs_s g_sampleregs[DEBUG_NSAMPLES];
 /* Input dma buffer for unaligned transfers */
 #if defined(CONFIG_ARMV7M_DCACHE) && defined(CONFIG_STM32H7_SDMMC_IDMA)
 static uint8_t sdmmc_rxbuffer[SDMMC_MAX_BLOCK_SIZE]
-__attribute__((aligned(ARMV7M_DCACHE_LINESIZE)));
+aligned_data(ARMV7M_DCACHE_LINESIZE);
 #endif
 
 /****************************************************************************
@@ -801,19 +811,18 @@ static void stm32_configwaitints(struct stm32_dev_s *priv, uint32_t waitmask,
                                 GPIO_PUPD_MASK);
       pinset |= (GPIO_INPUT | GPIO_EXTI);
 
-      /* Arm the SDMMC_D Ready and install Isr */
+      /* Arm the SDMMC_D0 Ready and install Isr */
 
       stm32_gpiosetevent(pinset, true, false, false,
                          stm32_sdmmc_rdyinterrupt, priv);
     }
 
-  /* Disarm SDMMC_D ready */
+  /* Disarm SDMMC_D0 ready and return it to SDMMC D0 */
 
   if ((wkupevent & SDIOWAIT_WRCOMPLETE) != 0)
     {
       stm32_gpiosetevent(priv->d0_gpio, false, false, false,
                          NULL, NULL);
-      stm32_configgpio(priv->d0_gpio);
     }
 #endif
 
@@ -1981,6 +1990,10 @@ static void stm32_reset(FAR struct sdio_dev_s *dev)
   priv->buffer     = 0;      /* Address of current R/W buffer */
   priv->remaining  = 0;      /* Number of bytes remaining in the transfer */
   priv->xfrmask    = 0;      /* Interrupt enables for data transfer */
+
+#ifdef HAVE_SDMMC_SDIO_MODE
+  priv->sdiointmask = 0;     /* SDIO card in-band interrupt mask */
+#endif
 
   priv->widebus    = false;
 
@@ -3624,4 +3637,44 @@ void sdio_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect)
   mcinfo("cdstatus: %02" PRIx8 "\n", priv->cdstatus);
   leave_critical_section(flags);
 }
+
+/****************************************************************************
+ * Name: sdio_set_sdio_card_isr
+ *
+ * Description:
+ *   SDIO card generates interrupt via SDIO_DATA_1 pin.
+ *   Called by board-specific logic to register an ISR for SDIO card.
+ *
+ * Input Parameters:
+ *   func      - callback function.
+ *   arg       - arg to be passed to the function.
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifdef HAVE_SDMMC_SDIO_MODE
+void sdio_set_sdio_card_isr(FAR struct sdio_dev_s *dev,
+                            int (*func)(void *), void *arg)
+{
+  struct stm32_dev_s *priv = (struct stm32_dev_s *)dev;
+
+  priv->do_sdio_card = func;
+
+  if (func != NULL)
+    {
+      priv->sdiointmask = STM32_SDMMC_MASK_SDIOITIE;
+      priv->do_sdio_arg = arg;
+    }
+  else
+    {
+      priv->sdiointmask = 0;
+    }
+
+  sdmmc_putreg32(priv, priv->xfrmask | priv->waitmask | priv->sdiointmask,
+                 STM32_SDMMC_MASK_OFFSET);
+}
+#endif
+
 #endif /* CONFIG_STM32H7_SDMMC1 || CONFIG_STM32H7_SDMMC2 */

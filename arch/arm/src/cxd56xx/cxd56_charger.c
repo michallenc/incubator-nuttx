@@ -52,14 +52,6 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Debug ********************************************************************/
-
-#ifdef CONFIG_CXD56_CHARGER_DEBUG
-#define baterr(fmt, ...) _err(fmt, ## __VA_ARGS__)
-#else
-#define baterr(fmt, ...)
-#endif
-
 /* Configuration */
 
 #ifdef CONFIG_CXD56_CHARGER_TEMP_PRECISE
@@ -79,14 +71,12 @@ struct charger_dev_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int charger_get_status(FAR enum battery_charger_status_e *status);
-static int charger_get_health(FAR enum battery_charger_health_e *health);
+static int charger_get_status(FAR enum battery_status_e *status);
+static int charger_get_health(FAR enum battery_health_e *health);
 static int charger_online(FAR bool *online);
 static int charger_get_temptable(FAR struct battery_temp_table_s *table);
 static int charger_set_temptable(FAR struct battery_temp_table_s *table);
 
-static int charger_open(FAR struct file *filep);
-static int charger_close(FAR struct file *filep);
 static ssize_t charger_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen);
 static ssize_t charger_write(FAR struct file *filep,
@@ -100,15 +90,13 @@ static int charger_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_chargerops =
 {
-  charger_open,   /* open */
-  charger_close,  /* close */
+  NULL,           /* open */
+  NULL,           /* close */
   charger_read,   /* read */
   charger_write,  /* write */
-  0,              /* seek */
-  charger_ioctl   /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  , NULL          /* poll */
-#endif
+  NULL,           /* seek */
+  charger_ioctl,  /* ioctl */
+  NULL            /* poll */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   , NULL          /* unlink */
 #endif
@@ -210,7 +198,7 @@ static int charger_therm2temp(int val)
  * Name: charger_get_status
  ****************************************************************************/
 
-static int charger_get_status(FAR enum battery_charger_status_e *status)
+static int charger_get_status(FAR enum battery_status_e *status)
 {
   uint8_t state;
   int ret;
@@ -269,7 +257,7 @@ static int charger_get_status(FAR enum battery_charger_status_e *status)
  * Name: charger_get_health
  ****************************************************************************/
 
-static int charger_get_health(FAR enum battery_charger_health_e *health)
+static int charger_get_health(FAR enum battery_health_e *health)
 {
   FAR struct pmic_gauge_s gauge;
   uint8_t state;
@@ -430,32 +418,6 @@ static int charger_set_temptable(FAR struct battery_temp_table_s *table)
 }
 
 /****************************************************************************
- * Name: charger_open
- *
- * Description:
- *   This function is called whenever the battery device is opened.
- *
- ****************************************************************************/
-
-static int charger_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: charger_close
- *
- * Description:
- *   This routine is called when the battery device is closed.
- *
- ****************************************************************************/
-
-static int charger_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: charger_read
  ****************************************************************************/
 
@@ -486,7 +448,7 @@ static ssize_t charger_write(FAR struct file *filep,
 static int charger_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct charger_dev_s *priv  = inode->i_private;
+  FAR struct charger_dev_s *priv = inode->i_private;
   int ret = -ENOTTY;
 
   nxsem_wait_uninterruptible(&priv->batsem);
@@ -495,16 +457,16 @@ static int charger_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     {
       case BATIOC_STATE:
         {
-          FAR enum battery_charger_status_e *status =
-            (FAR enum battery_charger_status_e *)(uintptr_t)arg;
+          FAR enum battery_status_e *status =
+            (FAR enum battery_status_e *)(uintptr_t)arg;
           ret = charger_get_status(status);
         }
         break;
 
       case BATIOC_HEALTH:
         {
-          FAR enum battery_charger_health_e *health =
-            (FAR enum battery_charger_health_e *)(uintptr_t)arg;
+          FAR enum battery_health_e *health =
+            (FAR enum battery_health_e *)(uintptr_t)arg;
           ret = charger_get_health(health);
         }
         break;

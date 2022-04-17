@@ -1408,7 +1408,7 @@ static int s25fl1_ioctl(FAR struct mtd_dev_s *dev,
   FAR struct s25fl1_dev_s *priv = (FAR struct s25fl1_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -1443,6 +1443,28 @@ static int s25fl1_ioctl(FAR struct mtd_dev_s *dev,
 
               finfo("blocksize: %d erasesize: %d neraseblocks: %d\n",
                     geo->blocksize, geo->erasesize, geo->neraseblocks);
+            }
+        }
+        break;
+
+      case BIOC_PARTINFO:
+        {
+          FAR struct partition_info_s *info =
+            (FAR struct partition_info_s *)arg;
+          if (info != NULL)
+            {
+#ifdef CONFIG_S25FL1_SECTOR512
+              info->numsectors  = priv->nsectors <<
+                                (priv->sectorshift - S25FL1_SECTOR512_SHIFT);
+              info->sectorsize  = 1 << S25FL1_SECTOR512_SHIFT;
+#else
+              info->numsectors  = priv->nsectors <<
+                                  (priv->sectorshift - priv->pageshift);
+              info->sectorsize  = 1 << priv->pageshift;
+#endif
+              info->startsector = 0;
+              info->parent[0]   = '\0';
+              ret               = OK;
             }
         }
         break;

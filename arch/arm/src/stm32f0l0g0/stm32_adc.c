@@ -44,8 +44,6 @@
 #include <nuttx/semaphore.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32.h"
 #include "stm32_dma.h"
@@ -1342,6 +1340,7 @@ static void adc_reset(FAR struct adc_dev_s *dev)
 #ifdef HAVE_ADC_CMN_DATA
   if (adccmn_lock(priv, true) < 0)
     {
+      leave_critical_section(flags);
       return;
     }
 

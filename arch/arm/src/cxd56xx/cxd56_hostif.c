@@ -39,8 +39,7 @@
 #include <arch/chip/hostif.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "cxd56_clock.h"
 #include "cxd56_pinconfig.h"
 #include "cxd56_icc.h"
@@ -142,8 +141,10 @@ static const struct file_operations g_hif_fops =
   hif_write,   /* write */
   hif_seek,    /* seek */
   hif_ioctl,   /* ioctl */
-  hif_poll,    /* poll */
-  hif_unlink   /* unlink */
+  hif_poll     /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , hif_unlink /* unlink */
+#endif
 };
 
 /****************************************************************************
@@ -344,10 +345,12 @@ static int hif_poll(FAR struct file *filep,
   return OK;
 }
 
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int hif_unlink(FAR struct inode *inode)
 {
   return OK;
 }
+#endif
 
 static int hif_rxhandler(int cpuid, int protoid,
                          uint32_t pdata, uint32_t data,

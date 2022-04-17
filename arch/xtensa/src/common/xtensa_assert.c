@@ -63,7 +63,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_USBDUMP
-static int usbtrace_syslog(FAR const char *fmt, ...)
+static int usbtrace_syslog(const char *fmt, ...)
 {
   va_list ap;
 
@@ -75,7 +75,7 @@ static int usbtrace_syslog(FAR const char *fmt, ...)
   return OK;
 }
 
-static int assert_tracecallback(FAR struct usbtrace_s *trace, FAR void *arg)
+static int assert_tracecallback(struct usbtrace_s *trace, void *arg)
 {
   usbtrace_trprintf(usbtrace_syslog, trace->event, trace->value);
   return 0;
@@ -189,6 +189,8 @@ void up_assert(const char *filename, int lineno)
 
 void xtensa_panic(int xptcode, uint32_t *regs)
 {
+  CURRENT_REGS = regs;
+
   /* We get here when a un-dispatch-able, irrecoverable exception occurs */
 
   board_autoled_on(LED_ASSERTION);
@@ -203,7 +205,6 @@ void xtensa_panic(int xptcode, uint32_t *regs)
   _alert("Unhandled Exception %d\n", xptcode);
 #endif
 
-  CURRENT_REGS = regs;
   xtensa_assert(); /* Should not return */
   for (; ; );
 }
@@ -290,6 +291,8 @@ void xtensa_panic(int xptcode, uint32_t *regs)
 
 void xtensa_user_panic(int exccause, uint32_t *regs)
 {
+  CURRENT_REGS = regs;
+
   /* We get here when a un-dispatch-able, irrecoverable exception occurs */
 
   board_autoled_on(LED_ASSERTION);
@@ -305,7 +308,6 @@ void xtensa_user_panic(int exccause, uint32_t *regs)
   _alert("User Exception: EXCCAUSE=%04x\n", exccause);
 #endif
 
-  CURRENT_REGS = regs;
   xtensa_assert(); /* Should not return */
   for (; ; );
 }

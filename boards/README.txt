@@ -61,7 +61,6 @@ The boards/ directory contains board specific configuration logic.  Each
 board must provide a subdirectory <board> under boards/ with the
 following characteristics:
 
-
   <board>
   |-- README.txt
   |-- include/
@@ -291,6 +290,11 @@ boards/mips/pic32mz/flipnclick-pic32mz
   bootloader).  It has with four Mikroe Click bus interfaces in addition to
   standard Arduino connectors.  This board features the Microchip
   PIC32MZ2048EFH100 MCU running at 200 MHz (252 MHz capable).
+
+boards/mips/pic32mz/chipkit-wifire
+  Board support for the chipKIT Wi-FIRE board. This board is a chipKIT
+  Arduino-compatible board. This board features
+  the Microchip PIC32MZ2048EFG100 MCU running at 200 MHz.
 
 boards/arm/sam34/flipnclick-sam3x
   Board support for the Mikroe Flip&Click STM32X board.  This board is an
@@ -710,6 +714,9 @@ boards/arm/sam34/sam4s-xplained
 
 boards/arm/sam34/sam4s-xplained-pro
   The port of NuttX to the Atmel SAM4S-Xplained Pro development board.
+
+boards/arm/samv7/same70-qmtech
+  The port of NuttX to the Atmel SAME70 evaluation board from QMTECH.
 
 boards/arm/samv7/same70-xplained
   The port of NuttX to the Atmel SAME70 Xplained evaluation board.

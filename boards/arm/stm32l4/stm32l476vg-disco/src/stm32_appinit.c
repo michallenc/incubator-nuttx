@@ -106,7 +106,7 @@ FAR struct mtd_dev_s *g_mtd_fs;
  *
  ****************************************************************************/
 
-#ifdef CONFIG_LIB_BOARDCTL
+#ifdef CONFIG_BOARDCTL
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef HAVE_RTC_DRIVER
@@ -253,8 +253,9 @@ int board_app_initialize(uintptr_t arg)
 #if defined(CONFIG_BCH)
       /* Use the minor number to create device paths */
 
-      snprintf(blockdev, 18, "/dev/mtdblock%d", N25QXXX_MTD_MINOR);
-      snprintf(chardev, 12, "/dev/mtd%d", N25QXXX_MTD_MINOR);
+      snprintf(blockdev, sizeof(blockdev), "/dev/mtdblock%d",
+               N25QXXX_MTD_MINOR);
+      snprintf(chardev, sizeof(chardev), "/dev/mtd%d", N25QXXX_MTD_MINOR);
 
       /* Now create a character device on the block device */
 
@@ -295,7 +296,7 @@ int board_app_initialize(uintptr_t arg)
 
   return ret;
 }
-#endif /* CONFIG_LIB_BOARDCTL */
+#endif /* CONFIG_BOARDCTL */
 
 #ifdef CONFIG_BOARDCTL_IOCTL
 int board_ioctl(unsigned int cmd, uintptr_t arg)
@@ -345,7 +346,7 @@ int board_ioctl(unsigned int cmd, uintptr_t arg)
 #if defined(CONFIG_BOARDCTL_UNIQUEID)
 int board_uniqueid(uint8_t *uniqueid)
 {
-  if (uniqueid == 0)
+  if (uniqueid == NULL)
     {
       return -EINVAL;
     }

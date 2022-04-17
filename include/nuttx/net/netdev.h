@@ -382,7 +382,8 @@ struct net_driver_s
    *        NETDEV_DOWN - The network is down
    */
 
-  FAR struct devif_callback_s *d_conncb;
+  FAR struct devif_callback_s *d_conncb;      /* This is the list head */
+  FAR struct devif_callback_s *d_conncb_tail; /* This is the list tail */
   FAR struct devif_callback_s *d_devcb;
 
   /* Driver callbacks */
@@ -450,7 +451,7 @@ typedef CODE int (*devif_poll_callback_t)(FAR struct net_driver_s *dev);
  * Ethernet, you will need to call the network ARP code before calling
  * this function:
  *
- *     #define BUF ((struct eth_hdr_s *)&dev->d_buf[0])
+ *     #define BUF ((FAR struct eth_hdr_s *)&dev->d_buf[0])
  *     dev->d_len = ethernet_devicedrver_poll();
  *     if (dev->d_len > 0)
  *       {
