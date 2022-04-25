@@ -40,7 +40,7 @@
 
 /* channels 1 and 2 have the same number of pins on Teensy */
 
-#define ADC_NCHANNELS 4
+#define ADC_NCHANNELS 7
 
 /****************************************************************************
  * Private Data
@@ -48,7 +48,7 @@
 
 static const uint8_t g_chanlist[ADC_NCHANNELS] =
   {
-    4, 2, 9, 0
+    4, 2, 9, 0, 3, 1, 10
   };
 
 /****************************************************************************

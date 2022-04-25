@@ -132,10 +132,10 @@
 #define GPIO_OUT4      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
                         GPIO_PORT4 | GPIO_PIN5)                  /* EMC_05 */
 
-#define GPIO_IN1       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN1 | IOMUX_PULL_UP_100K | \
-                        _IOMUX_PULL_ENABLE)                        /* B0_01 */
-#define GPIO_IN2       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN2 | IOMUX_PULL_UP_100K | \
-                        _IOMUX_PULL_ENABLE)                        /* B0_02 */
+#define GPIO_IN1       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN19 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B1_03 */
+#define GPIO_IN2       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN18 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B1_02 */
 #define GPIO_IN3       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN0 | IOMUX_PULL_UP_100K | \
                         _IOMUX_PULL_ENABLE)                        /* B0_00 */
 
