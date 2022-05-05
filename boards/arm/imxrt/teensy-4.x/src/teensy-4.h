@@ -138,6 +138,8 @@
                         _IOMUX_PULL_ENABLE)                        /* B1_02 */
 #define GPIO_IN3       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN0 | IOMUX_PULL_UP_100K | \
                         _IOMUX_PULL_ENABLE)                        /* B0_00 */
+#define GPIO_IN4       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN2 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_0 */
 
 /****************************************************************************
  * Public Types

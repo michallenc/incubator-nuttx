@@ -847,12 +847,12 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
         }
 
       /* PMSM specific configuration */
-      
-      if (priv->base != IMXRT_FLEXPWM2_BASE)
+  
+      if (priv->base != IMXRT_FLEXPWM4_BASE)
         {
           regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
                                         + MODULE_OFFSET * shift);
-          regval |= SMCTRL2_FORCE_SEL_EXT_FORCE;
+          regval |= SMCTRL2_FORCE_SEL_EXT_SYNC | SMCTRL2_FRCEN;
           putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
                                       + MODULE_OFFSET * shift);
         }
@@ -896,11 +896,11 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
 
       if (priv->modules[i].ext_trig)
         {
-          if ((priv->base == IMXRT_FLEXPWM2_BASE) && (priv->modules[i].module == 4))
+          if ((priv->base == IMXRT_FLEXPWM4_BASE) && (priv->modules[i].module == 3))
             {
               regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
-              regval |= SMT_OUT_TRIG_EN_VAL2;
+              regval |= SMT_OUT_TRIG_EN_VAL3;
               putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
                 int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_FORCE_SEL_OFFSET,
