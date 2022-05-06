@@ -1150,6 +1150,10 @@ config ENC1_HNE
 
 endif # ENC1_HIP
 
+config ENC1_XIE
+	bool "INDEX signal position capture"
+	default n
+
 config ENC1_XIP
 	bool "INDEX signal initializes position counter"
 	default n

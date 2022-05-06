@@ -80,6 +80,10 @@
 # define CONFIG_ENC1_HNE 0
 #endif
 
+#ifndef CONFIG_ENC1_XIE
+#  define CONFIG_ENC1_XIE 0
+#endif
+
 #ifndef CONFIG_ENC1_XIP
 #  define CONFIG_ENC1_XIP 0
 #endif
@@ -236,6 +240,7 @@
 #define XNE_SHIFT (3)
 #define REV_SHIFT (4)
 #define MOD_SHIFT (5)
+#define XIE_SHIFT (6)
 
 /****************************************************************************
  * Private Types
@@ -258,11 +263,16 @@ struct imxrt_qeconfig_s
                              * will reinitialize the position counter. Bits 4-0:
                              * [MOD, REV, XNE, XIP, HNE, HIP]
                              */
-
 #ifdef CONFIG_DEBUG_SENSORS
   bool      tst_dir_adv;    /* Whether to generate down/up test signals */
   uint8_t   tst_period;     /* Period of PHASE pulses in # of periph clock cycles */
 #endif
+};
+
+struct imxrt_qedata_s
+{
+  int32_t  index_pos;      /* Last position of index occurance */
+  uint32_t index_cnt;      /* Number of index occurance */
 };
 
 /* ENC Device Private Data */
@@ -278,6 +288,7 @@ struct imxrt_enc_lowerhalf_s
   /* IMXRT driver-specific fields: */
 
   FAR const struct imxrt_qeconfig_s *config;  /* static configuration */
+  FAR struct imxrt_qedata_s *data;
   sem_t sem_excl;                             /* Mutual exclusion semaphore to
                                                * ensure atomic 32-bit reads.
                                                */
@@ -311,6 +322,8 @@ static void imxrt_enc_set_initial_val(FAR struct imxrt_enc_lowerhalf_s *priv,
 static void imxrt_enc_modulo_enable(FAR struct imxrt_enc_lowerhalf_s *priv,
                                     uint32_t modulus);
 static void imxrt_enc_modulo_disable(FAR struct imxrt_enc_lowerhalf_s *priv);
+
+static int imxrt_enc_index(int irq, void *context, FAR void *arg);
 
 #ifdef CONFIG_DEBUG_SENSORS
 static int imxrt_enc_test_gen(FAR struct imxrt_enc_lowerhalf_s *priv,
@@ -356,6 +369,7 @@ static const struct imxrt_qeconfig_s imxrt_enc1_config =
   .in_filt_cnt = CONFIG_ENC1_FILTCNT,
   .init_flags  = CONFIG_ENC1_HIP << HIP_SHIFT |
                  CONFIG_ENC1_HNE << HNE_SHIFT |
+                 CONFIG_ENC1_XIE << XIE_SHIFT |
                  CONFIG_ENC1_XIP << XIP_SHIFT |
                  CONFIG_ENC1_XNE << XNE_SHIFT |
                  CONFIG_ENC1_DIR << REV_SHIFT |
@@ -367,10 +381,17 @@ static const struct imxrt_qeconfig_s imxrt_enc1_config =
 #endif
 };
 
+static struct imxrt_qedata_s imxrt_enc1_data =
+{
+  .index_pos = 0,
+  .index_cnt = 0,
+};
+
 static struct imxrt_enc_lowerhalf_s imxrt_enc1_priv =
 {
   .ops = &g_qecallbacks,
   .config = &imxrt_enc1_config,
+  .data = &imxrt_enc1_data,
 };
 #endif
 
@@ -640,6 +661,15 @@ static int imxrt_enc_reconfig(FAR struct imxrt_enc_lowerhalf_s *priv,
       clear |= ENC_CTRL_HNE;
     }
 
+  if ((args >> XIE_SHIFT) & 1)
+    {
+      set |= ENC_CTRL_XIE;
+    }
+  else
+    {
+      clear |= ENC_CTRL_XIE;
+    }
+
   if ((args >> XIP_SHIFT) & 1)
     {
       set |= ENC_CTRL_XIP;
@@ -752,6 +782,41 @@ static void imxrt_enc_modulo_disable(FAR struct imxrt_enc_lowerhalf_s *priv)
   imxrt_enc_modifyreg16(priv, IMXRT_ENC_CTRL2_OFFSET, ENC_CTRL2_MOD, 0);
 }
 
+/****************************************************************************
+ * Name: imxrt_enc_index
+ *
+ * Description:
+ *   Disables modulo counting.
+ *
+ * Input Parameters:
+ *   priv - A reference to the IMXRT enc lowerhalf structure
+ *
+ ****************************************************************************/
+
+static int imxrt_enc_index(int irq, void *context, FAR void *arg)
+{
+  FAR struct imxrt_enc_lowerhalf_s *priv =
+    (FAR struct imxrt_enc_lowerhalf_s *)arg;
+  FAR const struct imxrt_qeconfig_s *config = priv->config;
+  FAR const struct imxrt_qedata_s *data = priv->data;
+  uint16_t regval = getreg16(config->base + IMXRT_ENC_CTRL_OFFSET);
+  int ret;
+
+  if ((regval & ENC_CTRL_XIRQ) != 0)
+    {
+      /* Clear the interrupt */
+
+      regval |= ENC_CTRL_XIRQ;
+      putreg16(regval, config->base + IMXRT_ENC_CTRL_OFFSET);
+
+      imxrt_position(arg, &data->index_pos);
+
+      priv->data->index_cnt += 1;
+    }
+
+  return OK;
+}
+
 #ifdef CONFIG_DEBUG_SENSORS
 
 /****************************************************************************
@@ -825,7 +890,7 @@ static int imxrt_setup(FAR struct qe_lowerhalf_s *lower)
 {
   FAR struct imxrt_enc_lowerhalf_s *priv =
     (FAR struct imxrt_enc_lowerhalf_s *)lower;
-  FAR const struct imxrt_qeconfig_s *config = priv->config;
+  FAR struct imxrt_qeconfig_s *config = priv->config;
   uint32_t regval;
   int ret;
 
@@ -867,6 +932,15 @@ static int imxrt_setup(FAR struct qe_lowerhalf_s *lower)
   imxrt_enc_putreg16(priv, IMXRT_ENC_TST_OFFSET, regval);
 #endif
 
+  ret = irq_attach(IMXRT_IRQ_ENC1, imxrt_enc_index, priv);
+  if (ret < 0)
+    {
+      printf("irq_attach failed: %d\n", ret);
+      return ret;
+    }
+
+  up_enable_irq(IMXRT_IRQ_ENC1);
+
   /* Control and Control 2 register */
 
   regval = ENC_CTRL_SWIP;
@@ -874,6 +948,7 @@ static int imxrt_setup(FAR struct qe_lowerhalf_s *lower)
   regval |= ((config->init_flags >> HIP_SHIFT) & 1) ? ENC_CTRL_HIP : 0;
   regval |= ((config->init_flags >> HNE_SHIFT) & 1) ? ENC_CTRL_HNE : 0;
   regval |= ((config->init_flags >> XIP_SHIFT) & 1) ? ENC_CTRL_XIP : 0;
+  regval |= ((config->init_flags >> XIE_SHIFT) & 1) ? ENC_CTRL_XIE : 0;
   regval |= ((config->init_flags >> XNE_SHIFT) & 1) ? ENC_CTRL_XNE : 0;
   imxrt_enc_putreg16(priv, IMXRT_ENC_CTRL_OFFSET, regval);
 
@@ -1027,6 +1102,7 @@ static int imxrt_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
                        unsigned long arg)
 {
   struct imxrt_enc_lowerhalf_s *priv = (struct imxrt_enc_lowerhalf_s *)lower;
+  FAR struct imxrt_qedata_s *data = priv->data;
   switch (cmd)
     {
       /* QEIOC_POSDIFF:
@@ -1054,6 +1130,12 @@ static int imxrt_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
         break;
       case QEIOC_RESETATMAX:
         imxrt_enc_modulo_disable(priv);
+        break;
+      case QEIOC_INDEX_POS:
+        *((uint32_t *)arg) = data->index_pos;
+        break;
+      case QEIOC_INDEX_CNT:
+        *((uint32_t *)arg) = data->index_cnt;
         break;
 
 #ifdef CONFIG_DEBUG_SENSORS
