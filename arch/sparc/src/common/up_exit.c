@@ -63,11 +63,11 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DUMP_ON_EXIT
-static void _up_dumponexit(FAR struct tcb_s *tcb, FAR void *arg)
+static void _up_dumponexit(struct tcb_s *tcb, void *arg)
 {
-  FAR struct filelist *filelist;
+  struct filelist *filelist;
 #if CONFIG_NFILE_STREAMS > 0
-  FAR struct streamlist *streamlist;
+  struct streamlist *streamlist;
 #endif
   int i;
 
@@ -155,16 +155,6 @@ void up_exit(int status)
    */
 
   tcb = this_task();
-
-#ifdef CONFIG_ARCH_ADDRENV
-  /* Make sure that the address environment for the previously running
-   * task is closed down gracefully (data caches dump, MMU flushed) and
-   * set up the address environment for the new thread at the head of
-   * the ready-to-run list.
-   */
-
-  (void)group_addrenv(tcb);
-#endif
 
   /* Reset scheduler parameters */
 

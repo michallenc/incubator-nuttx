@@ -103,10 +103,6 @@ ifeq ($(CONFIG_STACK_COLORATION),y)
   CSRCS += up_checkstack.c
 endif
 
-ifeq ($(CONFIG_ARCH_COVERAGE),y)
-  STDLIBS += -lgcov
-endif
-
 ifeq ($(CONFIG_SPINLOCK),y)
   HOSTSRCS += up_testset.c
 endif
@@ -190,12 +186,6 @@ endif
 
 ifeq ($(CONFIG_SIM_SPI_LINUX),y)
   HOSTSRCS += up_spilinux.c
-
-  up_spilinux.c: config.h
-
-  config.h: $(TOPDIR)/include/nuttx/config.h
-	@echo "CP:  $<"
-	$(Q) cp $< $@
 endif
 
 ifeq ($(CONFIG_RPTUN),y)

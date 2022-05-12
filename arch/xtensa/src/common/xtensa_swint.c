@@ -103,7 +103,7 @@ int xtensa_swint(int irq, void *context, void *arg)
       case SYS_save_context:
         {
           DEBUGASSERT(regs[REG_A3] != 0);
-          memcpy((uint32_t *)regs[REG_A3], regs, (4 * XCPTCONTEXT_REGS));
+          memcpy(*(uint32_t **)regs[REG_A3], regs, XCPTCONTEXT_SIZE);
 #if XCHAL_CP_NUM > 0
           cpstate = (uintptr_t)regs[REG_A3] + cpstate_off;
           xtensa_coproc_savestate((struct xtensa_cpstate_s *)cpstate);
@@ -132,7 +132,7 @@ int xtensa_swint(int irq, void *context, void *arg)
       case SYS_restore_context:
         {
           DEBUGASSERT(regs[REG_A3] != 0);
-          CURRENT_REGS = (uint32_t *)regs[REG_A3];
+          CURRENT_REGS = *(uint32_t **)regs[REG_A3];
 #if XCHAL_CP_NUM > 0
           cpstate = (uintptr_t)regs[REG_A3] + cpstate_off;
           xtensa_coproc_restorestate((struct xtensa_cpstate_s *)cpstate);
@@ -161,10 +161,26 @@ int xtensa_swint(int irq, void *context, void *arg)
       case SYS_switch_context:
         {
           DEBUGASSERT(regs[REG_A3] != 0 && regs[REG_A4] != 0);
-
-          memcpy((uint32_t *)regs[REG_A3], regs, (4 * XCPTCONTEXT_REGS));
+          *(uint32_t **)regs[REG_A3] = regs;
           CURRENT_REGS = (uint32_t *)regs[REG_A4];
         }
+
+        break;
+
+      /* A2=SYS_flush_context:  This flush windows to the stack:
+       *
+       * int xtensa_flushcontext(void);
+       *
+       * At this point, the following values are saved in context:
+       *
+       *   A2 = SYS_flush_context
+       *
+       * In this case, we simply need to do nothing.
+       * As flush the register windows to the stack has be done by
+       * interrupt enter handler.
+       */
+
+      case SYS_flush_context:
 
         break;
     }

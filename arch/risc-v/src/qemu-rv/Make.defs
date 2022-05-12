@@ -35,6 +35,7 @@ CMN_CSRCS += riscv_releasestack.c riscv_stackframe.c riscv_schedulesigaction.c
 CMN_CSRCS += riscv_sigdeliver.c riscv_unblocktask.c riscv_usestack.c
 CMN_CSRCS += riscv_idle.c riscv_tcbinfo.c riscv_cpuidlestack.c
 CMN_CSRCS += riscv_exception.c riscv_getnewintctx.c riscv_doirq.c
+CMN_CSRCS += riscv_saveusercontext.c
 
 ifeq ($(CONFIG_SMP), y)
 CMN_CSRCS += riscv_cpuindex.c riscv_cpupause.c riscv_cpustart.c
@@ -50,6 +51,7 @@ CMN_CSRCS += riscv_checkstack.c
 endif
 
 ifeq ($(CONFIG_ARCH_HAVE_VFORK),y)
+CMN_ASRCS += vfork.S
 CMN_CSRCS += riscv_vfork.c
 endif
 
@@ -59,10 +61,16 @@ endif
 
 ifeq ($(CONFIG_ARCH_FPU),y)
 CMN_ASRCS += riscv_fpu.S
+CMN_CSRCS += riscv_fpucmp.c
 endif
 
 ifeq ($(CONFIG_ARCH_RV_ISA_A),y)
 CMN_ASRCS += riscv_testset.S
+endif
+
+ifeq ($(CONFIG_RISCV_SEMIHOSTING_HOSTFS),y)
+CMN_ASRCS += riscv_semihost.S
+CMN_CSRCS += riscv_hostfs.c
 endif
 
 # Specify our C code within this directory to be included

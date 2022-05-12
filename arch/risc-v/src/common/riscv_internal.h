@@ -33,8 +33,6 @@
 #  include <sys/types.h>
 #  include <stdint.h>
 #  include <syscall.h>
-#else
-#  include <arch/arch.h>
 #endif
 
 /****************************************************************************
@@ -48,6 +46,11 @@
 #define STACK_COLOR    0xdeadbeef
 #define INTSTACK_COLOR 0xdeadbeef
 #define HEAP_COLOR     'h'
+
+/* RISC-V requires a 16-byte stack alignment. */
+
+#define STACK_ALIGNMENT     16
+#define STACK_FRAME_SIZE    __XSTR(STACK_ALIGNMENT)
 
 /* Stack alignment macros */
 
@@ -233,12 +236,8 @@ void riscv_exception_attach(void);
 
 #ifdef CONFIG_ARCH_FPU
 void riscv_fpuconfig(void);
-void riscv_savefpu(uintptr_t *regs);
-void riscv_restorefpu(const uintptr_t *regs);
 #else
 #  define riscv_fpuconfig()
-#  define riscv_savefpu(regs)
-#  define riscv_restorefpu(regs)
 #endif
 
 /* RISC-V PMP Config ********************************************************/
@@ -324,23 +323,10 @@ uintptr_t riscv_mhartid(void);
 /* If kernel runs in Supervisor mode, a system call trampoline is needed */
 
 #ifdef CONFIG_ARCH_USE_S_MODE
-void riscv_dispatch_syscall(void) noreturn_function;
 void *riscv_perform_syscall(uintptr_t *regs);
 #endif
 
 /* Context switching via system calls ***************************************/
-
-/* SYS call 0:
- *
- * int riscv_saveusercontext(uintptr_t *saveregs);
- *
- * Return:
- * 0: Normal Return
- * 1: Context Switch Return
- */
-
-#define riscv_saveusercontext(saveregs) \
-  sys_call1(SYS_save_context, (uintptr_t)saveregs)
 
 /* SYS call 1:
  *
