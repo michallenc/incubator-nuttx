@@ -32,6 +32,7 @@
 #include <string.h>
 #include <debug.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <nuttx/timers/pwm.h>
 
@@ -242,7 +243,7 @@ static struct imxrt_flexpwm_s g_pwm1 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm1_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM1_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM1_BASE,
 };
@@ -364,7 +365,7 @@ static struct imxrt_flexpwm_s g_pwm2 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm2_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM2_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM2_BASE,
 };
@@ -486,7 +487,7 @@ static struct imxrt_flexpwm_s g_pwm3 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm3_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM3_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM3_BASE,
 };
@@ -608,7 +609,7 @@ static struct imxrt_flexpwm_s g_pwm4 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm4_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM4_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM4_BASE,
 };
@@ -791,6 +792,7 @@ static int pwm_set_output(struct pwm_lowerhalf_s *dev, uint8_t channel,
 static int pwm_setup(struct pwm_lowerhalf_s *dev)
 {
   struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
+
   uint32_t pin = 0;
   uint16_t regval;
   uint8_t shift;
@@ -805,6 +807,7 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
 
       if (priv->modules[i].used != 1)
         {
+          //DEBUGASSERT(dev == NULL);
           continue;
         }
 
@@ -905,24 +908,24 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
               regval |= SMT_OUT_TRIG_EN_VAL3;
               putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
-                int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_FORCE_SEL_OFFSET,
-                           IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
-                if (ret < 0)
-                  {
-                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
-                  }
-                ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_FORCE_SEL_OFFSET,
-                IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
-                if (ret < 0)
-                  {
-                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
-                  }
-                ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_FORCE_SEL_OFFSET,
-                IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
-                if (ret < 0)
-                  {
-                    printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
-                  }
+              int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_FORCE_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              if (ret < 0)
+                {
+                  printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                }
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_FORCE_SEL_OFFSET,
+              IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              if (ret < 0)
+                {
+                  printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                }
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_FORCE_SEL_OFFSET,
+              IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              if (ret < 0)
+                {
+                  printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+                }
             }
           else if ((priv->base == IMXRT_FLEXPWM2_BASE) && (priv->modules[i].module == 3))
             {
