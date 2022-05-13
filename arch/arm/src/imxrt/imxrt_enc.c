@@ -288,7 +288,7 @@ struct imxrt_enc_lowerhalf_s
   /* IMXRT driver-specific fields: */
 
   FAR const struct imxrt_qeconfig_s *config;  /* static configuration */
-  FAR struct imxrt_qedata_s *data;
+  struct qe_index_s *data;
   sem_t sem_excl;                             /* Mutual exclusion semaphore to
                                                * ensure atomic 32-bit reads.
                                                */
@@ -381,10 +381,11 @@ static const struct imxrt_qeconfig_s imxrt_enc1_config =
 #endif
 };
 
-static struct imxrt_qedata_s imxrt_enc1_data =
+static struct qe_index_s imxrt_enc1_data =
 {
-  .index_pos = 0,
-  .index_cnt = 0,
+  .qenc_pos = 0,
+  .indx_pos = 0,
+  .indx_cnt = 0,
 };
 
 static struct imxrt_enc_lowerhalf_s imxrt_enc1_priv =
@@ -798,7 +799,7 @@ static int imxrt_enc_index(int irq, void *context, FAR void *arg)
   FAR struct imxrt_enc_lowerhalf_s *priv =
     (FAR struct imxrt_enc_lowerhalf_s *)arg;
   FAR const struct imxrt_qeconfig_s *config = priv->config;
-  FAR const struct imxrt_qedata_s *data = priv->data;
+  FAR struct qe_index_s *data = priv->data;
   uint16_t regval = getreg16(config->base + IMXRT_ENC_CTRL_OFFSET);
   int ret;
 
@@ -809,9 +810,9 @@ static int imxrt_enc_index(int irq, void *context, FAR void *arg)
       regval |= ENC_CTRL_XIRQ;
       putreg16(regval, config->base + IMXRT_ENC_CTRL_OFFSET);
 
-      imxrt_position(arg, &data->index_pos);
+      imxrt_position(arg, &data->indx_pos);
 
-      priv->data->index_cnt += 1;
+      priv->data->indx_cnt += 1;
     }
 
   return OK;
@@ -1102,7 +1103,7 @@ static int imxrt_ioctl(struct qe_lowerhalf_s *lower, int cmd,
                        unsigned long arg)
 {
   struct imxrt_enc_lowerhalf_s *priv = (struct imxrt_enc_lowerhalf_s *)lower;
-  FAR struct imxrt_qedata_s *data = priv->data;
+  FAR struct qe_index_s *data = priv->data;
   switch (cmd)
     {
       /* QEIOC_POSDIFF:
@@ -1131,11 +1132,9 @@ static int imxrt_ioctl(struct qe_lowerhalf_s *lower, int cmd,
       case QEIOC_RESETATMAX:
         imxrt_enc_modulo_disable(priv);
         break;
-      case QEIOC_INDEX_POS:
-        *((uint32_t *)arg) = data->index_pos;
-        break;
-      case QEIOC_INDEX_CNT:
-        *((uint32_t *)arg) = data->index_cnt;
+      case QEIOC_GETINDEX:
+        imxrt_position(lower, &data->qenc_pos);
+        *((struct qe_index_s *)arg) = *data;
         break;
 
 #ifdef CONFIG_DEBUG_SENSORS

@@ -60,11 +60,10 @@
 #define QEIOC_RESET        _QEIOC(0x0002) /* Arg: None */
 #define QEIOC_SETPOSMAX    _QEIOC(0x0003) /* Arg: uint32_t */
 #define QEIOC_SETINDEX     _QEIOC(0x0004) /* Arg: uint32_t */
-#define QEIOC_INDEX_POS    _QEIOC(0x0005)
-#define QEIOC_INDEX_CNT    _QEIOC(0x0006)
+#define QEIOC_GETINDEX     _QEIOC(0x0005)
 
 #define QE_FIRST           0x0001         /* First required command */
-#define QE_NCMDS           6              /* 6 required commands */
+#define QE_NCMDS           5              /* 6 required commands */
 
 /* User defined ioctl commands are also supported. These will be forwarded
  * by the upper-half QE driver to the lower-half QE driver via the ioctl()
@@ -133,6 +132,13 @@ struct qe_ops_s
 
   CODE int (*ioctl)(FAR struct qe_lowerhalf_s *lower,
                     int cmd, unsigned long arg);
+};
+
+struct qe_index_s
+{
+  int32_t qenc_pos;     /* Qencoder actual position */
+  int32_t indx_pos;     /* Index last position */
+  int16_t indx_cnt;     /* Number of index occurances */
 };
 
 /* This is the interface between the lower half quadrature encoder driver
