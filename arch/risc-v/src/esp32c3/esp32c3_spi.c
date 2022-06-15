@@ -51,7 +51,7 @@
 #include "esp32c3_dma.h"
 #endif
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "hardware/esp32c3_gpio_sigmap.h"
 #include "hardware/esp32c3_pinmap.h"
 #include "hardware/esp32c3_spi.h"
@@ -425,17 +425,7 @@ static int esp32c3_spi_lock(struct spi_dev_s *dev, bool lock)
 #ifdef CONFIG_ESP32C3_SPI2_DMA
 static int esp32c3_spi_sem_waitdone(struct esp32c3_spi_priv_s *priv)
 {
-  int ret;
-  struct timespec abstime;
-
-  clock_gettime(CLOCK_REALTIME, &abstime);
-
-  abstime.tv_sec += 10;
-  abstime.tv_nsec += 0;
-
-  ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
-
-  return ret;
+  return nxsem_tickwait_uninterruptible(&priv->sem_isr, SEC2TICK(10));
 }
 #endif
 

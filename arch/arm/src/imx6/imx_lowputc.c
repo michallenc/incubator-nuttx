@@ -28,8 +28,6 @@
 #include <fixedmath.h>
 #include <assert.h>
 
-#include "arm_arch.h"
-
 #include "hardware/imx_iomuxc.h"
 #include "hardware/imx_ccm.h"
 #include "hardware/imx_uart.h"
@@ -37,9 +35,7 @@
 #include "imx_iomuxc.h"
 #include "imx_gpio.h"
 #include "imx_lowputc.h"
-
 #include "arm_internal.h"
-
 #include "hardware/imx_pinmux.h"
 #include <arch/board/board.h> /* Include last:  has dependencies */
 
@@ -291,7 +287,7 @@ void imx_lowsetup(void)
  ****************************************************************************/
 
 #ifdef IMX_HAVE_UART
-int imx_uart_configure(uint32_t base, FAR const struct uart_config_s *config)
+int imx_uart_configure(uint32_t base, const struct uart_config_s *config)
 {
 #ifndef CONFIG_SUPPRESS_UART_CONFIG
   uint64_t tmp;

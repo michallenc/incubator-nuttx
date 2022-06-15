@@ -23,10 +23,13 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <stdint.h>
-#include <nuttx/arch.h>
 
-#include "riscv_arch.h"
+#include <stdint.h>
+
+#include <nuttx/arch.h>
+#include <nuttx/irq.h>
+
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Public Functions
@@ -48,10 +51,9 @@
  *
  ****************************************************************************/
 
+#ifdef CONFIG_SMP
 int up_cpu_index(void)
 {
-  int mhartid;
-
-  asm volatile ("csrr %0, mhartid": "=r" (mhartid));
-  return mhartid;
+  return (int)riscv_mhartid();
 }
+#endif

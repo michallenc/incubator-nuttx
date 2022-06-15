@@ -1,0 +1,20 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+if ARCH_BOARD_NUCLEO_WL55JC
+
+config ARCH_BOARD_NUCLEO_WL55JC_DEMO_LED_IRQ
+	bool "[demo] LED on button interrupt"
+	depends on ARCH_BUTTONS
+	depends on NSH_ARCHINIT
+	---help---
+		When enabled, pressing B3 button will toggle red LED.
+		This options is mostly for demo purposes of how one
+		can install GPIO interrupt.
+
+comment "[demo] LED on button interrupt requires NSH_ARCHINIT"
+	depends on !NSH_ARCHINIT || !ARCH_BUTTONS
+
+endif # ARCH_BOARD_NUCLEO_WL55JC

@@ -32,7 +32,6 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -82,21 +81,6 @@ static int (* __vectors[NR_IRQS - NVIC_IRQ_FIRST])(void);
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  uint32_t sp;
-  __asm__
-  (
-    "\tmov %0, sp\n\t"
-    : "=r"(sp)
-  );
-  return sp;
-}
 
 /****************************************************************************
  * Name: nvic_irqinfo
@@ -359,7 +343,7 @@ int up_prioritize_irq(int irq, int priority)
  * Name: _up_doirq
  ****************************************************************************/
 
-int _up_doirq(int irq, FAR void *context, FAR void *arg)
+int _up_doirq(int irq, void *context, void *arg)
 {
   if (irq < NVIC_IRQ_FIRST)
     {

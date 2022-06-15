@@ -28,28 +28,31 @@ HEAD_CSRC  = esp32_start.c esp32_wdt.c
 
 # Common XTENSA files (arch/xtensa/src/common)
 
-CMN_ASRCS  = xtensa_context.S xtensa_coproc.S xtensa_cpuint.S xtensa_panic.S
-CMN_ASRCS += xtensa_sigtramp.S
+CMN_ASRCS  = xtensa_context.S xtensa_cpuint.S xtensa_panic.S
 
-CMN_CSRCS  = xtensa_assert.c xtensa_blocktask.c xtensa_copystate.c
+CMN_CSRCS  = xtensa_assert.c xtensa_blocktask.c
 CMN_CSRCS += xtensa_cpenable.c xtensa_createstack.c xtensa_exit.c
-CMN_CSRCS += xtensa_initialize.c xtensa_initialstate.c xtensa_interruptcontext.c
+CMN_CSRCS += xtensa_initialize.c xtensa_initialstate.c
 CMN_CSRCS += xtensa_irqdispatch.c xtensa_lowputs.c xtensa_mdelay.c
 CMN_CSRCS += xtensa_modifyreg8.c xtensa_modifyreg16.c xtensa_modifyreg32.c
 CMN_CSRCS += xtensa_puts.c xtensa_releasepending.c xtensa_releasestack.c
 CMN_CSRCS += xtensa_reprioritizertr.c xtensa_schedsigaction.c
 CMN_CSRCS += xtensa_sigdeliver.c xtensa_stackframe.c xtensa_udelay.c
 CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c xtensa_swint.c
-CMN_CSRCS += esp32_systemreset.c esp32_resetcause.c xtensa_switchcontext.c
+CMN_CSRCS += xtensa_saveusercontext.c
 
 # Configuration-dependent common XTENSA files
 
-ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
-  CMN_CSRCS += esp32_idle.c
+ifeq ($(CONFIG_DEBUG_TCBINFO),y)
+  CMN_CSRCS += xtensa_tcbinfo.c
 endif
 
 ifeq ($(CONFIG_DEBUG_ALERT),y)
   CMN_CSRCS += xtensa_dumpstate.c
+endif
+
+ifeq ($(CONFIG_ARCH_FPU),y)
+  CMN_CSRCS += xtensa_fpucmp.c
 endif
 
 ifeq ($(CONFIG_SPINLOCK),y)
@@ -72,9 +75,14 @@ endif
 # Required ESP32 files (arch/xtensa/src/lx6)
 
 CHIP_CSRCS  = esp32_allocateheap.c esp32_clockconfig.c esp32_gpio.c
+CHIP_CSRCS += esp32_systemreset.c esp32_resetcause.c
 CHIP_CSRCS += esp32_irq.c esp32_region.c
 CHIP_CSRCS += esp32_user.c
 CHIP_CSRCS += esp32_dma.c
+
+ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
+CHIP_CSRCS += esp32_idle.c
+endif
 
 ifeq ($(CONFIG_SCHED_TICKLESS),y)
 CHIP_CSRCS += esp32_tickless.c
@@ -103,11 +111,15 @@ ifeq ($(CONFIG_ESP32_I2C),y)
 CHIP_CSRCS += esp32_i2c.c
 endif
 
+ifeq ($(CONFIG_ESP32_TWAI),y)
+CHIP_CSRCS += esp32_twai.c
+endif
+
 ifeq ($(CONFIG_ESP32_SPI),y)
 CHIP_CSRCS += esp32_spi.c
-  ifeq ($(CONFIG_SPI_SLAVE),y)
-    CHIP_CSRCS += esp32_spi_slave.c
-  endif
+ifeq ($(CONFIG_SPI_SLAVE),y)
+CHIP_CSRCS += esp32_spi_slave.c
+endif
 endif
 
 # SPIFLASH and SPIRAM need spicache.c
@@ -142,15 +154,15 @@ endif
 
 ifeq ($(CONFIG_SMP),y)
 CHIP_ASRCS  = esp32_cpuindex.S
-CMN_CSRCS  += esp32_cpuidlestack.c esp32_cpustart.c esp32_intercpu_interrupt.c
+CHIP_CSRCS += esp32_cpuidlestack.c esp32_cpustart.c esp32_intercpu_interrupt.c
 endif
 
 ifeq ($(CONFIG_ESP32_UART),y)
-CMN_CSRCS += esp32_serial.c
+CHIP_CSRCS += esp32_serial.c
 endif
 
 ifeq ($(CONFIG_ESP32_RNG),y)
-CMN_CSRCS += esp32_rng.c
+CHIP_CSRCS += esp32_rng.c
 endif
 
 ifeq ($(CONFIG_ESP32_TIMER),y)
@@ -193,7 +205,7 @@ endif
 
 ifeq ($(CONFIG_ARCH_USE_TEXT_HEAP),y)
 CHIP_CSRCS += esp32_textheap.c
-CMN_ASRCS += xtensa_loadstore.S
+CMN_ASRCS  += xtensa_loadstore.S
 endif
 
 ifeq ($(CONFIG_ESP32_RT_TIMER),y)
@@ -244,11 +256,6 @@ EXTRA_LIBS += -lbtdm_app
     EXTRA_LIBS += -lcoexist
   endif
 endif
-
-# Due to some Wi-Fi related libraries, the option is need to avoid linking too much
-# unused functions.
-
-LDFLAGS += --gc-sections
 
 # Wireless interfaces.
 

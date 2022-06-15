@@ -34,7 +34,6 @@
 #include <arch/irq.h>
 
 #include "up_internal.h"
-#include "up_arch.h"
 #include "chip.h"
 #include "bm3803.h"
 /****************************************************************************
@@ -174,7 +173,7 @@ static int bm3803_exti3_isr(int irq, void *context, void  * arg)
 int bm3803_gpioset_irq(uint32_t pinset, bool enable, bool trig, bool edge,
                        xcpt_t func, void *arg)
 {
-  FAR struct gpio_callback_s *shared_cbs;
+  struct gpio_callback_s *shared_cbs;
   uint32_t pin = pinset & 0x3;
 
   uint32_t en = 0x80 << (pin * 8);

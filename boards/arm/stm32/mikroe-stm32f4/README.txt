@@ -150,7 +150,6 @@ There are two version of the FPU support built into the STM32 port.
    file:
 
      CONFIG_ARCH_FPU=y
-     CONFIG_ARMV7M_LAZYFPU=y
 
 MIO283QT-2/MIO283QT-9A
 ======================
@@ -167,18 +166,6 @@ with the MIO283QT-2.  It uses a different LCD controller.  The default in
 all of these configurations is the MIO283QT-2.  But MIO283QT-9A is also
 supported and you can switch from the MIO283QT-2 to the MIO283QT-9A by simply
 modifying the NuttX configuration
-
-CFLAGS
-------
-
-Only recent GCC toolchains have built-in support for the Cortex-M4 FPU.  You will see
-the following lines in each Make.defs file:
-
-  ifeq ($(CONFIG_ARCH_FPU),y)
-    ARCHCPUFLAGS = -mcpu=cortex-m4 -mthumb -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-  else
-    ARCHCPUFLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft
-  endif
 
 Mikroe-STM32F4-specific Configuration Options
 ===============================================
@@ -492,7 +479,7 @@ Where <subdir> is one of the following:
 
        CONFIG_HOST_WINDOWS=y                   : Windows
        CONFIG_WINDOWS_CYGWIN=y                 : Cygwin environment on Windows
-       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIW=y     : GNU EABI toolchain for Windows
+       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABI=y      : GNU EABI toolchain for Windows
 
        This is easily changed by modifying the configuration.
 
@@ -625,7 +612,7 @@ Where <subdir> is one of the following:
 
        CONFIG_HOST_WINDOWS=y                   : Builds under Windows
        CONFIG_WINDOWS_CYGWIN=y                 : Using Cygwin
-       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIW=y     : GNU EABI toolchain for Windows
+       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABI=y      : GNU EABI toolchain for Windows
 
     3. This configuration does have UART2 output enabled and set up as
        the system logging device:

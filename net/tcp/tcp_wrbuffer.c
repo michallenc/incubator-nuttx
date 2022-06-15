@@ -94,8 +94,6 @@ void tcp_wrbuffer_initialize(void)
 {
   int i;
 
-  sq_init(&g_wrbuffer.freebuffers);
-
   for (i = 0; i < CONFIG_NET_TCP_NWRBCHAINS; i++)
     {
       sq_addfirst(&g_wrbuffer.buffers[i].wb_node, &g_wrbuffer.freebuffers);
@@ -250,6 +248,46 @@ void tcp_wrbuffer_release(FAR struct tcp_wrbuffer_s *wrb)
   sq_addlast(&wrb->wb_node, &g_wrbuffer.freebuffers);
   nxsem_post(&g_wrbuffer.sem);
 }
+
+/****************************************************************************
+ * Name: tcp_wrbuffer_inqueue_size
+ *
+ * Description:
+ *   Get the in-queued write buffer size from connection
+ *
+ * Input Parameters:
+ *   conn - The TCP connection of interest
+ *
+ * Assumptions:
+ *   Called from user logic with the network locked.
+ *
+ ****************************************************************************/
+
+#if CONFIG_NET_SEND_BUFSIZE > 0
+uint32_t tcp_wrbuffer_inqueue_size(FAR struct tcp_conn_s *conn)
+{
+  FAR struct tcp_wrbuffer_s *wrb;
+  FAR sq_entry_t *entry;
+  uint32_t total = 0;
+
+  if (conn)
+    {
+      for (entry = sq_peek(&conn->unacked_q); entry; entry = sq_next(entry))
+        {
+          wrb = (FAR struct tcp_wrbuffer_s *)entry;
+          total += TCP_WBPKTLEN(wrb);
+        }
+
+      for (entry = sq_peek(&conn->write_q); entry; entry = sq_next(entry))
+        {
+          wrb = (FAR struct tcp_wrbuffer_s *)entry;
+          total += TCP_WBPKTLEN(wrb);
+        }
+    }
+
+  return total;
+}
+#endif /* CONFIG_NET_SEND_BUFSIZE */
 
 /****************************************************************************
  * Name: tcp_wrbuffer_test

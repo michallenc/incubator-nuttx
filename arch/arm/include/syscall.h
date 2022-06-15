@@ -52,7 +52,7 @@
 /* This logic uses three system calls {0,1,2} for context switching and one
  * for the syscall return.
  * So a minimum of four syscall values must be reserved.
- * If CONFIG_BUILD_PROTECTED is defined, then four more syscall values must
+ * If CONFIG_BUILD_FLAT isn't defined, then four more syscall values must
  * be reserved.
  */
 
@@ -66,7 +66,7 @@
 
 /* SYS call 0:
  *
- * int arm_saveusercontext(uint32_t *saveregs);
+ * int up_saveusercontext(void *saveregs);
  */
 
 #define SYS_save_context          (0)
@@ -80,7 +80,7 @@
 
 /* SYS call 2:
  *
- * void arm_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
+ * void arm_switchcontext(uint32_t **saveregs, uint32_t *restoreregs);
  */
 
 #define SYS_switch_context        (2)
@@ -97,7 +97,7 @@
 #ifndef CONFIG_BUILD_FLAT
 /* SYS call 4:
  *
- * void up_task_start(main_t taskentry, int argc, FAR char *argv[])
+ * void up_task_start(main_t taskentry, int argc, char *argv[])
  *        noreturn_function;
  */
 
@@ -115,8 +115,8 @@
 /* SYS call 6:
  *
  * void signal_handler(_sa_sigaction_t sighand,
- *                     int signo, FAR siginfo_t *info,
- *                     FAR void *ucontext);
+ *                     int signo, siginfo_t *info,
+ *                     void *ucontext);
  */
 
 #define SYS_signal_handler        (6)

@@ -36,9 +36,15 @@
 #include <stdio.h>
 
 #include <errno.h>
+#if defined(CONFIG_ESP32_EFUSE)
+#include <nuttx/efuse/efuse.h>
+#endif
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
 
+#if defined(CONFIG_ESP32_EFUSE)
+#include "esp32_efuse.h"
+#endif
 #include "esp32_partition.h"
 
 #ifdef CONFIG_USERLED
@@ -238,6 +244,17 @@ int esp32_bringup(void)
       syslog(LOG_ERR, "ERROR: esp32_pwm_setup() failed: %d\n", ret);
     }
 #endif /* CONFIG_ESP32_LEDC */
+
+#ifdef CONFIG_ESP32_TWAI
+
+  /* Initialize TWAI and register the TWAI driver. */
+
+  ret = esp32_twai_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: esp32_twai_setup failed: %d\n", ret);
+    }
+#endif
 
 #ifdef CONFIG_ESP32_RT_TIMER
   ret = esp32_rt_timer_init();

@@ -45,9 +45,7 @@
 #include <nuttx/serial/serial.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "gic.h"
 #include "hardware/imx_uart.h"
 #include "imx_config.h"
@@ -224,7 +222,7 @@ static int  imx_setup(struct uart_dev_s *dev);
 static void imx_shutdown(struct uart_dev_s *dev);
 static int  imx_attach(struct uart_dev_s *dev);
 static void imx_detach(struct uart_dev_s *dev);
-static int  imx_interrupt(int irq, void *context, FAR void *arg);
+static int  imx_interrupt(int irq, void *context, void *arg);
 static int  imx_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  imx_receive(struct uart_dev_s *dev, unsigned int *status);
 static void imx_rxint(struct uart_dev_s *dev, bool enable);
@@ -633,7 +631,7 @@ static void imx_detach(struct uart_dev_s *dev)
  *
  ****************************************************************************/
 
-static int imx_interrupt(int irq, void *context, FAR void *arg)
+static int imx_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct imx_uart_s *priv;

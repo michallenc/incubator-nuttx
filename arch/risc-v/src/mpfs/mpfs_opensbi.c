@@ -22,33 +22,28 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-#include <assert.h>
-#include <errno.h>
-#include <stdint.h>
-#include "riscv_arch.h"
-
 #include <hardware/mpfs_plic.h>
 #include <hardware/mpfs_memorymap.h>
 #include <hardware/mpfs_clint.h>
 #include <hardware/mpfs_sysreg.h>
-
-/* OpenSBI will also define NULL. Undefine NULL in order to avoid warning:
- * 'warning: "NULL" redefined'
- */
-
-#ifdef NULL
-  #undef NULL
+#ifdef CONFIG_MPFS_IHC
+#include <hardware/mpfs_ihc.h>
 #endif
 
+#include <sbi/riscv_io.h>
 #include <sbi/riscv_encoding.h>
 #include <sbi/sbi_console.h>
 #include <sbi/sbi_platform.h>
 #include <sbi/sbi_init.h>
 #include <sbi/sbi_scratch.h>
+#include <sbi/sbi_trap.h>
 #include <sbi_utils/irqchip/plic.h>
 #include <sbi_utils/ipi/aclint_mswi.h>
 #include <sbi_utils/timer/aclint_mtimer.h>
+
+#ifdef CONFIG_MPFS_IHC
+#include <mpfs_ihc.h>
+#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -76,6 +71,10 @@
                                        MPFS_SYSREG_SOFT_RESET_CR_OFFSET)
 #define MPFS_SYSREG_SUBBLK_CLOCK_CR   (MPFS_SYSREG_BASE + \
                                        MPFS_SYSREG_SUBBLK_CLOCK_CR_OFFSET)
+
+#define MICROCHIP_TECHNOLOGY_MVENDOR_ID  0x029
+#define SBI_EXT_MICROCHIP_TECHNOLOGY     (SBI_EXT_VENDOR_START | \
+                                          MICROCHIP_TECHNOLOGY_MVENDOR_ID)
 
 /****************************************************************************
  * Private Types
@@ -107,6 +106,13 @@ static int  mpfs_opensbi_console_init(void);
 static int  mpfs_irqchip_init(bool cold_boot);
 static int  mpfs_ipi_init(bool cold_boot);
 static int  mpfs_timer_init(bool cold_boot);
+#ifdef CONFIG_MPFS_IHC
+static int  mpfs_opensbi_vendor_ext_check(long extid);
+static int  mpfs_opensbi_ecall_handler(long extid, long funcid,
+                                       const struct sbi_trap_regs *regs,
+                                       unsigned long *out_val,
+                                       struct sbi_trap_info *out_trap);
+#endif
 
 /****************************************************************************
  * Extern Function Declarations
@@ -151,14 +157,18 @@ static struct aclint_mtimer_data mpfs_mtimer =
 
 static const struct sbi_platform_operations platform_ops =
 {
-  .console_init   = mpfs_opensbi_console_init,
-  .early_init     = mpfs_early_init,
-  .irqchip_init   = mpfs_irqchip_init,
-  .irqchip_exit   = NULL,
-  .ipi_init       = mpfs_ipi_init,
-  .ipi_exit       = NULL,
-  .timer_init     = mpfs_timer_init,
-  .timer_exit     = NULL,
+  .console_init        = mpfs_opensbi_console_init,
+  .early_init          = mpfs_early_init,
+  .irqchip_init        = mpfs_irqchip_init,
+  .irqchip_exit        = NULL,
+  .ipi_init            = mpfs_ipi_init,
+  .ipi_exit            = NULL,
+  .timer_init          = mpfs_timer_init,
+  .timer_exit          = NULL,
+#ifdef CONFIG_MPFS_IHC
+  .vendor_ext_check    = mpfs_opensbi_vendor_ext_check,
+  .vendor_ext_provider = mpfs_opensbi_ecall_handler,
+#endif
 };
 
 static struct aclint_mswi_data mpfs_mswi =
@@ -251,8 +261,6 @@ static const uint64_t sbi_entrypoints[] =
 
 static unsigned long mpfs_hart_to_scratch(int hartid)
 {
-  DEBUGASSERT(hartid < MPFS_MAX_NUM_HARTS);
-
   return (unsigned long)(&g_scratches[hartid].scratch);
 }
 
@@ -425,6 +433,8 @@ static int mpfs_timer_init(bool cold_boot)
 
 static int mpfs_early_init(bool cold_boot)
 {
+  uint32_t val;
+
   /* We expect that e51 has terminated the following irqs with
    * up_disable_irq():
    *   1. MPFS_IRQ_MMC_MAIN
@@ -441,15 +451,16 @@ static int mpfs_early_init(bool cold_boot)
 
   /* Explicitly reset eMMC */
 
-  modifyreg32(MPFS_SYSREG_SOFT_RESET_CR, 0, SYSREG_SOFT_RESET_CR_MMC);
-  modifyreg32(MPFS_SYSREG_SOFT_RESET_CR, SYSREG_SOFT_RESET_CR_MMC, 0);
+  val = readl((void *)MPFS_SYSREG_SOFT_RESET_CR);
+  writel(val | SYSREG_SOFT_RESET_CR_MMC, (void *)MPFS_SYSREG_SOFT_RESET_CR);
+  writel(val & ~SYSREG_SOFT_RESET_CR_MMC, (void *)MPFS_SYSREG_SOFT_RESET_CR);
 
   /* There are other clocks that need to be enabled for the Linux kernel to
    * run. For now, turn on all the clocks.
    */
 
-  putreg32(0x0, MPFS_SYSREG_SOFT_RESET_CR);
-  putreg32(0x7fffffff, MPFS_SYSREG_SUBBLK_CLOCK_CR);
+  writel(0x0, (void *)MPFS_SYSREG_SOFT_RESET_CR);
+  writel(0x7fffffff, (void *)MPFS_SYSREG_SUBBLK_CLOCK_CR);
 
   return 0;
 }
@@ -472,8 +483,6 @@ static int mpfs_early_init(bool cold_boot)
 
 static void mpfs_opensbi_scratch_setup(uint32_t hartid)
 {
-  DEBUGASSERT(hartid < MPFS_MAX_NUM_HARTS);
-
   g_scratches[hartid].scratch.options = SBI_SCRATCH_DEBUG_PRINTS;
   g_scratches[hartid].scratch.hartid_to_scratch =
       (unsigned long)mpfs_hart_to_scratch;
@@ -487,8 +496,6 @@ static void mpfs_opensbi_scratch_setup(uint32_t hartid)
   g_scratches[hartid].scratch.fw_start = (unsigned long)&__mpfs_nuttx_start;
   g_scratches[hartid].scratch.fw_size  = (unsigned long)&__mpfs_nuttx_end -
                                          (unsigned long)&__mpfs_nuttx_start;
-
-  DEBUGASSERT(g_scratches[hartid].scratch.fw_size > 0);
 }
 
 /****************************************************************************
@@ -514,6 +521,73 @@ static void mpfs_opensbi_pmp_setup(void)
   csr_write(pmpcfg0, MPFS_PMP_DEFAULT_PERM);
   csr_write(pmpcfg2, 0);
 }
+
+/****************************************************************************
+ * Name: mpfs_opensbi_vendor_ext_check
+ *
+ * Description:
+ *   Used by the OpenSBI in vendor probe to check the vendor ID.
+ *
+ * Input Parameters:
+ *   extid       - Vendor ID to be checked
+ *
+ * Returned Value:
+ *   1 on match, zero in case of no match
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MPFS_IHC
+static int mpfs_opensbi_vendor_ext_check(long extid)
+{
+  return (SBI_EXT_MICROCHIP_TECHNOLOGY == extid);
+}
+
+/****************************************************************************
+ * Name: mpfs_opensbi_ecall_handler
+ *
+ * Description:
+ *   Used by the S-mode kernel such as Linux to perform M-mode ecall actions
+ *   related to Inter-Hart Communication (IHC).
+ *
+ * Input Parameters:
+ *   extid          - Vendor ID
+ *   funcid         - One of the valid functions
+ *   sbi_trap_regs  - SBI trap registers
+ *   out_val        - Error code location
+ *   out_trap       - Trap registers such as epc, unused
+ *
+ * Returned Value:
+ *   0 always
+ *
+ ****************************************************************************/
+
+static int mpfs_opensbi_ecall_handler(long extid, long funcid,
+                                      const struct sbi_trap_regs *regs,
+                                      unsigned long *out_val,
+                                      struct sbi_trap_info *out_trap)
+{
+  uint32_t remote_channel = (uint32_t)regs->a0;
+  uint32_t *message_ptr   = (uint32_t *)regs->a1;
+  int result = 0;
+
+  switch (funcid)
+    {
+      case SBI_EXT_IHC_CTX_INIT:
+      case SBI_EXT_IHC_SEND:
+      case SBI_EXT_IHC_RECEIVE:
+        result = mpfs_ihc_sbi_ecall_handler(funcid, remote_channel,
+                                            message_ptr);
+        break;
+
+      default:
+        result = SBI_ENOTSUPP;
+    }
+
+  *out_val = result;
+
+  return 0;
+}
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -556,5 +630,5 @@ void __attribute__((noreturn)) mpfs_opensbi_setup(void)
 
   /* Will never get here */
 
-  PANIC();
+  sbi_panic(__func__);
 }

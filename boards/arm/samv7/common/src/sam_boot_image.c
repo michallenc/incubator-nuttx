@@ -33,7 +33,7 @@
 #include <nuttx/cache.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "barriers.h"
 
 #ifdef CONFIG_BOARDCTL_BOOT_IMAGE
@@ -136,7 +136,7 @@ static void systick_disable(void)
  *
  ****************************************************************************/
 
-int board_boot_image(FAR const char *path, uint32_t hdr_size)
+int board_boot_image(const char *path, uint32_t hdr_size)
 {
   static struct arm_vector_table vt;
   int fd;

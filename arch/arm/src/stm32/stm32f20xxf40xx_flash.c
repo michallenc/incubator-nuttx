@@ -41,8 +41,7 @@
 #include "stm32_flash.h"
 #include "stm32_rcc.h"
 #include "stm32_waste.h"
-
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /* Only for the STM32F[2|4]0xx family. */
 
@@ -451,6 +450,11 @@ ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
 
   sem_unlock();
   return written;
+}
+
+uint8_t up_progmem_erasestate(void)
+{
+  return FLASH_ERASEDVALUE;
 }
 
 #endif /* defined(CONFIG_STM32_STM32F20XX) || defined(CONFIG_STM32_STM32F4XXX) */

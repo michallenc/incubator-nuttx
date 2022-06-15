@@ -23,9 +23,12 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <arch/arch.h>
 #include <arch/irq.h>
 
 #include "chip.h"
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Public Symbols
@@ -71,15 +74,16 @@ __start:
 
   /* Load idle stack base to sp */
 
-#ifdef CONFIG_ARCH_RV32
-  lw   sp, 0(t0)
-#else
-  ld   sp, 0(t0)
-#endif
+  REGLOAD sp, 0(t0)
 
-  /* sp (stack top) = sp + idle stack size */
+  /*
+   * sp (stack top) = sp + idle stack size - XCPTCONTEXT_SIZE
+   * 
+   * Note: Reserve some space used by up_initial_state since we are already
+   * running and using the per CPU idle stack.
+   */
 
-  li   t0, CONFIG_IDLETHREAD_STACKSIZE
+  li   t0, STACK_ALIGN_UP(CONFIG_IDLETHREAD_STACKSIZE - XCPTCONTEXT_SIZE)
   add  sp, sp, t0
 
 2:
@@ -93,7 +97,11 @@ __start:
 
   /* Jump to qemu_rv_start */
 
+#ifdef CONFIG_ARCH_USE_S_MODE
+  jal  x1, qemu_rv_start_s
+#else
   jal  x1, qemu_rv_start
+#endif
 
   /* We shouldn't return from _start */
 

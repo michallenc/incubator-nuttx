@@ -49,8 +49,10 @@
  * must, therefore, be reserved (0 is not used).
  */
 
-#ifdef CONFIG_BUILD_KERNEL
+#ifndef CONFIG_BUILD_FLAT
 #  define CONFIG_SYS_RESERVED 4
+#else
+#  define CONFIG_SYS_RESERVED 3
 #endif
 
 /* sys_call macros **********************************************************/
@@ -88,7 +90,7 @@
  */
 
 #define SYS_syscall_return (3)
-#define up_syscall_return() (void)sys_call0(SYS_syscall_return)
+#define up_syscall_return() sys_call0(SYS_syscall_return)
 
 #endif
 

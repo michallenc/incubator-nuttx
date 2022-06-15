@@ -35,7 +35,6 @@
 #include <nuttx/syslog/syslog.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "sched/sched.h"
 #include "mips_internal.h"
 
@@ -129,7 +128,7 @@ static inline void mips_registerdump(void)
 
 void up_dumpstate(void)
 {
-  FAR struct tcb_s *rtcb = running_task();
+  struct tcb_s *rtcb = running_task();
   uint32_t sp = up_getsp();
   uint32_t ustackbase;
   uint32_t ustacksize;

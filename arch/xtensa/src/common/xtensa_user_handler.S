@@ -64,72 +64,9 @@
 #include <arch/xtensa/core.h>
 #include <arch/xtensa/xtensa_specregs.h>
 
+#include "xtensa_macros.S"
+
 #include "chip.h"
-
-/****************************************************************************
- * Assembly Language Macros
- ****************************************************************************/
-
-/****************************************************************************
- * Name: setintstack
- *
- * Description:
- *   Set the current stack pointer to the "top" the interrupt stack.
- *   Single CPU case.
- *   Must be provided by MCU-specific logic in the SMP case.
- *
- ****************************************************************************/
-
-#if !defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
-	.macro	setintstack tmp1 tmp2
-	movi		a1, g_intstacktop
-	.endm
-#endif
-
-/****************************************************************************
- * Macro: ps_setup
- *
- * Description:
- *   Set up PS for C, enable interrupts above this level and clear EXCM.
- *
- * Entry Conditions:
- *   level - interrupt level
- *   tmp   - scratch register
- *
- * Side Effects:
- *   PS and scratch register modified
- *
- * Assumptions:
- *   - PS.EXCM = 1, C calling disabled
- *
- ****************************************************************************/
-
-	.macro	ps_setup	level tmp
-
-#if 0 /* Nested interrupts no yet supported */
-#  ifdef __XTENSA_CALL0_ABI__
-	/* Disable interrupts at level and below */
-
-	movi	\tmp, PS_INTLEVEL(\level) | PS_UM
-#  else
-	movi	\tmp, PS_INTLEVEL(\level) | PS_UM | PS_WOE
-#  endif
-#else
-#  ifdef __XTENSA_CALL0_ABI__
-	/* Disable all low- and medium-priority interrupts.  Nested are not yet
-	 * supported.
-	 */
-
-	movi	\tmp, PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM
-#  else
-	movi	\tmp, PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM | PS_WOE
-#  endif
-#endif
-
-	wsr		\tmp, PS
-	rsync
-
-	.endm
 
 /****************************************************************************
  * Waypoints
@@ -210,7 +147,7 @@ _xtensa_user_handler:
 	/* Allocate exception frame and save minimal context. */
 
 	mov		a0, sp							/* Save SP in A0 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, PS							/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)
@@ -218,17 +155,22 @@ _xtensa_user_handler:
 	s32i	a0, sp, (4 * REG_PC)
 	rsr		a0, EXCSAVE_1					/* Save interruptee's a0 */
 	s32i	a0, sp, (4 * REG_A0)
+	s32i	a2, sp, (4 * REG_A2)
+
+	/* Save EXCCAUSE and EXCVADDR into the user frame */
+
+	rsr		a0, EXCCAUSE
+	s32i	a0, sp, (4 * REG_EXCCAUSE)
+	rsr		a0, EXCVADDR
+	s32i	a0, sp, (4 * REG_EXCVADDR)
 
 	/* Save rest of interrupt context. */
 
-	s32i	a2, sp, (4 * REG_A2)
-	mov		a2, sp							/* Address of state save on stack */
-	s32i	a3, sp, (4 * REG_A3)
 	call0	_xtensa_context_save			/* Save full register state */
 
 	/* Save current SP before (possibly) overwriting it,
-	* it's the register save area.
-	*/
+	 * it's the register save area.
+	 */
 
 	mov	a12, sp
 
@@ -238,38 +180,25 @@ _xtensa_user_handler:
 	setintstack a13 a14
 #endif
 
-	/* Save exc cause and vaddr into exception frame */
-
-	rsr		a0, EXCCAUSE
-	s32i	a0, sp, (4 * REG_EXCCAUSE)
-	rsr		a0, EXCVADDR
-	s32i	a0, sp, (4 * REG_EXCVADDR)
-
 	/* Set up PS for C, re-enable hi-pri interrupts, and clear EXCM. */
 
-#ifdef __XTENSA_CALL0_ABI__
-	movi	a0, PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM
-#else
-	movi	a0, PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM | PS_WOE
-#endif
-	wsr		a0, PS
+	ps_setup	1 a0
 
-  /* Create pseudo base save area. At this point, sp is still pointing to the
-   * allocated and filled exception stack frame.
-   */
+	/* Create pseudo base save area. At this point, a12 points to the
+	 * allocated and filled exception stack frame (old value of SP in case of
+	 * an interrupt stack).
+	 */
 
 #ifdef CONFIG_XTENSA_INTBACKTRACE
-  l32i    a3, sp, (4 * REG_A0)     /* Copy pre-exception a0 (return address) */
-  s32e    a3, sp, -16
-  l32i    a3, sp, (4 * REG_A1)     /* Copy pre-exception a1 (stack pointer) */
-  s32e    a3, sp, -12
-  rsr     a0, EPC_1                /* return address for debug backtrace */
-  movi    a4, 0xc0000000           /* constant with top 2 bits set (call size) */
-  rsync                            /* wait for WSR.PS to complete */
-  or      a0, a0, a4               /* set top 2 bits */
-  addx2   a0, a4, a0               /* clear top bit -- thus simulating call4 size */
-#else
-  rsync                            /* wait for WSR.PS to complete */
+	l32i    a3, a12, (4 * REG_A0)     /* Copy pre-exception a0 (return address) */
+	s32e    a3, sp, -16
+	l32i    a3, a12, (4 * REG_A1)     /* Copy pre-exception a1 (stack pointer) */
+	s32e    a3, sp, -12
+
+	rsr     a0, EPC_1                /* return address for debug backtrace */
+	movi    a4, 0xc0000000           /* constant with top 2 bits set (call size) */
+	or      a0, a0, a4               /* set top 2 bits */
+	addx2   a0, a4, a0               /* clear top bit -- thus simulating call4 size */
 #endif
 
 	/* Call xtensa_user, passing both the EXCCAUSE and a pointer to the
@@ -299,7 +228,7 @@ _xtensa_user_handler:
 	l32i	a0, a2, (4 * REG_PC)			/* Retrieve interruptee's PC */
 	wsr		a0, EPC_1
 	l32i	a0, a2, (4 * REG_A0)			/* Retrieve interruptee's A0 */
-	l32i	sp, a2, (4 * REG_A1)			/* Remove interrupt stack frame */
+	l32i	sp, a2, (4 * REG_A1)			/* Retrieve interrupt stack frame */
 	l32i	a2, a2, (4 * REG_A2)			/* Retrieve interruptee's A2 */
 	rsync									/* Ensure PS and EPC written */
 
@@ -332,24 +261,21 @@ _xtensa_syscall_handler:
 	/* Allocate stack frame and save A0, A1, and PS */
 
 	mov		a0, sp							/* Save SP in A0 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, PS							/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)
 	rsr		a0, EXCSAVE_1					/* Save interruptee's a0 */
 	s32i	a0, sp, (4 * REG_A0)
+	s32i	a2, sp, (4 * REG_A2)
+
+	/* Save rest of interrupt context. */
+
+	call0	_xtensa_context_save
 
 	/* Save EPC */
 
 #if XCHAL_HAVE_LOOPS != 0
-	/* Save A2 and A3 now to give us some registers to work with.  A0, A2
-	 * and A3 are now available.  NOTE that A3 will get saved again in
-	 * _xtensa_context_save().
-	 */
-
-	s32i	a2, sp, (4 * REG_A2)			/* Save interruptee's A2 */
-	s32i	a3, sp, (4 * REG_A3)			/* Save interruptee's A3 */
-
 	/* Get the interruptee's PC and skip over the 'syscall' instruction.
 	 * If it's at the end of a zero-overhead loop and it's not on the last
 	 * iteration, decrement loop counter and skip to beginning of loop.
@@ -380,16 +306,7 @@ _xtensa_syscall_handler:
 
 	wsr		a0, EPC_1						/* Update PC */
 	s32i	a0, sp, (4 * REG_PC)
-
-	/* Save a2 which will hold the argument to _xtensa_context_save*/
-
-	s32i	a2, sp, (4 * REG_A2)			/* Save interruptee's A2 */
 #endif
-
-	/* Save rest of interrupt context. */
-
-	mov		a2, sp							/* Address of state save on stack */
-	call0	_xtensa_context_save			/* Save full register state */
 
 	/* Dispatch the sycall as with other interrupts. */
 
@@ -441,7 +358,7 @@ _xtensa_syscall_handler:
 	l32i	a0, a2, (4 * REG_PC)			/* Retrieve interruptee's PC */
 	wsr		a0, EPC_1
 	l32i	a0, a2, (4 * REG_A0)			/* Retrieve interruptee's A0 */
-	l32i	sp, a2, (4 * REG_A1)			/* Remove interrupt stack frame */
+	l32i	sp, a2, (4 * REG_A1)			/* Retrieve interrupt stack frame */
 	l32i	a2, a2, (4 * REG_A2)			/* Retrieve interruptee's A2 */
 	rsync									/* Ensure PS and EPC written */
 
@@ -505,7 +422,7 @@ _xtensa_coproc_handler:
 	/* For now, just panic */
 
 	mov		a0, sp							/* Save SP in A0 */
-	addi	sp, sp, -(4 * XCPTCONTEXT_SIZE)	/* Allocate interrupt stack frame */
+	addi	sp, sp, -XCPTCONTEXT_SIZE	/* Allocate interrupt stack frame */
 	s32i	a0, sp, (4 * REG_A1)			/* Save pre-interrupt SP */
 	rsr		a0, PS							/* Save interruptee's PS */
 	s32i	a0, sp, (4 * REG_PS)
@@ -513,12 +430,10 @@ _xtensa_coproc_handler:
 	s32i	a0, sp, (4 * REG_PC)
 	rsr		a0, EXCSAVE_1					/* Save interruptee's a0 */
 	s32i	a0, sp, (4 * REG_A0)
+	s32i	a2, sp, (4 * REG_A2)
 
 	/* Save rest of interrupt context. */
 
-	s32i	a2, sp, (4 * REG_A2)
-	mov		a2, sp							/* Address of state save on stack */
-	s32i	a3, sp, (4 * REG_A3)
 	call0	_xtensa_context_save			/* Save full register state */
 
 	/* Switch to an interrupt stack if we have one */

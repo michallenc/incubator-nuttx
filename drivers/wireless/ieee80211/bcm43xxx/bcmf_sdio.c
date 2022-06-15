@@ -75,6 +75,9 @@
 
 /* Supported chip configurations */
 
+#ifdef CONFIG_IEEE80211_BROADCOM_BCM4301X
+  extern const struct bcmf_sdio_chip bcmf_4301x_config_sdio;
+#endif
 #ifdef CONFIG_IEEE80211_BROADCOM_BCM43362
   extern const struct bcmf_sdio_chip bcmf_43362_config_sdio;
 #endif
@@ -781,7 +784,7 @@ int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
       goto exit_uninit_hw;
     }
 
-  sbus->thread_id = ret;
+  sbus->thread_id = (pid_t)ret;
 
   /* SDIO bus is up and running */
 
@@ -813,6 +816,14 @@ int bcmf_chipinitialize(FAR struct bcmf_sdio_dev_s *sbus)
 
   switch (chipid)
     {
+#ifdef CONFIG_IEEE80211_BROADCOM_BCM4301X
+      case SDIO_DEVICE_ID_BROADCOM_43012:
+      case SDIO_DEVICE_ID_BROADCOM_43013:
+        wlinfo("bcm%d chip detected\n", chipid);
+        sbus->chip = (struct bcmf_sdio_chip *)&bcmf_4301x_config_sdio;
+        break;
+#endif
+
 #ifdef CONFIG_IEEE80211_BROADCOM_BCM43362
       case SDIO_DEVICE_ID_BROADCOM_43362:
         wlinfo("bcm43362 chip detected\n");
@@ -1006,7 +1017,8 @@ struct bcmf_sdio_frame *bcmf_sdio_allocate_frame(FAR struct bcmf_dev_s *priv,
 
   sframe = container_of(entry, struct bcmf_sdio_frame, list_entry);
 
-  sframe->header.len  = HEADER_SIZE + MAX_NETDEV_PKTSIZE;
+  sframe->header.len  = HEADER_SIZE + MAX_NETDEV_PKTSIZE +
+                        CONFIG_NET_GUARDSIZE;
   sframe->header.base = sframe->data;
   sframe->header.data = sframe->data;
   sframe->tx          = tx;

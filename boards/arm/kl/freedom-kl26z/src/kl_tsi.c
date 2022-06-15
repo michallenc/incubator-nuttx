@@ -36,7 +36,7 @@
 
 #include <nuttx/fs/fs.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "kl_gpio.h"
 #include "hardware/kl_tsi.h"
 #include "hardware/kl_pinmux.h"
@@ -61,8 +61,8 @@
  ****************************************************************************/
 
 static void    tsi_calibrate(void);
-static ssize_t tsi_read(FAR struct file *filep,
-                        FAR char *buffer, size_t buflen);
+static ssize_t tsi_read(struct file *filep,
+                        char *buffer, size_t buflen);
 
 /****************************************************************************
  * Private Data
@@ -138,7 +138,7 @@ static void tsi_calibrate(void)
  * Name: tsi_read
  ****************************************************************************/
 
-static ssize_t tsi_read(FAR struct file *filep, FAR char *buf, size_t buflen)
+static ssize_t tsi_read(struct file *filep, char *buf, size_t buflen)
 {
   static int deltacap = 0;
   uint32_t regval;

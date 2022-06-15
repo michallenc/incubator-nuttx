@@ -1072,9 +1072,27 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
           if (dev && dev->d_ioctl)
             {
               struct can_ioctl_data_s *can_bitrate_data =
-                            &req->ifr_ifru.ifru_can_data;
+                &req->ifr_ifru.ifru_can_data;
               ret = dev->d_ioctl(dev, cmd,
                             (unsigned long)(uintptr_t)can_bitrate_data);
+            }
+        }
+        break;
+#endif
+
+#if defined(CONFIG_NETDEV_IOCTL) && defined(CONFIG_NETDEV_CAN_FILTER_IOCTL)
+      case SIOCACANEXTFILTER:  /* Add an extended-ID filter */
+      case SIOCDCANEXTFILTER:  /* Delete an extended-ID filter */
+      case SIOCACANSTDFILTER:  /* Add a standard-ID filter */
+      case SIOCDCANSTDFILTER:  /* Delete a standard-ID filter */
+        {
+          dev = netdev_ifr_dev(req);
+          if (dev && dev->d_ioctl)
+            {
+              struct can_ioctl_filter_s *can_filter =
+                &req->ifr_ifru.ifru_can_filter;
+              ret = dev->d_ioctl(dev, cmd,
+                            (unsigned long)(uintptr_t)can_filter);
             }
         }
         break;
@@ -1086,7 +1104,7 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
           dev = netdev_findbyindex(req->ifr_ifindex);
           if (dev != NULL)
             {
-              strncpy(req->ifr_name, dev->d_ifname, IFNAMSIZ);
+              strlcpy(req->ifr_name, dev->d_ifname, IFNAMSIZ);
               ret = OK;
             }
           else
@@ -1473,6 +1491,74 @@ static int netdev_rt_ioctl(FAR struct socket *psock, int cmd,
 #endif
 
 /****************************************************************************
+ * Name: netdev_file_ioctl
+ *
+ * Description:
+ *   Perform file ioctl operations.
+ *
+ * Parameters:
+ *   psock    Socket structure
+ *   cmd      The ioctl command
+ *   arg      The argument of the ioctl cmd
+ *
+ * Return:
+ *   >=0 on success (positive non-zero values are cmd-specific)
+ *   Negated errno returned on failure.
+ *
+ ****************************************************************************/
+
+static int netdev_file_ioctl(FAR struct socket *psock, int cmd,
+                             unsigned long arg)
+{
+  int ret;
+
+  switch (cmd)
+    {
+      case FIONBIO:
+        {
+          FAR struct socket_conn_s *conn = psock->s_conn;
+          FAR int *nonblock = (FAR int *)(uintptr_t)arg;
+          sockcaps_t sockcaps;
+
+           /* Non-blocking is the only configurable option.  And it applies
+            * only Unix domain sockets and to read operations on TCP/IP
+            * and UDP/IP sockets when read-ahead is enabled.
+            */
+
+          DEBUGASSERT(psock->s_sockif != NULL &&
+                      psock->s_sockif->si_sockcaps != NULL);
+          sockcaps = psock->s_sockif->si_sockcaps(psock);
+
+          if ((sockcaps & SOCKCAP_NONBLOCKING) != 0)
+            {
+               if (nonblock && *nonblock)
+                 {
+                   conn->s_flags |= _SF_NONBLOCK;
+                 }
+               else
+                 {
+                   conn->s_flags &= ~_SF_NONBLOCK;
+                 }
+
+               ret = -ENOTTY; /* let file_vioctl update f_oflags */
+            }
+          else
+            {
+              nerr("ERROR: Non-blocking not supported for this socket\n");
+              ret = -ENOSYS;
+            }
+        }
+        break;
+
+      default:
+        ret = -ENOTTY;
+        break;
+    }
+
+  return ret;
+}
+
+/****************************************************************************
  * Name: netdev_ioctl
  *
  * Description:
@@ -1533,6 +1619,7 @@ ssize_t net_ioctl_arglen(int cmd)
 {
   switch (cmd)
     {
+      case FIONBIO:
       case FIONSPACE:
       case FIONREAD:
         return sizeof(int);
@@ -1673,13 +1760,21 @@ int psock_vioctl(FAR struct socket *psock, int cmd, va_list ap)
 
   arg = va_arg(ap, unsigned long);
 
-  /* Check for a USRSOCK ioctl command */
+  /* Check for socket specific ioctl command */
 
   ret = netdev_ioctl(psock, cmd, arg);
+
+  /* Check for file ioctl command */
+
   if (ret == -ENOTTY)
     {
-      /* Check for a standard network IOCTL command. */
+      ret = netdev_file_ioctl(psock, cmd, arg);
+    }
 
+  /* Check for a standard network IOCTL command. */
+
+  if (ret == -ENOTTY)
+    {
       ret = netdev_ifr_ioctl(psock, cmd, (FAR struct ifreq *)(uintptr_t)arg);
     }
 

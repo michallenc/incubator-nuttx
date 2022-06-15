@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -32,6 +33,7 @@
 #include <syscall.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/tls.h>
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
 #include <nuttx/syslog/syslog.h>
@@ -41,8 +43,6 @@
 
 #include "sched/sched.h"
 #include "irq/irq.h"
-
-#include "riscv_arch.h"
 #include "riscv_internal.h"
 
 /****************************************************************************
@@ -139,6 +139,7 @@ static inline void riscv_registerdump(volatile uintptr_t *regs)
 
 static void riscv_dump_task(struct tcb_s *tcb, void *arg)
 {
+  char args[64] = "";
 #ifdef CONFIG_STACK_COLORATION
   uint32_t stack_filled = 0;
   uint32_t stack_used;
@@ -174,38 +175,63 @@ static void riscv_dump_task(struct tcb_s *tcb, void *arg)
     }
 #endif
 
+#ifndef CONFIG_DISABLE_PTHREAD
+  if ((tcb->flags & TCB_FLAG_TTYPE_MASK) == TCB_FLAG_TTYPE_PTHREAD)
+    {
+      FAR struct pthread_tcb_s *ptcb = (FAR struct pthread_tcb_s *)tcb;
+
+      snprintf(args, sizeof(args), " %p", ptcb->arg);
+    }
+  else
+#endif
+    {
+      FAR char **argv = tcb->group->tg_info->argv + 1;
+      size_t npos = 0;
+
+      while (*argv != NULL && npos < sizeof(args))
+        {
+          npos += snprintf(args + npos, sizeof(args) - npos, " %s", *argv++);
+        }
+    }
+
   /* Dump interesting properties of this task */
 
   _alert("  %4d   %4d"
+#ifdef CONFIG_SMP
+         "  %4d"
+#endif
+         "   %7lu"
 #ifdef CONFIG_STACK_COLORATION
          "   %7lu"
 #endif
-         "   %7lu"
 #ifdef CONFIG_STACK_COLORATION
          "   %3" PRId32 ".%1" PRId32 "%%%c"
 #endif
 #ifdef CONFIG_SCHED_CPULOAD
          "   %3" PRId32 ".%01" PRId32 "%%"
 #endif
-#if CONFIG_TASK_NAME_SIZE > 0
-         "   %s"
+         "   %s%s\n"
+         , tcb->pid, tcb->sched_priority
+#ifdef CONFIG_SMP
+         , tcb->cpu
 #endif
-         "\n",
-         tcb->pid, tcb->sched_priority,
+         , (unsigned long)tcb->adj_stack_size
 #ifdef CONFIG_STACK_COLORATION
-         (unsigned long)up_check_tcbstack(tcb),
+         , (unsigned long)up_check_tcbstack(tcb)
 #endif
-         (unsigned long)tcb->adj_stack_size
 #ifdef CONFIG_STACK_COLORATION
-         , stack_filled / 10, stack_filled % 10,
-         (stack_filled >= 10 * 80 ? '!' : ' ')
+         , stack_filled / 10, stack_filled % 10
+         , (stack_filled >= 10 * 80 ? '!' : ' ')
 #endif
 #ifdef CONFIG_SCHED_CPULOAD
          , intpart, fracpart
 #endif
 #if CONFIG_TASK_NAME_SIZE > 0
          , tcb->name
+#else
+         , "<noname>"
 #endif
+         , args
         );
 }
 
@@ -246,6 +272,9 @@ static inline void riscv_showtasks(void)
   /* Dump interesting properties of each task in the crash environment */
 
   _alert("   PID    PRI"
+#ifdef CONFIG_SMP
+         "   CPU"
+#endif
 #ifdef CONFIG_STACK_COLORATION
          "      USED"
 #endif
@@ -256,13 +285,13 @@ static inline void riscv_showtasks(void)
 #ifdef CONFIG_SCHED_CPULOAD
          "      CPU"
 #endif
-#if CONFIG_TASK_NAME_SIZE > 0
-         "   COMMAND"
-#endif
-         "\n");
+         "   COMMAND\n");
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 15
   _alert("  ----   ----"
+#  ifdef CONFIG_SMP
+         "  ----"
+#  endif
 #  ifdef CONFIG_STACK_COLORATION
          "   %7lu"
 #  endif
@@ -308,6 +337,9 @@ static void riscv_dumpstate(void)
   uintptr_t istackbase;
   uintptr_t istacksize;
 #endif
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  uintptr_t kstackbase = 0;
+#endif
 
   /* Show back trace */
 
@@ -319,12 +351,11 @@ static void riscv_dumpstate(void)
 
   if (CURRENT_REGS)
     {
-      memcpy(rtcb->xcp.regs,
-             (uintptr_t *)CURRENT_REGS, XCPTCONTEXT_REGS);
+      rtcb->xcp.regs = (uintptr_t *)CURRENT_REGS;
     }
   else
     {
-      riscv_saveusercontext(rtcb->xcp.regs);
+      up_saveusercontext(rtcb->xcp.regs);
     }
 
   /* Dump the registers (if available) */
@@ -385,18 +416,46 @@ static void riscv_dumpstate(void)
   _alert("stack size: %" PRIxREG "\n", ustacksize);
 #endif
 
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  /* Does this thread have a kernel stack allocated? */
+
+  if (rtcb->xcp.kstack)
+    {
+      kstackbase = (uintptr_t)rtcb->xcp.kstack;
+
+      _alert("Kernel stack:\n");
+      _alert("  base: %" PRIxREG "\n", kstackbase);
+      _alert("  size: %" PRIxREG "\n", CONFIG_ARCH_KERNEL_STACKSIZE);
+    }
+#endif
+
   /* Dump the user stack if the stack pointer lies within the allocated user
    * stack memory.
    */
 
   if (sp >= ustackbase && sp < ustackbase + ustacksize)
     {
-      _alert("ERROR: Stack pointer is not within allocated stack\n");
-      riscv_stackdump(ustackbase, ustackbase + ustacksize);
+      _alert("User Stack\n");
+      riscv_stackdump(sp, ustackbase + ustacksize);
     }
+
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  /* Dump the kernel stack if the stack pointer lies within the allocated
+   * kernel stack memory.
+   */
+
+  else if (kstackbase != 0 &&
+           sp >= kstackbase &&
+           sp < kstackbase + CONFIG_ARCH_KERNEL_STACKSIZE)
+    {
+      _alert("Kernel Stack\n");
+      riscv_stackdump(sp, kstackbase + CONFIG_ARCH_KERNEL_STACKSIZE);
+    }
+#endif
   else
     {
-      riscv_stackdump(sp, ustackbase + ustacksize);
+      _alert("ERROR: Stack pointer is not within allocated stack\n");
+      riscv_stackdump(ustackbase, ustackbase + ustacksize);
     }
 }
 #else

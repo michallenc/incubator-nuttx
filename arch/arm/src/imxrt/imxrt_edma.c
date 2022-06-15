@@ -59,7 +59,6 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 
@@ -626,7 +625,7 @@ static void imxrt_dmach_interrupt(struct imxrt_dmach_s *dmach)
  *
  ****************************************************************************/
 
-static int imxrt_edma_interrupt(int irq, void *context, FAR void *arg)
+static int imxrt_edma_interrupt(int irq, void *context, void *arg)
 {
   struct imxrt_dmach_s *dmach;
   unsigned int chan;
@@ -665,7 +664,7 @@ static int imxrt_edma_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int imxrt_error_interrupt(int irq, void *context, FAR void *arg)
+static int imxrt_error_interrupt(int irq, void *context, void *arg)
 {
   uint32_t errstatus;
   uint32_t errmask;

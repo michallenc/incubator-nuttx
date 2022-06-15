@@ -33,6 +33,12 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* ESP32-S3-DEVKIT GPIOs ****************************************************/
+
+/* BOOT Button */
+
+#define BUTTON_BOOT  0
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -62,6 +68,18 @@
  ****************************************************************************/
 
 int esp32s3_bringup(void);
+
+/****************************************************************************
+ * Name: board_spiflash_init
+ *
+ * Description:
+ *   Initialize the SPIFLASH and register the MTD device.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ESP32S3_SPIFLASH
+int board_spiflash_init(void);
+#endif
 
 #endif /* __ASSEMBLY__ */
 #endif /* __BOARDS_XTENSA_ESP32S3_ESP32S3_DEVKIT_SRC_ESP32S3_DEVKIT_H */

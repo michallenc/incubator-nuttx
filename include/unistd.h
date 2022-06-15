@@ -280,6 +280,17 @@
 #  define lockf64                        lockf
 #endif
 
+/* NOTE: NuttX provides only one implementation:  If
+ * CONFIG_LIBC_ENVPATH is defined, then only execvp/execlp/execvpe behavior
+ * is supported; otherwise, only execv/execl/execve behavior is supported.
+ */
+
+#ifdef CONFIG_LIBC_EXECFUNCS
+#  define execvp                         execv
+#  define execlp                         execl
+#  define execvpe                        execve
+#endif
+
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -367,8 +378,11 @@ int     lchown(FAR const char *path, uid_t owner, gid_t group);
 /* Execution of programs from files */
 
 #ifdef CONFIG_LIBC_EXECFUNCS
-int     execl(FAR const char *path, ...);
+int     execl(FAR const char *path, FAR const char *arg0, ...);
+int     execle(FAR const char *path, FAR const char *arg0, ...);
 int     execv(FAR const char *path, FAR char * const argv[]);
+int     execve(FAR const char *path, FAR char *const argv[],
+               FAR char *const envp[]);
 #endif
 
 /* Byte operations */
@@ -409,6 +423,8 @@ gid_t   getegid(void);
 
 int     setreuid(uid_t ruid, uid_t euid);
 int     setregid(gid_t rgid, gid_t egid);
+
+int     getentropy(FAR void *buffer, size_t length);
 
 #undef EXTERN
 #if defined(__cplusplus)

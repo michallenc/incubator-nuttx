@@ -36,9 +36,7 @@
 #include <nuttx/drivers/drivers.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_periphclks.h"
 #include "sam_trng.h"
 
@@ -51,7 +49,7 @@
 
 /* Interrupts */
 
-static int sam_interrupt(int irq, void *context, FAR void *arg);
+static int sam_interrupt(int irq, void *context, void *arg);
 
 /* Character driver methods */
 
@@ -108,7 +106,7 @@ static const struct file_operations g_trngops =
  *
  ****************************************************************************/
 
-static int sam_interrupt(int irq, void *context, FAR void *arg)
+static int sam_interrupt(int irq, void *context, void *arg)
 {
   uint32_t odata;
 

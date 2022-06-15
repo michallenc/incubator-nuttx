@@ -58,8 +58,6 @@ void up_release_pending(void)
 
   /* Merge the g_pendingtasks list into the ready-to-run task list */
 
-  /* sched_lock(); */
-
   if (nxsched_merge_pending())
     {
       /* The currently active task has changed!  We will need to
@@ -111,7 +109,7 @@ void up_release_pending(void)
            * ready to run list.
            */
 
-          xtensa_switchcontext(rtcb->xcp.regs, nexttcb->xcp.regs);
+          xtensa_switchcontext(&rtcb->xcp.regs, nexttcb->xcp.regs);
 
           /* xtensa_switchcontext forces a context switch to the task at the
            * head of the ready-to-run list.  It does not 'return' in the

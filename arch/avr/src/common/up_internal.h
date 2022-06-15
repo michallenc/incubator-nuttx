@@ -29,6 +29,8 @@
 
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
+#  include <nuttx/arch.h>
+#  include <nuttx/irq.h>
 #endif
 
 #ifdef CONFIG_ARCH_FAMILY_AVR32
@@ -54,6 +56,13 @@
 #define STACK_COLOR    's'
 #define INTSTACK_COLOR 's'
 #define HEAP_COLOR     'h'
+
+#define getreg8(a)     (*(volatile uint8_t *)(a))
+#define putreg8(v,a)   (*(volatile uint8_t *)(a) = (v))
+#define getreg16(a)    (*(volatile uint16_t *)(a))
+#define putreg16(v,a)  (*(volatile uint16_t *)(a) = (v))
+#define getreg32(a)    (*(volatile uint32_t *)(a))
+#define putreg32(v,a)  (*(volatile uint32_t *)(a) = (v))
 
 /****************************************************************************
  * Public Types
@@ -106,6 +115,11 @@ extern uint32_t _ebss;            /* End+1 of .bss */
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* Atomic modification of registers */
+
+void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
+void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
+void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 /* Defined in files with the same name as the function */
 
@@ -114,7 +128,6 @@ void weak_function up_dma_initialize(void);
 #endif
 void up_sigdeliver(void);
 void up_lowputc(char ch);
-void up_puts(const char *str);
 void up_lowputs(const char *str);
 void up_dumpstate(void);
 
@@ -139,10 +152,6 @@ void up_lowinit(void);
 #ifdef CONFIG_DEV_CONSOLE
 void up_earlyserialinit(void);
 void up_serialinit(void);
-#endif
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
 #endif
 
 /* Defined in chip/xxx_ethernet.c */

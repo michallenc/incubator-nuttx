@@ -28,7 +28,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "c906_clockconfig.h"
 #include "c906_userspace.h"
 #include "c906.h"
@@ -72,6 +72,10 @@ void __c906_start(uint32_t mhartid)
 {
   const uint32_t *src;
   uint32_t *dest;
+
+  /* Configure FPU */
+
+  riscv_fpuconfig();
 
   if (0 != mhartid)
     {

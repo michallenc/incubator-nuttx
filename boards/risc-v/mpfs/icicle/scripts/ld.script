@@ -26,13 +26,17 @@ MEMORY
 
 OUTPUT_ARCH("riscv")
 
+__ksram_start = ORIGIN(sram);
+__ksram_size = LENGTH(sram);
+__ksram_end = ORIGIN(sram) + LENGTH(sram);
+
 ENTRY(_stext)
-EXTERN(_vectors)
+EXTERN(__start)
 SECTIONS
 {
     .text : {
         _stext = ABSOLUTE(.);
-        mpfs_head.o
+        *(.start .start.*)
         *(.text .text.*)
         *(.fixup)
         *(.gnu.warning)

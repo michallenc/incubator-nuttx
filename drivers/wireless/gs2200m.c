@@ -201,8 +201,6 @@ struct gs2200m_dev_s
 
 /* Character driver methods */
 
-static int     gs2200m_open(FAR struct file *filep);
-static int     gs2200m_close(FAR struct file *filep);
 static ssize_t gs2200m_read(FAR struct file *filep, FAR char *buff,
                             size_t len);
 static ssize_t gs2200m_write(FAR struct file *filep, FAR const char *buff,
@@ -227,8 +225,8 @@ static void _remove_all_pkt(FAR struct gs2200m_dev_s *dev, uint8_t c);
 
 static const struct file_operations g_gs2200m_fops =
 {
-  gs2200m_open,  /* open */
-  gs2200m_close, /* close */
+  NULL,          /* open */
+  NULL,          /* close */
   gs2200m_read,  /* read */
   gs2200m_write, /* write */
   NULL,          /* seek */
@@ -315,7 +313,7 @@ static uint8_t _cid_to_uint8(char c)
 static void _to_ascii_char(uint16_t num, char *str)
 {
   DEBUGASSERT(num <= 2032); /* See Table 20 */
-  snprintf(str, 5, "%04d", num);
+  snprintf(str, 6, "%04d", num);
 }
 
 /****************************************************************************
@@ -707,24 +705,6 @@ static int gs2200m_lock(FAR struct gs2200m_dev_s *dev)
 static void gs2200m_unlock(FAR struct gs2200m_dev_s *dev)
 {
   nxsem_post(&dev->dev_sem);
-}
-
-/****************************************************************************
- * Name: gs2200m_open
- ****************************************************************************/
-
-static int gs2200m_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: gs2200m_close
- ****************************************************************************/
-
-static int gs2200m_close(FAR struct file *filep)
-{
-  return OK;
 }
 
 /****************************************************************************
@@ -1552,7 +1532,7 @@ retry_recv:
       /* release & initialize pkt_dat before retry */
 
       _release_pkt_dat(dev, pkt_dat);
-      memset(pkt_dat, 0, sizeof(pkt_dat));
+      memset(pkt_dat, 0, sizeof(*pkt_dat));
 
       bulk = true;
       goto retry_recv;
@@ -1567,7 +1547,7 @@ retry_recv:
           /* release & initialize pkt_dat before retry */
 
           _release_pkt_dat(dev, pkt_dat);
-          memset(pkt_dat, 0, sizeof(pkt_dat));
+          memset(pkt_dat, 0, sizeof(*pkt_dat));
         }
 
       wlwarn("*** retry cmd=%s (n=%d)\n", cmd, n);
@@ -1639,7 +1619,7 @@ static enum pkt_type_e gs2200m_set_opmode(FAR struct gs2200m_dev_s *dev,
 static enum pkt_type_e gs2200m_get_mac(FAR struct gs2200m_dev_s *dev)
 {
   struct pkt_dat_s pkt_dat;
-  enum pkt_type_e   r;
+  enum pkt_type_e  r;
   uint32_t mac[6];
   char cmd[16];
   int n;
@@ -1731,7 +1711,7 @@ static enum pkt_type_e gs2200m_join_network(FAR struct gs2200m_dev_s *dev,
                                             FAR char *ssid, uint8_t ch)
 {
   struct pkt_dat_s pkt_dat;
-  enum pkt_type_e   r;
+  enum pkt_type_e  r;
   char cmd[64];
   char addr[3][17];
   int n;
@@ -1864,7 +1844,7 @@ static enum pkt_type_e gs2200m_set_wpa2pf(FAR struct gs2200m_dev_s *dev,
 enum pkt_type_e gs2200m_get_wstatus(FAR struct gs2200m_dev_s *dev)
 {
   struct pkt_dat_s pkt_dat;
-  enum pkt_type_e   r;
+  enum pkt_type_e  r;
   int i;
 
   /* Initialize pkt_dat and send command */
@@ -1897,8 +1877,8 @@ gs2200m_create_clnt(FAR struct gs2200m_dev_s *dev,
                     FAR struct gs2200m_connect_msg *msg,
                     FAR char *cid)
 {
-  enum pkt_type_e  r;
   struct pkt_dat_s pkt_dat;
+  enum pkt_type_e  r;
   char cmd[40];
   char *p;
   int   n;
@@ -1962,8 +1942,8 @@ static enum pkt_type_e gs2200m_start_server(FAR struct gs2200m_dev_s *dev,
                                             FAR char *port, bool is_tcp,
                                             FAR char *cid)
 {
-  enum pkt_type_e   r;
   struct pkt_dat_s pkt_dat;
+  enum pkt_type_e  r;
   char cmd[40];
   char *p;
   int   n;
@@ -2009,10 +1989,10 @@ errout:
 static enum pkt_type_e gs2200m_send_bulk(FAR struct gs2200m_dev_s *dev,
                                          FAR struct gs2200m_send_msg *msg)
 {
-  enum pkt_type_e   r;
   enum spi_status_e s;
+  enum pkt_type_e   r;
   int  bulk_hdr_size;
-  char digits[5];
+  char digits[6];
   char cmd[32];
 
   memset(cmd, 0, sizeof(cmd));
@@ -2182,7 +2162,7 @@ static enum pkt_type_e gs2200m_get_cstatus(FAR struct gs2200m_dev_s *dev,
                                            FAR struct gs2200m_name_msg *msg)
 {
   struct pkt_dat_s pkt_dat;
-  enum pkt_type_e   r;
+  enum pkt_type_e  r;
   char cmd[16];
   int i;
 
@@ -2768,7 +2748,7 @@ static int gs2200m_ioctl_iwreq(FAR struct gs2200m_dev_s *dev,
 {
   struct iwreq *res = (struct iwreq *)&msg->ifr;
   struct pkt_dat_s pkt_dat;
-  enum pkt_type_e   r;
+  enum pkt_type_e  r;
   char cmd[64];
   char cmd2[64];
   int  n = 0;

@@ -29,19 +29,15 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "litex.h"
 
 /****************************************************************************
- * Public Data
+ * Pre-processor Definitions
  ****************************************************************************/
 
-volatile uintptr_t *g_current_regs[1];
+#define RV_IRQ_MASK 27
 
 /****************************************************************************
  * Public Functions
@@ -53,8 +49,7 @@ volatile uintptr_t *g_current_regs[1];
 
 void *riscv_dispatch_irq(uintptr_t vector, uintptr_t *regs)
 {
-  uintptr_t  irq = (vector >> 27) | (vector & 0xf);
-  uintptr_t *mepc = regs;
+  int irq = (vector >> RV_IRQ_MASK) | (vector & 0xf);
   int i;
 
   /* Firstly, check if the irq is machine external interrupt */
@@ -84,43 +79,13 @@ void *riscv_dispatch_irq(uintptr_t vector, uintptr_t *regs)
       irq += val;
     }
 
-  /* NOTE: In case of ecall, we need to adjust mepc in the context */
-
-  if (RISCV_IRQ_ECALLM == irq)
-    {
-      *mepc += 4;
-    }
-
   /* Acknowledge the interrupt */
 
   riscv_ack_irq(irq);
 
-#ifdef CONFIG_SUPPRESS_INTERRUPTS
-  PANIC();
-#else
-  /* Current regs non-zero indicates that we are processing an interrupt;
-   * CURRENT_REGS is also used to manage interrupt level context switches.
-   *
-   * Nested interrupts are not supported
-   */
-
-  DEBUGASSERT(CURRENT_REGS == NULL);
-  CURRENT_REGS = regs;
-
   /* Deliver the IRQ */
 
-  irq_dispatch(irq, regs);
-
-#endif
-
-  /* If a context switch occurred while processing the interrupt then
-   * CURRENT_REGS may have change value.  If we return any value different
-   * from the input regs, then the lower level will know that a context
-   * switch occurred during interrupt processing.
-   */
-
-  regs = (uintptr_t *)CURRENT_REGS;
-  CURRENT_REGS = NULL;
+  regs = riscv_doirq(irq, regs);
 
   return regs;
 }

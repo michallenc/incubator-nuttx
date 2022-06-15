@@ -35,8 +35,7 @@
 #include <nuttx/compiler.h>
 #include <arch/board/board.h>
 #include <rx65n_rtc.h>
-#include "up_arch.h"
-
+#include "up_internal.h"
 #include "nuttx/compiler.h"
 #ifdef CONFIG_RX65N_RTC
 
@@ -554,7 +553,7 @@ int rx65n_rtc_setdatetime(FAR const struct tm *tp)
    * seconds)
    */
 
-  /* (void)gmtime_r(&tp->tv_sec, &tp); */
+  /* gmtime_r(&tp->tv_sec, &tp); */
 
   rtc_dumptime(&tp, "Setting time");
 
@@ -707,7 +706,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
    * seconds)
    */
 
-  (void)gmtime_r(&tp->tv_sec, &newtime);
+  gmtime_r(&tp->tv_sec, &newtime);
   rtc_dumptime(&newtime, "Setting time");
 
   /* Then write the broken out values to the RTC */

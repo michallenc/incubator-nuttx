@@ -251,7 +251,6 @@ int esp_wifi_start_scan(struct iwreq *iwr)
 int esp_wifi_get_scan_results(struct iwreq *iwr)
 {
   int ret = OK;
-  struct timespec abstime;
   static bool scan_block = false;
   struct wifi_scan_result *priv = &g_scan_priv;
 
@@ -260,9 +259,7 @@ int esp_wifi_get_scan_results(struct iwreq *iwr)
       if (scan_block == false)
         {
           scan_block = true;
-          clock_gettime(CLOCK_REALTIME, &abstime);
-          abstime.tv_sec += SCAN_TIME_SEC;
-          nxsem_timedwait(&priv->scan_signal, &abstime);
+          nxsem_tickwait(&priv->scan_signal, SEC2TICK(SCAN_TIME_SEC));
           scan_block = false;
         }
       else
@@ -362,7 +359,7 @@ void esp_wifi_scan_event_parse(void)
       return;
     }
 
-  ap_list_buffer = kmm_malloc(bss_total * sizeof(wifi_ap_record_t));
+  ap_list_buffer = kmm_zalloc(bss_total * sizeof(wifi_ap_record_t));
   if (ap_list_buffer == NULL)
     {
       priv->scan_status = ESP_SCAN_DONE;
@@ -370,7 +367,6 @@ void esp_wifi_scan_event_parse(void)
       return;
     }
 
-  memset(ap_list_buffer, 0x0, sizeof(ap_list_buffer));
   if (esp_wifi_scan_get_ap_records(&bss_total,
               (wifi_ap_record_t *)ap_list_buffer) == OK)
     {

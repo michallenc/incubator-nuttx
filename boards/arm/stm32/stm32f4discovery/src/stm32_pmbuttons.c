@@ -32,7 +32,7 @@
 #include <nuttx/power/pm.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "nvic.h"
 #include "stm32_pwr.h"
 #include "stm32_pm.h"
@@ -65,7 +65,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_IRQBUTTONS
-static int button_handler(int irq, FAR void *context, FAR void *arg);
+static int button_handler(int irq, void *context, void *arg);
 #endif /* CONFIG_ARCH_IRQBUTTONS */
 
 /****************************************************************************
@@ -81,7 +81,7 @@ static int button_handler(int irq, FAR void *context, FAR void *arg);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_IRQBUTTONS
-static int button_handler(int irq, FAR void *context, FAR void *arg)
+static int button_handler(int irq, void *context, void *arg)
 {
   /* At this point the MCU should have already awakened.  The state
    * change will be handled in the IDLE loop when the system is re-awakened

@@ -145,20 +145,20 @@ typedef uint16_t     nlink_t;
  * because negative PID values are used to represent invalid PIDs.
  */
 
-typedef int16_t      pid_t;
+typedef int          pid_t;
 
 /* id_t is a general identifier that can be used to contain at least a pid_t,
  * uid_t, or gid_t.
  */
 
-typedef int16_t      id_t;
+typedef int          id_t;
 
 /* Unix requires a key of type key_t defined in file sys/types.h for
  * requesting resources such as shared memory segments, message queues and
  * semaphores. A key is simply an integer of type key_t
  */
 
-typedef int16_t      key_t;
+typedef int32_t      key_t;
 
 /* Signed integral type of the result of subtracting two pointers */
 

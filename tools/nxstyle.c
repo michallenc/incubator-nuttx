@@ -182,6 +182,7 @@ static const struct file_section_s g_section_info[] =
 
 static const char *g_white_prefix[] =
 {
+  "ASCII_",  /* Ref:  include/nuttx/ascii.h */
   "Elf",     /* Ref:  include/elf.h, include/elf32.h, include/elf64.h */
   "PRId",    /* Ref:  inttypes.h */
   "PRIi",    /* Ref:  inttypes.h */
@@ -195,15 +196,27 @@ static const char *g_white_prefix[] =
   "SCNx",    /* Ref:  inttypes.h */
   "SYS_",    /* Ref:  include/sys/syscall.h */
   "STUB_",   /* Ref:  syscall/syscall_lookup.h, syscall/sycall_stublookup.c */
+  "XK_",     /* Ref:  include/input/X11_keysymdef.h */
   "b8",      /* Ref:  include/fixedmath.h */
   "b16",     /* Ref:  include/fixedmath.h */
   "b32",     /* Ref:  include/fixedmath.h */
   "ub8",     /* Ref:  include/fixedmath.h */
   "ub16",    /* Ref:  include/fixedmath.h */
   "ub32",    /* Ref:  include/fixedmath.h */
-  "ASCII_",  /* Ref:  include/nuttx/ascii.h */
-  "XK_",     /* Ref:  include/input/X11_keysymdef.h */
+  "lua_",    /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lua.h */
+  "luaL_",   /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lauxlib.h */
 
+  NULL
+};
+
+static const char *g_white_suffix[] =
+{
+  /* Ref:  include/nuttx/wireless/nrf24l01.h */
+
+  "Mbps",
+  "kHz",
+  "kbps",
+  "us",
   NULL
 };
 
@@ -216,6 +229,10 @@ static const char *g_white_list[] =
   /* Ref:  gnu_unwind_find_exidx.c */
 
   "__gnu_Unwind_Find_exidx",
+
+  /* Ref:  lib_impure.c */
+
+  "__sFILE_fake",
 
   /* Ref:  stdlib.h */
 
@@ -709,12 +726,32 @@ static bool white_list(const char *ident, int lineno)
 {
   const char **pptr;
   const char *str;
+  size_t len2;
+  size_t len;
 
   for (pptr = g_white_prefix;
        (str = *pptr) != NULL;
        pptr++)
     {
-      if (strncmp(ident, str, strlen(str)) == 0)
+      len = strlen(str);
+      if (strncmp(ident, str, len) == 0)
+        {
+          return true;
+        }
+    }
+
+  len2 = strlen(ident);
+  while (!isalnum(ident[len2 - 1]))
+    {
+      len2--;
+    }
+
+  for (pptr = g_white_suffix;
+       (str = *pptr) != NULL;
+       pptr++)
+    {
+      len = strlen(str);
+      if (len2 >= len && strncmp(ident + len2 - len, str, len) == 0)
         {
           return true;
         }
@@ -724,8 +761,7 @@ static bool white_list(const char *ident, int lineno)
        (str = *pptr) != NULL;
        pptr++)
     {
-      size_t len = strlen(str);
-
+      len = strlen(str);
       if (strncmp(ident, str, len) == 0 &&
           isalnum(ident[len]) == 0)
         {

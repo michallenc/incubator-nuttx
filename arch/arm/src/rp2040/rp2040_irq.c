@@ -34,10 +34,7 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
-#include "rp2040_irq.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -161,7 +158,7 @@ static void rp2040_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int rp2040_nmi(int irq, FAR void *context, FAR void *arg)
+static int rp2040_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -169,7 +166,7 @@ static int rp2040_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int rp2040_pendsv(int irq, FAR void *context, FAR void *arg)
+static int rp2040_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -177,7 +174,7 @@ static int rp2040_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int rp2040_reserved(int irq, FAR void *context, FAR void *arg)
+static int rp2040_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");

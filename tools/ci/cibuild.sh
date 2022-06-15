@@ -164,10 +164,10 @@ function arm-gcc-toolchain {
         ;;
     esac
     cd "${prebuilt}"
-    wget --quiet https://developer.arm.com/-/media/Files/downloads/gnu-rm/9-2019q4/RC2.1/gcc-arm-none-eabi-9-2019-q4-major-${flavor}.tar.bz2
-    tar jxf gcc-arm-none-eabi-9-2019-q4-major-${flavor}.tar.bz2
-    mv gcc-arm-none-eabi-9-2019-q4-major gcc-arm-none-eabi
-    rm gcc-arm-none-eabi-9-2019-q4-major-${flavor}.tar.bz2
+    wget --quiet https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-${flavor}.tar.bz2
+    tar jxf gcc-arm-none-eabi-10.3-2021.10-${flavor}.tar.bz2
+    mv gcc-arm-none-eabi-10.3-2021.10 gcc-arm-none-eabi
+    rm gcc-arm-none-eabi-10.3-2021.10-${flavor}.tar.bz2
   fi
   arm-none-eabi-gcc --version
 }
@@ -196,10 +196,10 @@ function riscv-gcc-toolchain {
         ;;
     esac
     cd "${prebuilt}"
-    wget --quiet https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-8.3.0-2019.08.0-${flavor}.tar.gz
-    tar zxf riscv64-unknown-elf-gcc-8.3.0-2019.08.0-${flavor}.tar.gz
-    mv riscv64-unknown-elf-gcc-8.3.0-2019.08.0-${flavor} riscv64-unknown-elf-gcc
-    rm riscv64-unknown-elf-gcc-8.3.0-2019.08.0-${flavor}.tar.gz
+    wget --quiet https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-${flavor}.tar.gz
+    tar zxf riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-${flavor}.tar.gz
+    mv riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-${flavor} riscv64-unknown-elf-gcc
+    rm riscv64-unknown-elf-toolchain-10.2.0-2020.12.8-${flavor}.tar.gz
   fi
   riscv64-unknown-elf-gcc --version
 }
@@ -224,7 +224,7 @@ function xtensa-esp32-gcc-toolchain {
     esac
   fi
   xtensa-esp32-elf-gcc --version
-  pip3 install esptool
+  pip3 install esptool==3.3.1
 }
 
 function avr-gcc-toolchain {

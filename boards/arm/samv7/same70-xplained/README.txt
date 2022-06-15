@@ -1300,7 +1300,7 @@ NOTES:
        CONFIG_WINDOWS_CYGWIN=y             : Cywin under Windows
 
      System Type -> Toolchain:
-       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIW=y : GNU ARM EABI toolchain
+       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABI=y  : GNU ARM EABI toolchain
 
      NOTE: As of this writing, there are issues with using this tool at
      the -Os level of optimization.  This has not been proven to be a
@@ -1719,7 +1719,7 @@ Configuration sub-directories
       CONFIG_SAMV7_FORMAT_MCUBOOT=y
       CONFIG_INIT_ENTRYPOINT="mcuboot_loader_main"
 
-  mcuboot-confirm:
+  mcuboot-slot-confirm:
     This configuration exercises the MCUboot compatible application slot
     confirm example.
 
@@ -1733,8 +1733,7 @@ Configuration sub-directories
 
       CONFIG_BOARD_LATE_INITIALIZE=y
 
-      CONFIG_BOOT_MCUBOOT=y
-      CONFIG_MCUBOOT_SLOT_CONFIRM_EXAMPLE=y
+      CONFIG_EXAMPLES_MCUBOOT_SLOT_CONFIRM=y
 
       CONFIG_SAMV7_FORMAT_MCUBOOT=y
       CONFIG_INIT_ENTRYPOINT="mcuboot_confirm_main"

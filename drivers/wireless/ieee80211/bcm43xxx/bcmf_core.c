@@ -248,7 +248,7 @@ int bcmf_upload_file(FAR struct bcmf_sdio_dev_s *sbus, uint32_t address,
 
   /* Open the file in the detached state */
 
-  ret = file_open(&finfo, path, O_RDONLY | O_BINARY);
+  ret = file_open(&finfo, path, O_RDONLY);
   if (ret < 0)
     {
       wlerr("ERROR: Failed to open the FILE MTD file %s: %d\n", path, ret);
@@ -439,9 +439,12 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
 
   switch (sbus->cur_chip_id)
     {
-#if defined(CONFIG_IEEE80211_BROADCOM_BCM43362) || \
+#if defined(CONFIG_IEEE80211_BROADCOM_BCM4301X) || \
+    defined(CONFIG_IEEE80211_BROADCOM_BCM43362) || \
     defined(CONFIG_IEEE80211_BROADCOM_BCM43438)
 
+      case SDIO_DEVICE_ID_BROADCOM_43012:
+      case SDIO_DEVICE_ID_BROADCOM_43013:
       case SDIO_DEVICE_ID_BROADCOM_43362:
       case SDIO_DEVICE_ID_BROADCOM_43430:
         /* Disable ARMCM3 core and reset SOCRAM core to set device in
@@ -521,9 +524,12 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
 
   switch (sbus->cur_chip_id)
     {
-#if defined(CONFIG_IEEE80211_BROADCOM_BCM43362) || \
+#if defined(CONFIG_IEEE80211_BROADCOM_BCM4301X) || \
+    defined(CONFIG_IEEE80211_BROADCOM_BCM43362) || \
     defined(CONFIG_IEEE80211_BROADCOM_BCM43438)
 
+      case SDIO_DEVICE_ID_BROADCOM_43012:
+      case SDIO_DEVICE_ID_BROADCOM_43013:
       case SDIO_DEVICE_ID_BROADCOM_43362:
       case SDIO_DEVICE_ID_BROADCOM_43430:
         up_mdelay(10);

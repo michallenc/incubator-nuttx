@@ -32,14 +32,13 @@
 /* Include chip-specific IRQ definitions (including IRQ numbers) */
 
 #include <nuttx/config.h>
+
 #include <arch/types.h>
 
-#ifndef __ASSEMBLY__
-#include <stdint.h>
-#include <nuttx/irq.h>
+#include <arch/arch.h>
 #include <arch/csr.h>
 #include <arch/chip/irq.h>
-#endif
+#include <arch/mode.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -50,7 +49,7 @@
 /* IRQ 0-15 : (exception:interrupt=0) */
 
 #define RISCV_IRQ_IAMISALIGNED  (0)   /* Instruction Address Misaligned */
-#define RISCV_IRQ_IAFAULT       (1)   /* Instruction Address Fault */
+#define RISCV_IRQ_IAFAULT       (1)   /* Instruction Access Fault */
 #define RISCV_IRQ_IINSTRUCTION  (2)   /* Illegal Instruction */
 #define RISCV_IRQ_BPOINT        (3)   /* Break Point */
 #define RISCV_IRQ_LAMISALIGNED  (4)   /* Load Address Misaligned */
@@ -64,7 +63,7 @@
 #define RISCV_IRQ_INSTRUCTIONPF (12)  /* Instruction page fault */
 #define RISCV_IRQ_LOADPF        (13)  /* Load page fault */
 #define RISCV_IRQ_RESERVED      (14)  /* Reserved */
-#define RISCV_IRQ_SROREPF       (15)  /* Store/AMO page fault */
+#define RISCV_IRQ_STOREPF       (15)  /* Store/AMO page fault */
 
 #define RISCV_MAX_EXCEPTION     (15)
 
@@ -82,9 +81,9 @@
 /* IRQ bit and IRQ mask */
 
 #ifdef CONFIG_ARCH_RV32
-#  define RISCV_IRQ_BIT           (1 << 31)
+#  define RISCV_IRQ_BIT           (UINT32_C(1) << 31)
 #else
-#  define RISCV_IRQ_BIT           (1 << 63)
+#  define RISCV_IRQ_BIT           (UINT64_C(1) << 63)
 #endif
 
 #define RISCV_IRQ_MASK            (~RISCV_IRQ_BIT)
@@ -183,10 +182,10 @@
 #define INT_XCPT_SIZE       (INT_REG_SIZE * INT_XCPT_REGS)
 
 #ifdef CONFIG_ARCH_RV32
-#  if defined(CONFIG_ARCH_DPFPU)
-#    define FPU_REG_SIZE    2
-#  elif defined(CONFIG_ARCH_QPFPU)
+#  if defined(CONFIG_ARCH_QPFPU)
 #    define FPU_REG_SIZE    4
+#  elif defined(CONFIG_ARCH_DPFPU)
+#    define FPU_REG_SIZE    2
 #  elif defined(CONFIG_ARCH_FPU)
 #    define FPU_REG_SIZE    1
 #  endif
@@ -234,8 +233,10 @@
 #  define REG_FCSR_NDX      (INT_XCPT_REGS + FPU_REG_SIZE * 32)
 
 #  define FPU_XCPT_REGS     (FPU_REG_SIZE * 33)
+#  define FPU_REG_FULL_SIZE (INT_REG_SIZE * FPU_REG_SIZE)
 #else /* !CONFIG_ARCH_FPU */
-#  define FPU_XCPT_REGS     0
+#  define FPU_XCPT_REGS     (0)
+#  define FPU_REG_FULL_SIZE (0)
 #endif /* CONFIG_ARCH_FPU */
 
 #define XCPTCONTEXT_REGS    (INT_XCPT_REGS + FPU_XCPT_REGS)
@@ -459,6 +460,26 @@
 #define REG_T5              REG_X30
 #define REG_T6              REG_X31
 
+#ifdef CONFIG_ARCH_FPU
+/* $0-$1 = fs0-fs1: Callee saved registers */
+
+#  define REG_FS0           REG_F8
+#  define REG_FS1           REG_F9
+
+/* $18-$27 = fs2-fs11: Callee saved registers */
+
+#  define REG_FS2           REG_F18
+#  define REG_FS3           REG_F19
+#  define REG_FS4           REG_F20
+#  define REG_FS5           REG_F21
+#  define REG_FS6           REG_F22
+#  define REG_FS7           REG_F23
+#  define REG_FS8           REG_F24
+#  define REG_FS9           REG_F25
+#  define REG_FS10          REG_F26
+#  define REG_FS11          REG_F27
+#endif
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -471,8 +492,8 @@
 struct xcpt_syscall_s
 {
   uintptr_t sysreturn;   /* The return PC */
-#ifdef CONFIG_BUILD_PROTECTED
-  uintptr_t int_ctx;     /* Interrupt context (i.e. mstatus) */
+#ifndef CONFIG_BUILD_FLAT
+  uintptr_t int_ctx;     /* Interrupt context (i.e. m-/sstatus) */
 #endif
 };
 #endif
@@ -492,16 +513,15 @@ struct xcptcontext
   /* These additional register save locations are used to implement the
    * signal delivery trampoline.
    *
-   * REVISIT:  Because there is only one copy of these save areas,
+   * REVISIT:  Because there is only a reference of these save areas,
    * only a single signal handler can be active.  This precludes
    * queuing of signal actions.  As a result, signals received while
    * another signal handler is executing will be ignored!
    */
 
-  uintptr_t saved_epc;     /* Trampoline PC */
-  uintptr_t saved_int_ctx; /* Interrupt context with interrupts disabled. */
+  uintptr_t *saved_regs;
 
-#ifdef CONFIG_BUILD_PROTECTED
+#ifndef CONFIG_BUILD_FLAT
   /* This is the saved address to use when returning from a user-space
    * signal handler.
    */
@@ -519,9 +539,25 @@ struct xcptcontext
 
 #endif
 
+#ifdef CONFIG_ARCH_ADDRENV
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  /* In this configuration, all syscalls execute from an internal kernel
+   * stack.  Why?  Because when we instantiate and initialize the address
+   * environment of the new user process, we will temporarily lose the
+   * address environment of the old user process, including its stack
+   * contents.  The kernel C logic will crash immediately with no valid
+   * stack in place.
+   */
+
+  uintptr_t *ustkptr;  /* Saved user stack pointer */
+  uintptr_t *kstack;   /* Allocate base of the (aligned) kernel stack */
+  uintptr_t *kstkptr;  /* Saved kernel stack pointer */
+#endif
+#endif
+
   /* Register save area */
 
-  uintptr_t regs[XCPTCONTEXT_REGS];
+  uintptr_t *regs;
 };
 
 #endif /* __ASSEMBLY__ */
@@ -545,6 +581,55 @@ extern "C"
 #define EXTERN extern
 #endif
 
+/* g_current_regs[] holds a references to the current interrupt level
+ * register storage structure.  If is non-NULL only during interrupt
+ * processing.  Access to g_current_regs[] must be through the macro
+ * CURRENT_REGS for portability.
+ */
+
+/* For the case of architectures with multiple CPUs, then there must be one
+ * such value for each processor that can receive an interrupt.
+ */
+
+EXTERN volatile uintptr_t *g_current_regs[CONFIG_SMP_NCPUS];
+#define CURRENT_REGS (g_current_regs[up_cpu_index()])
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: up_irq_enable
+ *
+ * Description:
+ *   Return the current interrupt state and enable interrupts
+ *
+ ****************************************************************************/
+
+irqstate_t up_irq_enable(void);
+
+/****************************************************************************
+ * Name: up_cpu_index
+ *
+ * Description:
+ *   Return an index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
+ *   corresponds to the currently executing CPU.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   An integer index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
+ *   corresponds to the currently executing CPU.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SMP
+int up_cpu_index(void);
+#else
+#  define up_cpu_index() (0)
+#endif
+
 /****************************************************************************
  * Inline Functions
  ****************************************************************************/
@@ -565,9 +650,9 @@ static inline irqstate_t up_irq_save(void)
 
   __asm__ __volatile__
     (
-      "csrrc %0, mstatus, %1\n"
+      "csrrc %0, " __XSTR(CSR_STATUS) ", %1\n"
       : "=r" (flags)
-      : "r"(MSTATUS_MIE)
+      : "r"(STATUS_IE)
       : "memory"
     );
 
@@ -590,7 +675,7 @@ static inline void up_irq_restore(irqstate_t flags)
 {
   __asm__ __volatile__
     (
-      "csrw mstatus, %0\n"
+      "csrw " __XSTR(CSR_STATUS) ", %0\n"
       : /* no output */
       : "r" (flags)
       : "memory"
@@ -598,18 +683,28 @@ static inline void up_irq_restore(irqstate_t flags)
 }
 
 /****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_irq_enable
+ * Name: up_interrupt_context
  *
  * Description:
- *   Return the current interrupt state and enable interrupts
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
  *
  ****************************************************************************/
 
-EXTERN irqstate_t up_irq_enable(void);
+static inline bool up_interrupt_context(void)
+{
+#ifdef CONFIG_SMP
+  irqstate_t flags = up_irq_save();
+#endif
+
+  bool ret = CURRENT_REGS != NULL;
+
+#ifdef CONFIG_SMP
+  up_irq_restore(flags);
+#endif
+
+  return ret;
+}
 
 #undef EXTERN
 #if defined(__cplusplus)

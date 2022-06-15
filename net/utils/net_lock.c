@@ -34,6 +34,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/clock.h>
 #include <nuttx/semaphore.h>
+#include <nuttx/sched.h>
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/net.h>
 
@@ -43,15 +44,15 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define NO_HOLDER (pid_t)-1
+#define NO_HOLDER (INVALID_PROCESS_ID)
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static sem_t        g_netlock;
-static pid_t        g_holder = NO_HOLDER;
-static unsigned int g_count  = 0;
+static sem_t        g_netlock = SEM_INITIALIZER(1);
+static pid_t        g_holder  = NO_HOLDER;
+static unsigned int g_count;
 
 /****************************************************************************
  * Private Functions
@@ -96,27 +97,15 @@ _net_timedwait(sem_t *sem, bool interruptible, unsigned int timeout)
 
   if (timeout != UINT_MAX)
     {
-      struct timespec abstime;
-
-      DEBUGVERIFY(clock_gettime(CLOCK_REALTIME, &abstime));
-
-      abstime.tv_sec  += timeout / MSEC_PER_SEC;
-      abstime.tv_nsec += timeout % MSEC_PER_SEC * NSEC_PER_MSEC;
-      if (abstime.tv_nsec >= NSEC_PER_SEC)
-        {
-          abstime.tv_sec++;
-          abstime.tv_nsec -= NSEC_PER_SEC;
-        }
-
       /* Wait until we get the lock or until the timeout expires */
 
       if (interruptible)
         {
-          ret = nxsem_timedwait(sem, &abstime);
+          ret = nxsem_tickwait(sem, MSEC2TICK(timeout));
         }
       else
         {
-          ret = nxsem_timedwait_uninterruptible(sem, &abstime);
+          ret = nxsem_tickwait_uninterruptible(sem, MSEC2TICK(timeout));
         }
     }
   else
@@ -148,19 +137,6 @@ _net_timedwait(sem_t *sem, bool interruptible, unsigned int timeout)
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: net_lockinitialize
- *
- * Description:
- *   Initialize the locking facility
- *
- ****************************************************************************/
-
-void net_lockinitialize(void)
-{
-  nxsem_init(&g_netlock, 0, 1);
-}
 
 /****************************************************************************
  * Name: net_lock
@@ -459,7 +435,7 @@ int net_lockedwait_uninterruptible(sem_t *sem)
  * Description:
  *   Allocate an IOB.  If no IOBs are available, then atomically wait for
  *   for the IOB while temporarily releasing the lock on the network.
- *   This function is wrapped version of nxsem_timedwait(), this wait will
+ *   This function is wrapped version of nxsem_tickwait(), this wait will
  *   be terminated when the specified timeout expires.
  *
  *   Caution should be utilized.  Because the network lock is relinquished

@@ -29,12 +29,9 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
+#include <sys/types.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "hardware/qemu_rv_memorymap.h"
 #include "hardware/qemu_rv_plic.h"
 
@@ -49,12 +46,6 @@
 #endif
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-volatile uintptr_t *g_current_regs[CONFIG_SMP_NCPUS];
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -64,17 +55,11 @@ volatile uintptr_t *g_current_regs[CONFIG_SMP_NCPUS];
 
 void *riscv_dispatch_irq(uintptr_t vector, uintptr_t *regs)
 {
-  uintptr_t irq = (vector >> RV_IRQ_MASK) | (vector & 0xf);
-  uintptr_t *mepc = regs;
-
-  if (vector < RISCV_IRQ_ECALLM)
-    {
-      riscv_fault(irq, regs);
-    }
+  int irq = (vector >> RV_IRQ_MASK) | (vector & 0xf);
 
   /* Firstly, check if the irq is machine external interrupt */
 
-  if (RISCV_IRQ_MEXT == irq)
+  if (RISCV_IRQ_EXT == irq)
     {
       uintptr_t val = getreg32(QEMU_RV_PLIC_CLAIM);
 
@@ -83,50 +68,21 @@ void *riscv_dispatch_irq(uintptr_t vector, uintptr_t *regs)
       irq += val;
     }
 
-  /* NOTE: In case of ecall, we need to adjust mepc in the context */
+  /* EXT means no interrupt */
 
-  if (RISCV_IRQ_ECALLM == irq)
-    {
-      *mepc += 4;
-    }
-
-#ifdef CONFIG_SUPPRESS_INTERRUPTS
-  PANIC();
-#else
-  /* Current regs non-zero indicates that we are processing an interrupt;
-   * CURRENT_REGS is also used to manage interrupt level context switches.
-   *
-   * Nested interrupts are not supported
-   */
-
-  DEBUGASSERT(CURRENT_REGS == NULL);
-  CURRENT_REGS = regs;
-
-  /* MEXT means no interrupt */
-
-  if (RISCV_IRQ_MEXT != irq)
+  if (RISCV_IRQ_EXT != irq)
     {
       /* Deliver the IRQ */
 
-      irq_dispatch(irq, regs);
+      regs = riscv_doirq(irq, regs);
     }
 
-  if (RISCV_IRQ_MEXT <= irq)
+  if (RISCV_IRQ_EXT <= irq)
     {
       /* Then write PLIC_CLAIM to clear pending in PLIC */
 
-      putreg32(irq - RISCV_IRQ_MEXT, QEMU_RV_PLIC_CLAIM);
+      putreg32(irq - RISCV_IRQ_EXT, QEMU_RV_PLIC_CLAIM);
     }
-#endif
-
-  /* If a context switch occurred while processing the interrupt then
-   * CURRENT_REGS may have change value.  If we return any value different
-   * from the input regs, then the lower level will know that a context
-   * switch occurred during interrupt processing.
-   */
-
-  regs = (uintptr_t *)CURRENT_REGS;
-  CURRENT_REGS = NULL;
 
   return regs;
 }

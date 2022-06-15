@@ -71,6 +71,11 @@ static int files_extend(FAR struct filelist *list, size_t row)
       return 0;
     }
 
+  if (row * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK > OPEN_MAX)
+    {
+      return -EMFILE;
+    }
+
   tmp = kmm_realloc(list->fl_files, sizeof(FAR struct file *) * row);
   DEBUGASSERT(tmp);
   if (tmp == NULL)
@@ -98,6 +103,12 @@ static int files_extend(FAR struct filelist *list, size_t row)
 
   list->fl_files = tmp;
   list->fl_rows = row;
+
+  /* Note: If assertion occurs, the fl_rows has a overflow.
+   * And there may be file descriptors leak in system.
+   */
+
+  DEBUGASSERT(list->fl_rows == row);
   return 0;
 }
 
@@ -250,8 +261,7 @@ int files_allocate(FAR struct inode *inode, int oflags, off_t pos,
  *
  ****************************************************************************/
 
-int files_duplist(FAR struct filelist *plist,
-                  FAR struct filelist *clist, bool stdio_only)
+int files_duplist(FAR struct filelist *plist, FAR struct filelist *clist)
 {
   int ret;
   int i;
@@ -265,28 +275,25 @@ int files_duplist(FAR struct filelist *plist,
       return ret;
     }
 
-#ifdef CONFIG_FDCLONE_STDIO
-
-  /* Determine how many file descriptors to clone.  If
-   * CONFIG_FDCLONE_DISABLE is set, no file descriptors will be
-   * cloned.  If CONFIG_FDCLONE_STDIO is set, only the first
-   * three descriptors (stdin, stdout, and stderr) will be
-   * cloned.  Otherwise all file descriptors will be cloned.
-   */
-
-  stdio_only = true;
-#endif
-
   for (i = 0; i < plist->fl_rows; i++)
     {
       for (j = 0; j < CONFIG_NFILE_DESCRIPTORS_PER_BLOCK; j++)
         {
           FAR struct file *filep;
+#ifdef CONFIG_FDCLONE_STDIO
 
-          if (stdio_only && i * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK + j >= 3)
+          /* Determine how many file descriptors to clone.  If
+           * CONFIG_FDCLONE_DISABLE is set, no file descriptors will be
+           * cloned.  If CONFIG_FDCLONE_STDIO is set, only the first
+           * three descriptors (stdin, stdout, and stderr) will be
+           * cloned.  Otherwise all file descriptors will be cloned.
+           */
+
+          if (i * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK + j >= 3)
             {
               goto out;
             }
+#endif
 
           filep = &plist->fl_files[i][j];
           if (filep->f_inode == NULL || (filep->f_oflags & O_CLOEXEC) != 0)
@@ -354,7 +361,7 @@ int fs_getfilep(int fd, FAR struct file **filep)
       return -EAGAIN;
     }
 
-  if ((unsigned int)fd >= CONFIG_NFILE_DESCRIPTORS_PER_BLOCK * list->fl_rows)
+  if (fd < 0 || fd >= list->fl_rows * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK)
     {
       return -EBADF;
     }
@@ -366,12 +373,23 @@ int fs_getfilep(int fd, FAR struct file **filep)
   /* And return the file pointer from the list */
 
   ret = _files_semtake(list);
-  if (ret >= 0)
+  if (ret < 0)
     {
-      *filep = &list->fl_files[fd / CONFIG_NFILE_DESCRIPTORS_PER_BLOCK]
-                              [fd % CONFIG_NFILE_DESCRIPTORS_PER_BLOCK];
-      _files_semgive(list);
+      return ret;
     }
+
+  *filep = &list->fl_files[fd / CONFIG_NFILE_DESCRIPTORS_PER_BLOCK]
+                          [fd % CONFIG_NFILE_DESCRIPTORS_PER_BLOCK];
+
+  /* if f_inode is NULL, fd was closed */
+
+  if (!(*filep)->f_inode)
+    {
+      *filep = (FAR struct file *)NULL;
+      ret = -EBADF;
+    }
+
+  _files_semgive(list);
 
   return ret;
 }

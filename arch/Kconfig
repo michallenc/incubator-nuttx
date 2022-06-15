@@ -15,6 +15,7 @@ config ARCH_ARM
 	select ARCH_HAVE_STACKCHECK
 	select ARCH_HAVE_CUSTOMOPT
 	select ARCH_HAVE_STDARG_H
+	select ARCH_HAVE_SETJMP if !ARCH_TOOLCHAIN_IAR
 	select ARCH_HAVE_SYSCALL_HOOKS
 	select ARCH_HAVE_RDWR_MEM_CPU_RUN
 	select ARCH_HAVE_THREAD_LOCAL
@@ -63,7 +64,9 @@ config ARCH_RISCV
 	select ARCH_HAVE_BACKTRACE
 	select ARCH_HAVE_INTERRUPTSTACK
 	select ARCH_HAVE_STACKCHECK
+	select ARCH_HAVE_VFORK
 	select ARCH_HAVE_CUSTOMOPT
+	select ARCH_HAVE_SETJMP
 	select ARCH_HAVE_STDARG_H
 	select ARCH_HAVE_SYSCALL_HOOKS
 	select ARCH_HAVE_RDWR_MEM_CPU_RUN
@@ -77,11 +80,13 @@ config ARCH_SIM
 	select ARCH_HAVE_MULTICPU
 	select ARCH_HAVE_RTC_SUBSECONDS
 	select ARCH_HAVE_SERIAL_TERMIOS
+	select ARCH_HAVE_SYSCALL_HOOKS
 	select ARCH_HAVE_TICKLESS
 	select ARCH_HAVE_POWEROFF
 	select ARCH_HAVE_TESTSET
 	select ARCH_HAVE_VFORK
 	select ARCH_HAVE_SETJMP
+	select ARCH_HAVE_CUSTOMOPT
 	select ARCH_SETJMP_H
 	select ALARM_ARCH
 	select ONESHOT
@@ -218,6 +223,49 @@ config ARCH_TOOLCHAIN_GNU
 	bool
 	default n
 
+config ARCH_TOOLCHAIN_CLANG
+	bool
+	select ARCH_TOOLCHAIN_GNU
+	default n
+
+choice
+	prompt "Link Time Optimization (LTO)"
+	default LTO_NONE
+	---help---
+		This option enables Link Time Optimization (LTO), which allows the
+		compiler to optimize binaries globally.
+
+		If unsure, select LTO_NONE. Note that LTO is very resource-intensive
+		so it's disabled by default.
+
+config LTO_NONE
+	bool "None"
+	---help---
+		Build the kernel normally, without Link Time Optimization (LTO).
+
+config LTO_FULL
+	bool "GNU Full LTO (EXPERIMENTAL)"
+	depends on ARCH_TOOLCHAIN_GNU
+	---help---
+		Link time optimization is implemented as a GCC front end for a bytecode
+		bytecode representation of GIMPLE that is emitted in special sections
+		of .o files. Currently, LTO support is enabled in most ELF-based systems,
+		as well as darwin, cygwin and mingw systems.
+
+config LTO_THIN
+	bool "Clang ThinLTO (EXPERIMENTAL)"
+	depends on ARCH_TOOLCHAIN_CLANG
+	---help---
+		This option enables Clang's ThinLTO, which allows for parallel
+		optimization and faster incremental compiles compared to the
+		CONFIG_LTO_FULL option. More information can be found
+		from Clang's documentation:
+
+		https://clang.llvm.org/docs/ThinLTO.html
+
+		If unsure, say Y.
+endchoice
+
 config ARCH_GNU_NO_WEAKFUNCTIONS
 	bool
 	depends on ARCH_TOOLCHAIN_GNU
@@ -235,7 +283,6 @@ config ARCH_SIZET_LONG
 
 config ARCH_COVERAGE
 	bool "Enable code coverage analysis"
-	select HAVE_CXX
 	select HAVE_CXXINITIALIZE
 	default n
 	---help---
@@ -321,9 +368,7 @@ config ARCH_HAVE_FPU
 config ARCH_HAVE_DPFPU
 	bool
 	default n
-
-config ARCH_HAVE_LAZYFPU
-	bool
+	select ARCH_HAVE_FPU
 
 config ARCH_HAVE_MMU
 	bool
@@ -350,11 +395,6 @@ config ARCH_HAVE_PROGMEM
 	default n
 
 config ARCH_HAVE_PROGMEM_READ
-	bool
-	default n
-	depends on ARCH_HAVE_PROGMEM
-
-config ARCH_HAVE_PROGMEM_ERASESTATE
 	bool
 	default n
 	depends on ARCH_HAVE_PROGMEM
@@ -781,6 +821,13 @@ config ARCH_STACKDUMP
 	---help---
 		Enable to do stack dumps after assertions
 
+config DUMP_ON_EXIT
+	bool "Dump all tasks state on exit"
+	default n
+	depends on DEBUG_SCHED_INFO
+	---help---
+		Dump all tasks state on exit()
+
 config ARCH_USBDUMP
 	bool "Dump USB trace data"
 	default n
@@ -902,7 +949,6 @@ menu "Bring-Up Options"
 config SUPPRESS_CLOCK_CONFIG
 	bool "Suppress clock configuration"
 	default n
-	depends on ARCH_XTENSA
 	---help---
 		Do not configure clocking.  Instead relies on the reset clock
 		configuration (or clock configuration provided by a bootloader).
@@ -932,13 +978,6 @@ config SUPPRESS_UART_CONFIG
 		Do not re-configure the serial console UART from its start-up state.
 		This is useful when a boot loader has already initialized the serial
 		port.
-
-config DUMP_ON_EXIT
-	bool "Dump task state"
-	default n
-	depends on DEBUG_SCHED_INFO
-	---help---
-		Dump task state on exit()
 
 endmenu # Bring-Up Options
 

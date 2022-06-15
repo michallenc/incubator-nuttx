@@ -189,12 +189,6 @@ int up_init_ipi(int irq);
 void up_timer_update(void);
 #endif
 
-/* rpmsg_serialinit *********************************************************/
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#endif
-
 /* up_uart.c ****************************************************************/
 
 void up_uartinit(void);
@@ -237,10 +231,17 @@ int sim_tsc_initialize(int minor);
 int sim_tsc_uninitialize(void);
 #endif
 
+/* up_keyboard.c ************************************************************/
+
+#ifdef CONFIG_SIM_KEYBOARD
+int sim_kbd_initialize(void);
+void up_kbdevent(uint32_t key, bool is_press);
+#endif
+
 /* up_eventloop.c ***********************************************************/
 
 #if defined(CONFIG_SIM_TOUCHSCREEN) || defined(CONFIG_SIM_AJOYSTICK) || \
-    defined(CONFIG_ARCH_BUTTONS)
+    defined(CONFIG_ARCH_BUTTONS) || defined(CONFING_SIM_KEYBOARD)
 void up_x11events(void);
 void up_buttonevent(int x, int y, int buttons);
 #endif

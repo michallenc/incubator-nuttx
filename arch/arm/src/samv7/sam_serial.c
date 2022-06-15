@@ -44,7 +44,6 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sam_config.h"
 
@@ -414,7 +413,7 @@ static int  sam_setup(struct uart_dev_s *dev);
 static void sam_shutdown(struct uart_dev_s *dev);
 static int  sam_attach(struct uart_dev_s *dev);
 static void sam_detach(struct uart_dev_s *dev);
-static int  sam_interrupt(int irq, void *context, FAR void *arg);
+static int  sam_interrupt(int irq, void *context, void *arg);
 static int  sam_ioctl(struct file *filep, int cmd, unsigned long arg);
 #ifdef SERIAL_HAVE_NODMA_OPS
 static int  sam_receive(struct uart_dev_s *dev, unsigned int *status);
@@ -1290,7 +1289,7 @@ static void sam_detach(struct uart_dev_s *dev)
  *
  ****************************************************************************/
 
-static int sam_interrupt(int irq, void *context, FAR void *arg)
+static int sam_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct sam_dev_s *priv;

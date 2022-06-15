@@ -49,7 +49,6 @@
 #include "stm32_uart.h"
 #include "stm32_dma.h"
 #include "stm32_rcc.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -3141,7 +3140,7 @@ static int up_pm_prepare(struct pm_callback_s *cb, int domain,
  ****************************************************************************/
 
 #ifdef HAVE_SERIALDRIVER
-FAR uart_dev_t *stm32_serial_get_uart(int uart_num)
+uart_dev_t *stm32_serial_get_uart(int uart_num)
 {
   int uart_idx = uart_num - 1;
 

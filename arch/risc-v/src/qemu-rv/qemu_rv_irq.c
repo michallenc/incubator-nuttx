@@ -30,14 +30,16 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/irq.h>
-#include <arch/board/board.h>
+#include <nuttx/irq.h>
 
 #include "riscv_internal.h"
-#include "riscv_arch.h"
-
 #include "chip.h"
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+volatile uintptr_t *g_current_regs[CONFIG_SMP_NCPUS];
 
 /****************************************************************************
  * Public Functions
@@ -82,9 +84,9 @@ void up_irqinitialize(void)
 
   CURRENT_REGS = NULL;
 
-  /* Attach the ecall interrupt handler */
+  /* Attach the common interrupt handler */
 
-  irq_attach(RISCV_IRQ_ECALLM, riscv_swint, NULL);
+  riscv_exception_attach();
 
 #ifdef CONFIG_SMP
   /* Clear MSOFT for CPU0 */
@@ -116,25 +118,22 @@ void up_irqinitialize(void)
 void up_disable_irq(int irq)
 {
   int extirq;
-  uint32_t oldstat;
 
-  if (irq == RISCV_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_SOFT)
     {
-      /* Read mstatus & clear machine software interrupt enable in mie */
+      /* Read m/sstatus & clear machine software interrupt enable in m/sie */
 
-      asm volatile ("csrrc %0, mie, %1": "=r" (oldstat) : "r"(MIE_MSIE));
+      CLEAR_CSR(CSR_IE, IE_SIE);
     }
-  else if (irq == RISCV_IRQ_MTIMER)
+  else if (irq == RISCV_IRQ_TIMER)
     {
-      /* Read mstatus & clear machine timer interrupt enable in mie */
+      /* Read m/sstatus & clear timer interrupt enable in m/sie */
 
-      asm volatile("csrrc %0, mie, %1"
-                  : "=r"(oldstat)
-                  : "r"(MIE_MTIE));
+      CLEAR_CSR(CSR_IE, IE_TIE);
     }
-  else if (irq > RISCV_IRQ_MEXT)
+  else if (irq > RISCV_IRQ_EXT)
     {
-      extirq = irq - RISCV_IRQ_MEXT;
+      extirq = irq - RISCV_IRQ_EXT;
 
       /* Clear enable bit for the irq */
 
@@ -161,25 +160,22 @@ void up_disable_irq(int irq)
 void up_enable_irq(int irq)
 {
   int extirq;
-  uint32_t oldstat;
 
-  if (irq == RISCV_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_SOFT)
     {
-      /* Read mstatus & set machine software interrupt enable in mie */
+      /* Read m/sstatus & set machine software interrupt enable in m/sie */
 
-      asm volatile ("csrrs %0, mie, %1": "=r" (oldstat) : "r"(MIE_MSIE));
+      SET_CSR(CSR_IE, IE_SIE);
     }
-  else if (irq == RISCV_IRQ_MTIMER)
+  else if (irq == RISCV_IRQ_TIMER)
     {
-      /* Read mstatus & set machine timer interrupt enable in mie */
+      /* Read m/sstatus & set timer interrupt enable in m/sie */
 
-      asm volatile("csrrs %0, mie, %1"
-                  : "=r"(oldstat)
-                  : "r"(MIE_MTIE));
+      SET_CSR(CSR_IE, IE_TIE);
     }
-  else if (irq > RISCV_IRQ_MEXT)
+  else if (irq > RISCV_IRQ_EXT)
     {
-      extirq = irq - RISCV_IRQ_MEXT;
+      extirq = irq - RISCV_IRQ_EXT;
 
       /* Set enable bit for the irq */
 
@@ -197,36 +193,15 @@ void up_enable_irq(int irq)
 
 irqstate_t up_irq_enable(void)
 {
-  uint64_t oldstat;
+  irqstate_t oldstat;
 
-#if 1
-  /* Enable MEIE (machine external interrupt enable) */
+  /* Enable external interrupts (mie/sie) */
 
-  /* TODO: should move to up_enable_irq() */
+  SET_CSR(CSR_IE, IE_EIE);
 
-  asm volatile ("csrrs %0, mie, %1": "=r" (oldstat) : "r"(MIE_MEIE));
-#endif
+  /* Read and enable global interrupts (M/SIE) in m/sstatus */
 
-  /* Read mstatus & set machine interrupt enable (MIE) in mstatus */
+  oldstat = READ_AND_SET_CSR(CSR_STATUS, STATUS_IE);
 
-  asm volatile ("csrrs %0, mstatus, %1": "=r" (oldstat) : "r"(MSTATUS_MIE));
   return oldstat;
-}
-
-/****************************************************************************
- * Name: riscv_get_newintctx
- *
- * Description:
- *   Return initial mstatus when a task is created.
- *
- ****************************************************************************/
-
-uint32_t riscv_get_newintctx(void)
-{
-  /* Set machine previous privilege mode to machine mode.
-   * Also set machine previous interrupt enable
-   * Note: In qemu, FPU is always exist even if don't use F|D ISA extension
-   */
-
-  return (MSTATUS_MPPM | MSTATUS_MPIE | MSTATUS_FS_INIT);
 }

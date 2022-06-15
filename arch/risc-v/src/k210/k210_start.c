@@ -28,7 +28,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "k210_clockconfig.h"
 #include "k210_userspace.h"
 #include "k210.h"
@@ -59,13 +59,17 @@ uintptr_t g_idle_topstack = K210_IDLESTACK0_TOP;
  ****************************************************************************/
 
 /****************************************************************************
- * Name: k210_start
+ * Name: __k210_start
  ****************************************************************************/
 
 void __k210_start(uint32_t mhartid)
 {
   const uint32_t *src;
   uint32_t *dest;
+
+  /* Configure FPU */
+
+  riscv_fpuconfig();
 
   if (0 < mhartid)
     {

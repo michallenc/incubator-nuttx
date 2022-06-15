@@ -103,6 +103,13 @@
 #define INTSTACK_COLOR 0x1bad1dea
 #define HEAP_COLOR     'h'
 
+#define getreg8(a)     (*(volatile uint8_t *)(a))
+#define putreg8(v,a)   (*(volatile uint8_t *)(a) = (v))
+#define getreg16(a)    (*(volatile uint16_t *)(a))
+#define putreg16(v,a)  (*(volatile uint16_t *)(a) = (v))
+#define getreg32(a)    (*(volatile uint32_t *)(a))
+#define putreg32(v,a)  (*(volatile uint32_t *)(a) = (v))
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -123,19 +130,6 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-/* For the case of architectures with multiple CPUs, then there must be one
- * such value for each processor that can receive an interrupt.
- */
-
-EXTERN volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#define CURRENT_REGS (g_current_regs[up_cpu_index()])
 
 /* This is the beginning of heap as provided from up_head.S.
  * This is the first address in DRAM after the loaded
@@ -218,6 +212,11 @@ EXTERN uint32_t _eramfuncs;       /* Copy destination end address in RAM */
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* Atomic modification of registers */
+
+void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
+void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
+void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 /* Low level initialization provided by board-level logic *******************/
 
@@ -228,7 +227,6 @@ int  or1k_print_cpuinfo(void);
 
 void up_copyfullstate(uint32_t *dest, uint32_t *src);
 void up_decodeirq(uint32_t *regs);
-int  up_saveusercontext(uint32_t *saveregs);
 void up_fullcontextrestore(uint32_t *restoreregs) noreturn_function;
 void up_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
 
@@ -255,8 +253,8 @@ uint32_t *up_doirq(int irq, uint32_t *regs);
 
 /* Exception Handlers */
 
-int  up_hardfault(int irq, FAR void *context, FAR void *arg);
-int  up_memfault(int irq, FAR void *context, FAR void *arg);
+int  up_hardfault(int irq, void *context, void *arg);
+int  up_memfault(int irq, void *context, void *arg);
 
 /* Interrupt acknowledge and dispatch */
 
@@ -269,7 +267,6 @@ uint32_t *or1k_syscall(uint32_t *regs);
 /* Low level serial output **************************************************/
 
 void up_lowputc(char ch);
-void up_puts(const char *str);
 void up_lowputs(const char *str);
 
 #ifdef USE_SERIALDRIVER
@@ -278,10 +275,6 @@ void up_serialinit(void);
 
 #ifdef USE_EARLYSERIALINIT
 void up_earlyserialinit(void);
-#endif
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
 #endif
 
 /* DMA **********************************************************************/
@@ -305,10 +298,6 @@ void up_addregion(void);
 #else
 # define up_addregion()
 #endif
-
-/* Watchdog timer ***********************************************************/
-
-void up_wdtinit(void);
 
 /* Networking ***************************************************************/
 
@@ -340,7 +329,7 @@ void up_usbuninitialize(void);
 
 /* Debug ********************************************************************/
 #ifdef CONFIG_STACK_COLORATION
-void up_stack_color(FAR void *stackbase, size_t nbytes);
+void up_stack_color(void *stackbase, size_t nbytes);
 #endif
 
 #undef EXTERN

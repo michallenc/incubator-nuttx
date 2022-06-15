@@ -32,9 +32,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "up_arch.h"
 #include "up_internal.h"
-
 #include "group/group.h"
 
 /****************************************************************************
@@ -100,7 +98,7 @@ uint32_t *up_doirq(int irq, uint32_t *regs)
        * thread at the head of the ready-to-run list.
        */
 
-      (void)group_addrenv(NULL);
+      group_addrenv(NULL);
 #endif
     }
 #endif

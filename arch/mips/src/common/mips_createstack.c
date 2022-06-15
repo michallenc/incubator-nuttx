@@ -36,7 +36,6 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
 
 /****************************************************************************
@@ -80,7 +79,7 @@
  *
  ****************************************************************************/
 
-int up_create_stack(FAR struct tcb_s *tcb, size_t stack_size, uint8_t ttype)
+int up_create_stack(struct tcb_s *tcb, size_t stack_size, uint8_t ttype)
 {
 #ifdef CONFIG_TLS_ALIGNED
   /* The allocated stack size must not exceed the maximum possible for the

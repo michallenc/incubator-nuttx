@@ -41,7 +41,7 @@
 #include <arch/board/cxd56_imageproc.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -226,7 +226,7 @@ static void ip_semgive(sem_t * id)
   nxsem_post(id);
 }
 
-static int intr_handler_rot(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_rot(int irq, void *context, void *arg)
 {
   putreg32(1, ROT_INTR_CLEAR);
   putreg32(0, ROT_INTR_ENABLE);

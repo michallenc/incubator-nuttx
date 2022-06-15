@@ -89,7 +89,6 @@
 
 #ifndef __ASSEMBLY__
 
-extern volatile uint32_t *g_current_regs;
 extern uint32_t g_idle_topstack;
 
 /****************************************************************************
@@ -104,12 +103,6 @@ extern uint32_t g_idle_topstack;
 
 void minerva_board_initialize(void);
 
-/* Memory allocation ********************************************************/
-
-#if CONFIG_MM_REGIONS > 1
-void minerva_add_region(void);
-#endif
-
 /* Context switching ********************************************************/
 
 void minerva_copystate(uint32_t * dest, uint32_t * src);
@@ -121,19 +114,7 @@ uint32_t *minerva_doirq(int irq, uint32_t * regs);
 
 /* Software interrupts ******************************************************/
 
-int minerva_swint(int irq, FAR void *context, FAR void *arg);
-
-/* Rpmsg serial *************************************************************/
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#else
-#  define rpmsg_serialinit()
-#endif
-
-/* System timer *************************************************************/
-
-void minerva_timer_initialize(void);
+int minerva_swint(int irq, void *context, void *arg);
 
 /* Signal handling **********************************************************/
 

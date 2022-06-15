@@ -20,7 +20,7 @@
 
 include $(TOPDIR)/Make.defs
 
-CSRCS = stm32_boot.c stm32_bringup.c stm32_spi.c stm32_perfcount.c
+CSRCS = stm32_boot.c stm32_bringup.c stm32_spi.c
 
 ifeq ($(CONFIG_ARCH_LEDS),y)
 CSRCS += stm32_autoleds.c
@@ -129,10 +129,6 @@ endif
 
 ifeq ($(CONFIG_LCD_UG2864HSWEG01),y)
 CSRCS += stm32_ug2864hsweg01.c
-endif
-
-ifeq ($(CONFIG_TESTING_OSTEST),y)
-CSRCS += stm32_ostest.c
 endif
 
 ifeq ($(CONFIG_TIMER),y)

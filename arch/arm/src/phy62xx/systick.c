@@ -28,7 +28,7 @@
 #include "clock.h"
 #include "pwrmgr.h"
 #include "nvic.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "jump_function.h"
 #include <arch/irq.h>
 
@@ -36,7 +36,7 @@
  * Public Functions
  ****************************************************************************/
 
-static int systic_timerisr(int irq, uint32_t *regs, FAR void *arg)
+static int systic_timerisr(int irq, uint32_t *regs, void *arg)
 {
   /* Process timer interrupt */
 

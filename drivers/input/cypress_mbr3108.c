@@ -240,18 +240,12 @@ static int mbr3108_i2c_write(FAR struct mbr3108_dev_s *dev, uint8_t reg,
   struct i2c_msg_s msgv[2] =
   {
     {
-      .frequency = CONFIG_MBR3108_I2C_FREQUENCY,
-      .addr      = dev->addr,
-      .flags     = 0,
-      .buffer    = &reg,
-      .length    = 1
+      CONFIG_MBR3108_I2C_FREQUENCY,
+      dev->addr, 0, &reg, sizeof(reg)
     },
     {
-      .frequency = CONFIG_MBR3108_I2C_FREQUENCY,
-      .addr      = dev->addr,
-      .flags     = I2C_M_NOSTART,
-      .buffer    = (void *)buf,
-      .length    = buflen
+      CONFIG_MBR3108_I2C_FREQUENCY,
+      dev->addr, I2C_M_NOSTART, buf, buflen
     }
   };
 
@@ -294,18 +288,12 @@ static int mbr3108_i2c_read(FAR struct mbr3108_dev_s *dev, uint8_t reg,
   struct i2c_msg_s msgv[2] =
   {
     {
-      .frequency = CONFIG_MBR3108_I2C_FREQUENCY,
-      .addr      = dev->addr,
-      .flags     = 0,
-      .buffer    = &reg,
-      .length    = 1
+      CONFIG_MBR3108_I2C_FREQUENCY,
+      dev->addr, 0, &reg, sizeof(reg)
     },
     {
-      .frequency = CONFIG_MBR3108_I2C_FREQUENCY,
-      .addr      = dev->addr,
-      .flags     = I2C_M_READ,
-      .buffer    = buf,
-      .length    = buflen
+      CONFIG_MBR3108_I2C_FREQUENCY,
+      dev->addr, I2C_M_READ, buf, buflen
     }
   };
 
@@ -1004,7 +992,7 @@ static void mbr3108_poll_notify(FAR struct mbr3108_dev_s *priv)
       struct pollfd *fds = priv->fds[i];
       if (fds)
         {
-          mbr3108_dbg("Report events: %02x\n", fds->revents);
+          mbr3108_dbg("Report events: %08" PRIx32 "\n", fds->revents);
 
           fds->revents |= POLLIN;
           nxsem_post(fds->sem);

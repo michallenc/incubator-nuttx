@@ -35,14 +35,52 @@
 #include <nuttx/sched.h>
 #include <nuttx/addrenv.h>
 
-#include "signal/signal.h"
-#include "arm.h"
 #include "addrenv.h"
+#include "arm.h"
 #include "arm_internal.h"
+#include "group/group.h"
+#include "signal/signal.h"
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: dump_syscall
+ *
+ * Description:
+ *   Dump the syscall registers
+ *
+ ****************************************************************************/
+
+static void dump_syscall(const char *tag, uint32_t cmd, const uint32_t *regs)
+{
+  /* The SVCall software interrupt is called with R0 = system call command
+   * and R1..R7 =  variable number of arguments depending on the system call.
+   */
+
+#ifdef CONFIG_LIB_SYSCALL
+  if (cmd >= CONFIG_SYS_RESERVED)
+    {
+      svcinfo("SYSCALL %s: regs: %p cmd: %" PRId32 " name: %s\n", tag,
+              regs, cmd, g_funcnames[cmd - CONFIG_SYS_RESERVED]);
+    }
+  else
+#endif
+    {
+      svcinfo("SYSCALL %s: regs: %p cmd: %" PRId32 "\n", tag, regs, cmd);
+    }
+
+  svcinfo("  R0: %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32
+          " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 "\n",
+          regs[REG_R0],  regs[REG_R1],  regs[REG_R2],  regs[REG_R3],
+          regs[REG_R4],  regs[REG_R5],  regs[REG_R6],  regs[REG_R7]);
+  svcinfo("  R8: %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32
+          " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 "\n",
+          regs[REG_R8],  regs[REG_R9],  regs[REG_R10], regs[REG_R11],
+          regs[REG_R12], regs[REG_R13], regs[REG_R14], regs[REG_R15]);
+  svcinfo("CPSR: %08" PRIx32 "\n", regs[REG_CPSR]);
+}
 
 /****************************************************************************
  * Name: dispatch_syscall
@@ -104,10 +142,6 @@ static void dispatch_syscall(void)
 #endif
 
 /****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -132,7 +166,13 @@ uint32_t *arm_syscall(uint32_t *regs)
 
   /* Nested interrupts are not supported */
 
-  DEBUGASSERT(regs);
+  DEBUGASSERT(CURRENT_REGS == NULL);
+
+  /* Current regs non-zero indicates that we are processing an interrupt;
+   * CURRENT_REGS is also used to manage interrupt level context switches.
+   */
+
+  CURRENT_REGS = regs;
 
   /* The SYSCALL command is in R0 on entry.  Parameters follow in R1..R7 */
 
@@ -142,16 +182,7 @@ uint32_t *arm_syscall(uint32_t *regs)
    * and R1..R7 =  variable number of arguments depending on the system call.
    */
 
-  svcinfo("SYSCALL Entry: regs: %p cmd: %" PRId32 "\n", regs, cmd);
-  svcinfo("  R0: %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32
-          " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 "\n",
-          regs[REG_R0],  regs[REG_R1],  regs[REG_R2],  regs[REG_R3],
-          regs[REG_R4],  regs[REG_R5],  regs[REG_R6],  regs[REG_R7]);
-  svcinfo("  R8: %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32
-          " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 " %08" PRIx32 "\n",
-          regs[REG_R8],  regs[REG_R9],  regs[REG_R10], regs[REG_R11],
-          regs[REG_R12], regs[REG_R13], regs[REG_R14], regs[REG_R15]);
-  svcinfo("CPSR: %08" PRIx32 "\n", regs[REG_CPSR]);
+  dump_syscall("Entry", cmd, regs);
 
   /* Handle the SVCall according to the command in R0 */
 
@@ -172,7 +203,7 @@ uint32_t *arm_syscall(uint32_t *regs)
 #ifdef CONFIG_LIB_SYSCALL
       case SYS_syscall_return:
         {
-          FAR struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = nxsched_self();
           int index = (int)rtcb->xcp.nsyscalls - 1;
 
           /* Make sure that there is a saved SYSCALL return address. */
@@ -215,7 +246,7 @@ uint32_t *arm_syscall(uint32_t *regs)
            */
 
           rtcb->flags          &= ~TCB_FLAG_SYSCALL;
-          (void)nxsig_unmask_pendingsignal();
+          nxsig_unmask_pendingsignal();
         }
         break;
 #endif
@@ -238,15 +269,15 @@ uint32_t *arm_syscall(uint32_t *regs)
            * set will determine the restored context.
            */
 
-          arm_restorefpu((uint32_t *)regs[REG_R1]);
-          regs = (uint32_t *)regs[REG_R1];
-          DEBUGASSERT(regs);
+          CURRENT_REGS = (uint32_t *)regs[REG_R1];
+          DEBUGASSERT(CURRENT_REGS);
         }
         break;
 
       /* R0=SYS_switch_context:  This a switch context command:
        *
-       *   void arm_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
+       *   void arm_switchcontext(uint32_t **saveregs,
+       *                          uint32_t *restoreregs);
        *
        * At this point, the following values are saved in context:
        *
@@ -263,19 +294,14 @@ uint32_t *arm_syscall(uint32_t *regs)
       case SYS_switch_context:
         {
           DEBUGASSERT(regs[REG_R1] != 0 && regs[REG_R2] != 0);
-#if defined(CONFIG_ARCH_FPU)
-          arm_copyarmstate((uint32_t *)regs[REG_R1], regs);
-          arm_restorefpu((uint32_t *)regs[REG_R2]);
-#else
-          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
-#endif
-          regs = (uint32_t *)regs[REG_R2];
+          *(uint32_t **)regs[REG_R1] = regs;
+          CURRENT_REGS = (uint32_t *)regs[REG_R2];
         }
         break;
 
       /* R0=SYS_task_start:  This a user task start
        *
-       *   void up_task_start(main_t taskentry, int argc, FAR char *argv[])
+       *   void up_task_start(main_t taskentry, int argc, char *argv[])
        *     noreturn_function;
        *
        * At this point, the following values are saved in context:
@@ -346,7 +372,7 @@ uint32_t *arm_syscall(uint32_t *regs)
       /* R0=SYS_signal_handler:  This a user signal handler callback
        *
        * void signal_handler(_sa_sigaction_t sighand, int signo,
-       *                     FAR siginfo_t *info, FAR void *ucontext);
+       *                     siginfo_t *info, void *ucontext);
        *
        * At this point, the following values are saved in context:
        *
@@ -359,7 +385,7 @@ uint32_t *arm_syscall(uint32_t *regs)
 
       case SYS_signal_handler:
         {
-          FAR struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = nxsched_self();
 
           /* Remember the caller's return address */
 
@@ -396,7 +422,7 @@ uint32_t *arm_syscall(uint32_t *regs)
               DEBUGASSERT(rtcb->xcp.kstkptr == NULL &&
                           rtcb->xcp.ustkptr != NULL);
 
-              rtcb->xcp.kstkptr = (FAR uint32_t *)regs[REG_SP];
+              rtcb->xcp.kstkptr = (uint32_t *)regs[REG_SP];
               regs[REG_SP]      = (uint32_t)rtcb->xcp.ustkptr;
             }
 #endif
@@ -416,7 +442,7 @@ uint32_t *arm_syscall(uint32_t *regs)
 
       case SYS_signal_handler_return:
         {
-          FAR struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = nxsched_self();
 
           /* Set up to return to the kernel-mode signal dispatching logic. */
 
@@ -424,7 +450,7 @@ uint32_t *arm_syscall(uint32_t *regs)
 
           regs[REG_PC]         = rtcb->xcp.sigreturn;
           cpsr                 = regs[REG_CPSR] & ~PSR_MODE_MASK;
-          regs[REG_CPSR]       = cpsr | PSR_MODE_SVC;
+          regs[REG_CPSR]       = cpsr | PSR_MODE_SYS;
           rtcb->xcp.sigreturn  = 0;
 
 #ifdef CONFIG_ARCH_KERNEL_STACK
@@ -454,7 +480,7 @@ uint32_t *arm_syscall(uint32_t *regs)
       default:
         {
 #ifdef CONFIG_LIB_SYSCALL
-          FAR struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = nxsched_self();
           int index = rtcb->xcp.nsyscalls;
 
           /* Verify that the SYS call number is within range */
@@ -477,7 +503,7 @@ uint32_t *arm_syscall(uint32_t *regs)
           regs[REG_PC]   = (uint32_t)dispatch_syscall;
 #ifdef CONFIG_BUILD_KERNEL
           cpsr           = regs[REG_CPSR] & ~PSR_MODE_MASK;
-          regs[REG_CPSR] = cpsr | PSR_MODE_SVC;
+          regs[REG_CPSR] = cpsr | PSR_MODE_SYS;
 #endif
           /* Offset R0 to account for the reserved values */
 
@@ -494,7 +520,7 @@ uint32_t *arm_syscall(uint32_t *regs)
 
           if (index == 0 && rtcb->xcp.kstack != NULL)
             {
-              rtcb->xcp.ustkptr = (FAR uint32_t *)regs[REG_SP];
+              rtcb->xcp.ustkptr = (uint32_t *)regs[REG_SP];
               regs[REG_SP]      = (uint32_t)rtcb->xcp.kstack +
                                   ARCH_KERNEL_STACKSIZE;
             }
@@ -510,18 +536,36 @@ uint32_t *arm_syscall(uint32_t *regs)
         break;
     }
 
+#ifdef CONFIG_ARCH_ADDRENV
+  /* Check for a context switch.  If a context switch occurred, then
+   * CURRENT_REGS will have a different value than it did on entry.  If an
+   * interrupt level context switch has occurred, then establish the correct
+   * address environment before returning from the interrupt.
+   */
+
+  if (regs != CURRENT_REGS)
+    {
+      /* Make sure that the address environment for the previously
+       * running task is closed down gracefully (data caches dump,
+       * MMU flushed) and set up the address environment for the new
+       * thread at the head of the ready-to-run list.
+       */
+
+      group_addrenv(NULL);
+    }
+#endif
+
+  regs = (uint32_t *)CURRENT_REGS;
+
   /* Report what happened */
 
-  svcinfo("SYSCALL Exit: regs: %p\n", regs);
-  svcinfo("  R0: %" PRIx32 " %" PRIx32 " %" PRIx32 " %" PRIx32
-          " %" PRIx32 " %" PRIx32 " %" PRIx32 " %" PRIx32 "\n",
-          regs[REG_R0],  regs[REG_R1],  regs[REG_R2],  regs[REG_R3],
-          regs[REG_R4],  regs[REG_R5],  regs[REG_R6],  regs[REG_R7]);
-  svcinfo("  R8: %" PRIx32 " %" PRIx32 " %" PRIx32 " %" PRIx32
-          " %" PRIx32 " %" PRIx32 " %" PRIx32 " %" PRIx32 "\n",
-          regs[REG_R8],  regs[REG_R9],  regs[REG_R10], regs[REG_R11],
-          regs[REG_R12], regs[REG_R13], regs[REG_R14], regs[REG_R15]);
-  svcinfo("CPSR: %08" PRIx32 "\n", regs[REG_CPSR]);
+  dump_syscall("Exit", cmd, regs);
+
+  /* Set CURRENT_REGS to NULL to indicate that we are no longer in an
+   * interrupt handler.
+   */
+
+  CURRENT_REGS = NULL;
 
   /* Return the last value of curent_regs.  This supports context switches
    * on return from the exception.  That capability is only used with the

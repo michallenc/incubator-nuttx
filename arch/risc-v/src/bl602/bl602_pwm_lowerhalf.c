@@ -33,9 +33,7 @@
 
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "bl602_gpio.h"
 #include "bl602_pwm_lowerhalf.h"
 #include "hardware/bl602_pwm.h"
@@ -364,8 +362,8 @@ static int bl602_pwm_start(struct pwm_lowerhalf_s *dev,
                            const struct pwm_info_s *info)
 {
   struct bl602_pwm_s *priv = (struct bl602_pwm_s *)dev;
-  int                     ret  = OK;
-  int                     i;
+  int                 ret  = OK;
+  int                 i;
 
   UNUSED(i);
 

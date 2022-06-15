@@ -43,7 +43,7 @@
 #include "mpfs_spi.h"
 #include "hardware/mpfs_spi.h"
 #include "hardware/mpfs_sysreg.h"
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -681,17 +681,7 @@ static int mpfs_spi_hwfeatures(struct spi_dev_s *dev,
 
 static int mpfs_spi_sem_waitdone(struct mpfs_spi_priv_s *priv)
 {
-  struct timespec abstime;
-  int ret;
-
-  clock_gettime(CLOCK_REALTIME, &abstime);
-
-  abstime.tv_sec += 10;
-  abstime.tv_nsec += 0;
-
-  ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
-
-  return ret;
+  return nxsem_tickwait_uninterruptible(&priv->sem_isr, SEC2TICK(10));
 }
 
 /****************************************************************************

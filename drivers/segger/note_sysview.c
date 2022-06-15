@@ -40,12 +40,16 @@
 
 struct sysview_s
 {
-  unsigned int              irq[CONFIG_SMP_NCPUS];
+  unsigned int                 irq[CONFIG_SMP_NCPUS];
 #ifdef CONFIG_SCHED_INSTRUMENTATION_FILTER
-  struct note_filter_mode_s mode;
+  struct note_filter_mode_s    mode;
 #endif
 #ifdef CONFIG_SCHED_INSTRUMENTATION_IRQHANDLER
-  struct note_filter_irq_s  irq_mask;
+  struct note_filter_irq_s     irq_mask;
+#endif
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SYSCALL
+  struct note_filter_syscall_s syscall_mask;
+  struct note_filter_syscall_s syscall_marker;
 #endif
 };
 
@@ -79,7 +83,11 @@ static void sysview_send_taskinfo(FAR struct tcb_s *tcb)
   SEGGER_SYSVIEW_TASKINFO info;
 
   info.TaskID     = tcb->pid;
+#if CONFIG_TASK_NAME_SIZE > 0
   info.sName      = tcb->name;
+#else
+  info.sName      = "<noname>";
+#endif
   info.Prio       = tcb->sched_priority;
   info.StackBase  = (uintptr_t)tcb->stack_base_ptr;
   info.StackSize  = tcb->adj_stack_size;
@@ -155,11 +163,24 @@ static bool sysview_isenabled(void)
     }
 #endif
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SYSCALL
+  /* Use the Syscall "0" to identify whether the syscall is enabled,
+   * if the host tool is closed abnormally, use this bit to clear
+   * the active set.
+   */
+
+  if (!enable &&
+      NOTE_FILTER_SYSCALLMASK_ISSET(0, &g_sysview.syscall_marker))
+    {
+      NOTE_FILTER_SYSCALLMASK_ZERO(&g_sysview.syscall_marker);
+    }
+#endif
+
   return enable;
 }
 
 /****************************************************************************
- * Name: sysview_isenabled_irqhandler
+ * Name: sysview_isenabled_irq
  *
  * Description:
  *   Check whether the interrupt handler instrumentation is enabled.
@@ -188,6 +209,44 @@ static bool sysview_isenabled_irq(int irq, bool enter)
 
   if ((g_sysview.mode.flag & NOTE_FILTER_MODE_FLAG_IRQ) == 0 ||
       NOTE_FILTER_IRQMASK_ISSET(irq, &g_sysview.irq_mask))
+    {
+      return false;
+    }
+#endif
+
+  return true;
+}
+#endif
+
+/****************************************************************************
+ * Name: sysview_isenabled_syscall
+ *
+ * Description:
+ *   Check whether the syscall instrumentation is enabled.
+ *
+ * Input Parameters:
+ *   nr - syscall number
+ *
+ * Returned Value:
+ *   True is returned if the instrumentation is enabled.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SYSCALL
+static inline int sysview_isenabled_syscall(int nr)
+{
+#ifdef CONFIG_SCHED_INSTRUMENTATION_FILTER
+  if (!sysview_isenabled())
+    {
+      return false;
+    }
+
+  /* If the syscall trace is disabled or the syscall number is masked,
+   * do nothing.
+   */
+
+  if ((g_sysview.mode.flag & NOTE_FILTER_MODE_FLAG_SYSCALL) == 0 ||
+      NOTE_FILTER_SYSCALLMASK_ISSET(nr, &g_sysview.syscall_mask))
     {
       return false;
     }
@@ -310,6 +369,58 @@ void sched_note_irqhandler(int irq, FAR void *handler, bool enter)
 }
 #endif
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SYSCALL
+void sched_note_syscall_enter(int nr, int argc, ...)
+{
+  nr -= CONFIG_SYS_RESERVED;
+
+  if (sysview_isenabled_syscall(nr) == 0)
+    {
+      return;
+    }
+
+  /* Set the name marker if the current syscall nr is not active */
+
+  if (NOTE_FILTER_SYSCALLMASK_ISSET(nr, &g_sysview.syscall_marker) == 0)
+    {
+      /* Set the name marker */
+
+      SEGGER_SYSVIEW_NameMarker(nr, g_funcnames[nr]);
+
+      /* Mark the syscall active */
+
+      NOTE_FILTER_SYSCALLMASK_SET(nr, &g_sysview.syscall_marker);
+
+      /* Use the Syscall "0" to identify whether the syscall is enabled,
+       * if the host tool is closed abnormally, use this bit to clear
+       * the active set.
+       */
+
+      if (NOTE_FILTER_SYSCALLMASK_ISSET(0, &g_sysview.syscall_marker) == 0)
+        {
+          NOTE_FILTER_SYSCALLMASK_SET(0, &g_sysview.syscall_marker);
+        }
+    }
+
+  SEGGER_SYSVIEW_MarkStart(nr);
+}
+
+void sched_note_syscall_leave(int nr, uintptr_t result)
+{
+  nr -= CONFIG_SYS_RESERVED;
+
+  if (sysview_isenabled_syscall(nr) == 0)
+    {
+      return;
+    }
+
+  if (NOTE_FILTER_SYSCALLMASK_ISSET(nr, &g_sysview.syscall_marker) != 0)
+    {
+      SEGGER_SYSVIEW_MarkStop(nr);
+    }
+}
+#endif
+
 /****************************************************************************
  * Name: sysview_get_interrupt_id
  *
@@ -367,7 +478,9 @@ int sysview_initialize(void)
   SEGGER_SYSVIEW_SetRAMBase(CONFIG_SEGGER_SYSVIEW_RAM_BASE);
 #endif
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_FILTER
   if ((g_sysview.mode.flag & NOTE_FILTER_MODE_FLAG_ENABLE) != 0)
+#endif
     {
       SEGGER_SYSVIEW_Start();
     }
@@ -490,4 +603,50 @@ void sched_note_filter_irq(struct note_filter_irq_s *oldf,
 }
 #endif
 
+/****************************************************************************
+ * Name: sched_note_filter_syscall
+ *
+ * Description:
+ *   Set and get syscall filter setting
+ *   (Same as NOTECTL_GETSYSCALLFILTER / NOTECTL_SETSYSCALLFILTER ioctls)
+ *
+ * Input Parameters:
+ *   oldf - A writable pointer to struct note_filter_syscall_s to get
+ *          current syscall filter setting
+ *          If 0, no data is written.
+ *   newf - A read-only pointer to struct note_filter_syscall_s of the
+ *          new syscall filter setting
+ *          If 0, the setting is not updated.
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SYSCALL
+void sched_note_filter_syscall(struct note_filter_syscall_s *oldf,
+                               struct note_filter_syscall_s *newf)
+{
+  irqstate_t flags;
+
+  flags = spin_lock_irqsave(NULL);
+
+  if (oldf != NULL)
+    {
+      /* Return the current filter setting */
+
+      *oldf = g_sysview.syscall_mask;
+    }
+
+  if (newf != NULL)
+    {
+      /* Replace the syscall filter mask by the provided setting */
+
+      g_sysview.syscall_mask = *newf;
+    }
+
+  spin_unlock_irqrestore(NULL, flags);
+}
 #endif
+
+#endif /* CONFIG_SCHED_INSTRUMENTATION_FILTER */

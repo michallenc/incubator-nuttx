@@ -32,9 +32,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "start.h"
 #include "clock.h"
 #include "log.h"
@@ -85,7 +83,7 @@ const uintptr_t g_idle_topstack = IDLE_STACK;
  ****************************************************************************/
 
 /****************************************************************************
- * Name: _start
+ * Name: c_start
  *
  * Description:
  *   This is the reset entry point.

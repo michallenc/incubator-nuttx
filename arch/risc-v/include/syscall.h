@@ -31,6 +31,8 @@
 
 #include <nuttx/config.h>
 
+#include <arch/arch.h>
+
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #endif
@@ -45,7 +47,7 @@
 
 /* This logic uses three system calls {0,1,2} for context switching and one
  * for the syscall return.  So a minimum of four syscall values must be
- * reserved.  If CONFIG_BUILD_PROTECTED is defined, then four more syscall
+ * reserved.  If CONFIG_BUILD_FLAT isn't defined, then four more syscall
  * values must be reserved.
  */
 
@@ -67,14 +69,14 @@
 
 /* SYS call 1:
  *
- * void riscv_fullcontextrestore(uint32_t *restoreregs) noreturn_function;
+ * void riscv_fullcontextrestore(uintptr_t *restoreregs) noreturn_function;
  */
 
 #define SYS_restore_context       (1)
 
 /* SYS call 2:
  *
- * void riscv_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
+ * void riscv_switchcontext(uintptr_t **saveregs, uintptr_t *restoreregs);
  */
 
 #define SYS_switch_context        (2)
@@ -122,51 +124,6 @@
 #define SYS_signal_handler_return (7)
 #endif /* !CONFIG_BUILD_FLAT */
 
-/* sys_call macros **********************************************************/
-
-#ifndef __ASSEMBLY__
-
-/* Context switching system calls *******************************************/
-
-/* SYS call 0:
- *
- * int riscv_saveusercontext(uint64_t *saveregs);
- *
- * Return:
- * 0: Normal Return
- * 1: Context Switch Return
- */
-
-#define riscv_saveusercontext(saveregs) \
-  (int)sys_call1(SYS_save_context, (uintptr_t)saveregs)
-
-/* SYS call 1:
- *
- * void riscv_fullcontextrestore(uint32_t *restoreregs) noreturn_function;
- */
-
-#define riscv_fullcontextrestore(restoreregs) \
-  sys_call1(SYS_restore_context, (uintptr_t)restoreregs)
-
-/* SYS call 2:
- *
- * void riscv_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
- */
-
-#define riscv_switchcontext(saveregs, restoreregs) \
-  sys_call2(SYS_switch_context, (uintptr_t)saveregs, (uintptr_t)restoreregs)
-
-#ifdef CONFIG_BUILD_KERNEL
-/* SYS call 3:
- *
- * void riscv_syscall_return(void);
- */
-
-#define riscv_syscall_return() sys_call0(SYS_syscall_return)
-
-#endif
-#endif /* __ASSEMBLY__ */
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -193,6 +150,22 @@ extern "C"
 #define EXTERN extern
 #endif
 
+long smh_call(unsigned int nbr, void *parm);
+
+#if defined(CONFIG_ARCH_USE_S_MODE) && defined(__KERNEL__)
+uintptr_t sys_call0(unsigned int nbr);
+uintptr_t sys_call1(unsigned int nbr, uintptr_t parm1);
+uintptr_t sys_call2(unsigned int nbr, uintptr_t parm1, uintptr_t parm2);
+uintptr_t sys_call3(unsigned int nbr, uintptr_t parm1, uintptr_t parm2,
+                    uintptr_t parm3);
+uintptr_t sys_call4(unsigned int nbr, uintptr_t parm1, uintptr_t parm2,
+                    uintptr_t parm3, uintptr_t parm4);
+uintptr_t sys_call5(unsigned int nbr, uintptr_t parm1, uintptr_t parm2,
+                    uintptr_t parm3, uintptr_t parm4, uintptr_t parm5);
+uintptr_t sys_call6(unsigned int nbr, uintptr_t parm1, uintptr_t parm2,
+                    uintptr_t parm3, uintptr_t parm4, uintptr_t parm5,
+                    uintptr_t parm6);
+#else
 /****************************************************************************
  * Name: sys_call0
  *
@@ -390,6 +363,7 @@ static inline uintptr_t sys_call6(unsigned int nbr, uintptr_t parm1,
 
   return r0;
 }
+#endif
 
 #undef EXTERN
 #ifdef __cplusplus

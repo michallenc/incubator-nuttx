@@ -153,15 +153,6 @@ void up_reprioritize_rtr(struct tcb_s *tcb, uint8_t priority)
             {
               struct tcb_s *nexttcb = this_task();
 
-#ifdef CONFIG_ARCH_ADDRENV
-              /* Make sure that the address environment for the previously
-               * running task is closed down gracefully (data caches dump,
-               * MMU flushed) and set up the address environment for the new
-               * thread at the head of the ready-to-run list.
-               */
-
-              group_addrenv(nexttcb);
-#endif
               /* Update scheduler parameters */
 
               nxsched_resume_scheduler(nexttcb);
@@ -170,7 +161,7 @@ void up_reprioritize_rtr(struct tcb_s *tcb, uint8_t priority)
                * ready to run list.
                */
 
-              arm_switchcontext(rtcb->xcp.regs, nexttcb->xcp.regs);
+              arm_switchcontext(&rtcb->xcp.regs, nexttcb->xcp.regs);
 
               /* arm_switchcontext forces a context switch to the task at the
                * head of the ready-to-run list.  It does not 'return' in the

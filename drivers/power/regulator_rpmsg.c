@@ -153,7 +153,7 @@ static int regulator_rpmsg_is_enabled(FAR struct regulator_dev_s *rdev);
  * Private Data
  ****************************************************************************/
 
-static mutex_t g_regulator_rpmsg_lock          =  MUTEX_INITIALIZER;
+static mutex_t g_regulator_rpmsg_lock          =  NXMUTEX_INITIALIZER;
 static struct list_node g_regulator_rpmsg_priv =
           LIST_INITIAL_VALUE(g_regulator_rpmsg_priv);
 
@@ -327,9 +327,10 @@ static void regulator_rpmsg_server_unbind(FAR struct rpmsg_endpoint *ept)
 {
   FAR struct regulator_rpmsg_server_s *priv = ept->priv;
   FAR struct regulator_rpmsg_s *reg;
+  FAR struct regulator_rpmsg_s *tmp;
 
-  list_for_every_entry(&priv->regulator_list, reg,
-                       struct regulator_rpmsg_s, node)
+  list_for_every_entry_safe(&priv->regulator_list, reg, tmp,
+                            struct regulator_rpmsg_s, node)
     {
       while (regulator_is_enabled(reg->regulator))
         {
