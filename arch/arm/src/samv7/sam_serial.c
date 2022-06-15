@@ -47,8 +47,10 @@
 #include "arm_internal.h"
 #include "sam_config.h"
 
+#include "hardware/sam_pinmap.h"
 #include "hardware/sam_uart.h"
 #include "sam_xdmac.h"
+#include "sam_gpio.h"
 #include "sam_periphclks.h"
 #include "sam_serial.h"
 
@@ -393,6 +395,7 @@ struct sam_dev_s
 #endif
 
   bool     has_rxdma;           /* True if RX DMA is enabled */
+  bool     has_rs485;           /* True if RS-485 mode is enabled */
 
   /* RX DMA state */
 
@@ -556,6 +559,7 @@ static struct sam_dev_s g_uart0priv =
   .bits           = CONFIG_UART0_BITS,
   .stopbits2      = CONFIG_UART0_2STOP,
   .has_rxdma      = false,
+  .has_rs485      = false,
 };
 
 static uart_dev_t g_uart0port =
@@ -588,6 +592,7 @@ static struct sam_dev_s g_uart1priv =
   .bits           = CONFIG_UART1_BITS,
   .stopbits2      = CONFIG_UART1_2STOP,
   .has_rxdma      = false,
+  .has_rs485      = false,
 };
 
 static uart_dev_t g_uart1port =
@@ -620,6 +625,7 @@ static struct sam_dev_s g_uart2priv =
   .bits           = CONFIG_UART2_BITS,
   .stopbits2      = CONFIG_UART2_2STOP,
   .has_rxdma      = false,
+  .has_rs485      = false,
 };
 
 static uart_dev_t g_uart2port =
@@ -652,6 +658,7 @@ static struct sam_dev_s g_uart3priv =
   .bits           = CONFIG_UART3_BITS,
   .stopbits2      = CONFIG_UART3_2STOP,
   .has_rxdma      = false,
+  .has_rs485      = false,
 };
 
 static uart_dev_t g_uart3port =
@@ -684,6 +691,7 @@ static struct sam_dev_s g_uart4priv =
   .bits           = CONFIG_UART4_BITS,
   .stopbits2      = CONFIG_UART4_2STOP,
   .has_rxdma      = false,
+  .has_rs485      = false,
 };
 
 static uart_dev_t g_uart4port =
@@ -723,6 +731,11 @@ static struct sam_dev_s g_usart0priv =
   .has_rxdma      = true,
 #else
   .has_rxdma      = false,
+#endif
+#ifdef CONFIG_SAMV7_USART0_RS485MODE
+  .has_rs485      = true,
+#else
+  .has_rs485      = false,
 #endif
 };
 
@@ -769,6 +782,11 @@ static struct sam_dev_s g_usart1priv =
 #else
   .has_rxdma      = false,
 #endif
+#ifdef CONFIG_SAMV7_USART1_RS485MODE
+  .has_rs485      = true,
+#else
+  .has_rs485      = false,
+#endif
 };
 
 static uart_dev_t g_usart1port =
@@ -813,6 +831,11 @@ static struct sam_dev_s g_usart2priv =
   .has_rxdma      = true,
 #else
   .has_rxdma      = false,
+#endif
+#ifdef CONFIG_SAMV7_USART2_RS485MODE
+  .has_rs485      = true,
+#else
+  .has_rs485      = false,
 #endif
 };
 
@@ -1082,6 +1105,15 @@ static int sam_setup(struct uart_dev_s *dev)
   /* Enable receiver & transmitter */
 
   sam_serialout(priv, SAM_UART_CR_OFFSET, (UART_CR_RXEN | UART_CR_TXEN));
+
+#ifdef SERIAL_HAVE_RS485
+  if (priv->has_rs485)
+    {
+      regval = sam_serialin(priv, SAM_UART_MR_OFFSET);
+      regval |= UART_MR_MODE_RS485;
+      sam_serialout(priv, SAM_UART_MR_OFFSET, regval);
+    }
+#endif
 #endif
 
   return OK;

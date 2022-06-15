@@ -246,6 +246,9 @@ void sam_lowsetup(void)
   uint32_t regval;
 #endif
 
+  //printf("in lowsetup\n");
+  //DEBUGASSERT(true);
+
   /* Enable clocking for all selected UART/USARTs */
 
 #ifdef CONFIG_SAMV7_UART0
@@ -306,7 +309,7 @@ void sam_lowsetup(void)
 #ifdef CONFIG_USART0_OFLOWCONTROL
   sam_configgpio(GPIO_USART0_CTS);
 #endif
-#ifdef CONFIG_USART0_IFLOWCONTROL
+#if defined (CONFIG_USART0_IFLOWCONTROL) || (CONFIG_SAMV7_USART0_RS485MODE)
   sam_configgpio(GPIO_USART0_RTS);
 #endif
 #endif
@@ -317,7 +320,7 @@ void sam_lowsetup(void)
 #  ifdef CONFIG_USART1_OFLOWCONTROL
   sam_configgpio(GPIO_USART1_CTS);
 #  endif
-#  ifdef CONFIG_USART1_IFLOWCONTROL
+#  if defined (CONFIG_USART1_IFLOWCONTROL) || (CONFIG_SAMV7_USART1_RS485MODE)
   sam_configgpio(GPIO_USART1_RTS);
 #  endif
 
@@ -342,7 +345,7 @@ void sam_lowsetup(void)
 #ifdef CONFIG_USART2_OFLOWCONTROL
   sam_configgpio(GPIO_USART2_CTS);
 #endif
-#ifdef CONFIG_USART2_IFLOWCONTROL
+#if defined (CONFIG_USART2_IFLOWCONTROL) || (CONFIG_SAMV7_USART2_RS485MODE)
   sam_configgpio(GPIO_USART2_RTS);
 #endif
 #endif

@@ -35,6 +35,14 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* Is RS-485 used? */
+
+#undef SERIAL_HAVE_RS485
+#if defined(CONFIG_SAMV7_USART0_RS485MODE) || defined(CONFIG_SAMV7_USART1_RS485MODE) || \
+    defined(CONFIG_SAMV7_USART2_RS485MODE)
+#  define SERIAL_HAVE_RS485 1
+#endif
+
 /* Is RX DMA used on the console UART? */
 
 #undef SERIAL_HAVE_CONSOLE_RXDMA
