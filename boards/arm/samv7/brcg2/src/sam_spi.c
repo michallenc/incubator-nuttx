@@ -34,7 +34,7 @@
 #include <arch/board/board.h>
 #include <nuttx/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "sam_gpio.h"
 #include "sam_qspi_spi.h"
