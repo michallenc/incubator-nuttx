@@ -241,11 +241,6 @@
 #define GPIO_VBUSON (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                      GPIO_PORT_PIOA | GPIO_PIN22)       /* PA_22 */
 
-/* ADM2483 driver */
-
-#define GPIO_ADM2483_EN (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
-                         GPIO_PORT_PIOD | GPIO_PIN18)       /* PD_18 */
-
 /* ADDR0-7 pins */
 
 #define BOARD_NGPIOIN     8         /* Amount of GPIO Input pins */
@@ -331,16 +326,14 @@ int sam_bringup(void);
 #endif
 
 /****************************************************************************
- * Name:  sam_adm2483_enable
+ * Name:  sam_adm2483_init
  *
  * Description:
  *   Called from sam_bringup(), enables adm2483 driver.
  *
  ****************************************************************************/
 
-#ifdef CONFIG_BRCG2_ADM2483_USART
-void sam_adm2483_enable(void);
-#endif
+void sam_adm2483_init(void);
 
 /****************************************************************************
  * Name: sam_spidev_initialize

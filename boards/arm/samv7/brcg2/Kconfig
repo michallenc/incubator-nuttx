@@ -5,12 +5,6 @@
 
 if ARCH_BOARD_SAME70_BRCG2
 
-config BRCG2_ADM2483_USART
-	bool "ADM2483 Transciever support"
-	default y
-	---help---
-	  Enables output from ADM2483 Transciever (USART to RS-485).
-
 config BRCG2_FLASH
 	bool "MTD driver for external 64 Mbyte W25Q512JV FLASH on QSPI"
 	default n

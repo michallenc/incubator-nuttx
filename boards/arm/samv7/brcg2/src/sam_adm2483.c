@@ -23,6 +23,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <arch/board/board.h>
 
 #include <sys/types.h>
 #include <stdint.h>
@@ -32,8 +33,6 @@
 #include "arm_internal.h"
 #include "sam_gpio.h"
 #include "brcg2.h"
-
-#ifdef CONFIG_BRCG2_ADM2483_USART
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -51,16 +50,14 @@
  * Name:  sam_adm2483_enable
  *
  * Description:
- *   Called from sam_bringup(), enables adm2483 driver.
+ *   Called from sam_bringup(), init USART2 RTS pin to ADM2483 transciever.
  *
  ****************************************************************************/
 
-void sam_adm2483_enable(void)
+void sam_adm2483_init(void)
 {
   /* Set on the DE pin (PD_18) and enable the driver */
 
-  sam_configgpio(GPIO_ADM2483_EN);
-  sam_gpiowrite(GPIO_ADM2483_EN, 1);
+  sam_configgpio(GPIO_USART2_RS485_DIR);
+  sam_gpiowrite(GPIO_USART2_RS485_DIR, 0);
 }
-
-#endif /* CONFIG_BRCG2_ADM2483_USART */

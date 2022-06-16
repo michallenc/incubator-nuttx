@@ -239,9 +239,7 @@ int sam_bringup(void)
 #endif /* defined(CONFIG_BCH) */
 #endif
 
-#ifdef CONFIG_BRCG2_ADM2483_USART
-  sam_adm2483_enable();
-#endif 
+  sam_adm2483_init();
 
 #ifdef CONFIG_SAMV7_MCAN
   /* Initialize CAN and register the CAN driver. */
