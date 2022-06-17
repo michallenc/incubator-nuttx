@@ -737,7 +737,7 @@ static struct sam_dev_s g_usart0priv =
 #endif
 #ifdef CONFIG_SAMV7_USART0_RS485MODE
   .has_rs485      = true,
-  .rs485_dir_gpio = GPIO_USART0_RS485_DIR,
+  .rs485_dir_gpio = GPIO_USART0_RTS,
 #else
   .has_rs485      = false,
 #endif
@@ -788,7 +788,7 @@ static struct sam_dev_s g_usart1priv =
 #endif
 #ifdef CONFIG_SAMV7_USART1_RS485MODE
   .has_rs485      = true,
-  .rs485_dir_gpio = GPIO_USART1_RS485_DIR,
+  .rs485_dir_gpio = GPIO_USART1_RTS,
 #else
   .has_rs485      = false,
 #endif
@@ -839,7 +839,7 @@ static struct sam_dev_s g_usart2priv =
 #endif
 #ifdef CONFIG_SAMV7_USART2_RS485MODE
   .has_rs485      = true,
-  .rs485_dir_gpio = GPIO_USART2_RS485_DIR,
+  .rs485_dir_gpio = GPIO_USART2_RTS,
 #else
   .has_rs485      = false,
 #endif
@@ -1115,11 +1115,11 @@ static int sam_setup(struct uart_dev_s *dev)
 #ifdef SERIAL_HAVE_RS485
   if (priv->has_rs485)
     {
-      /*regval = sam_serialin(priv, SAM_UART_MR_OFFSET);
-      regval |= UART_MR_MODE_RS485;
-      sam_serialout(priv, SAM_UART_MR_OFFSET, regval);*/
       sam_configgpio(priv->rs485_dir_gpio);
-      sam_gpiowrite(priv->rs485_dir_gpio, 0);
+
+      regval = sam_serialin(priv, SAM_UART_MR_OFFSET);
+      regval |= UART_MR_MODE_RS485;
+      sam_serialout(priv, SAM_UART_MR_OFFSET, regval);
     }
 #endif
 #endif
@@ -1222,12 +1222,29 @@ static int sam_dma_setup(struct uart_dev_s *dev)
 static void sam_shutdown(struct uart_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
+  uint32_t regval;
 
   /* Reset and disable receiver and transmitter */
 
   sam_serialout(priv, SAM_UART_CR_OFFSET,
                 (UART_CR_RSTRX | UART_CR_RSTTX | UART_CR_RXDIS |
                  UART_CR_TXDIS));
+
+  /* Set mode back to normal */
+
+  regval = sam_serialin(priv, SAM_UART_MR_OFFSET);
+  regval &= ~(UART_MR_MODE_MASK);
+  sam_serialout(priv, SAM_UART_MR_OFFSET, regval);
+
+
+#ifdef SERIAL_HAVE_RS485
+  if (priv->has_rs485)
+    {
+      /* Force RTS pin to get low if RS-485 mode is enabled */
+
+      sam_serialout(priv, SAM_UART_CR_OFFSET, UART_CR_RTSEN);
+    }
+#endif
 
   /* Disable all interrupts */
 
@@ -1381,14 +1398,6 @@ static int sam_interrupt(int irq, void *context, void *arg)
           uart_xmitchars(dev);
           handled = true;
         }
-
-#ifdef SERIAL_HAVE_RS485
-      if ((pending & UART_INT_TXEMPTY) != 0)
-        {
-          sam_gpiowrite(priv->rs485_dir_gpio, 0);
-          sam_serialout(priv, SAM_UART_IDR_OFFSET, UART_INT_TXEMPTY);
-        }
-#endif
 
       /* Timeout interrupt (idle detection for USART) */
 
@@ -1868,13 +1877,6 @@ static void sam_send(struct uart_dev_s *dev, int ch)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
 
-#ifdef SERIAL_HAVE_RS485
-  if (priv->has_rs485)
-    {
-      sam_gpiowrite(priv->rs485_dir_gpio, 1);
-    }
-#endif
-
   sam_serialout(priv, SAM_UART_THR_OFFSET, (uint32_t)ch);
 }
 
@@ -1891,7 +1893,6 @@ static void sam_txint(struct uart_dev_s *dev, bool enable)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev->priv;
   irqstate_t flags;
-  uint32_t regval;
 
   flags = enter_critical_section();
   if (enable)
@@ -1901,14 +1902,8 @@ static void sam_txint(struct uart_dev_s *dev, bool enable)
        */
 
 #ifndef CONFIG_SUPPRESS_SERIAL_INTS
-      regval = UART_INT_TXRDY;
 
-      if (priv->has_rs485)
-        {
-          //regval |= UART_INT_TXEMPTY;
-        }
-
-      sam_serialout(priv, SAM_UART_IER_OFFSET, regval);
+      sam_serialout(priv, SAM_UART_IER_OFFSET, UART_INT_TXRDY);
 
       /* Fake a TX interrupt here by just calling uart_xmitchars() with
        * interrupts disabled (note this may recurse).
@@ -1923,13 +1918,6 @@ static void sam_txint(struct uart_dev_s *dev, bool enable)
       /* Disable the TX interrupt */
 
       sam_serialout(priv, SAM_UART_IDR_OFFSET, UART_INT_TXRDY);
-
-      if (priv->has_rs485)
-        {
-          sam_serialout(priv, SAM_UART_IER_OFFSET, UART_INT_TXEMPTY);
-        }
-
-      sam_serialout(priv, SAM_UART_IER_OFFSET, regval);
     }
 
   leave_critical_section(flags);
