@@ -31,6 +31,8 @@
 
 #include "chip.h"
 
+#include "hardware/sam_xdmac.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -223,17 +225,18 @@ extern "C"
  ****************************************************************************/
 
 /****************************************************************************
- * Name: sam_dmaresidual
+ * Name: sam_destaddr
  *
  * Description:
- *   Returns the number of bytes remaining to be transferred
+ *   Returns the pointer to the destionation address, i.e the last address
+ *   data were written by DMA.
  *
  * Assumptions:
  *   - DMA handle allocated by sam_dmachannel()
  *
  ****************************************************************************/
 
-size_t sam_dmaresidual(DMA_HANDLE handle);
+size_t sam_destaddr(DMA_HANDLE handle);
 
 /****************************************************************************
  * Name: sam_dmachannel
@@ -318,6 +321,21 @@ int sam_dmarxsetup(DMA_HANDLE handle, uint32_t paddr,
                    uint32_t maddr, size_t nbytes);
 
 /****************************************************************************
+ * Name: sam_dmarxsetup_circular
+ *
+ * Description:
+ *   Configure DMA for receipt of two circular buffers for peripheral to
+ *   memory transfer.
+ *
+ ****************************************************************************/
+
+int sam_dmarxsetup_circular(DMA_HANDLE handle,
+                            struct chnext_view1_s *descr[2],
+                            uint32_t maddr[2],
+                            uint32_t paddr,
+                            size_t nbytes);
+
+/****************************************************************************
  * Name: sam_dmastart
  *
  * Description:
@@ -326,6 +344,16 @@ int sam_dmarxsetup(DMA_HANDLE handle, uint32_t paddr,
  ****************************************************************************/
 
 int sam_dmastart(DMA_HANDLE handle, dma_callback_t callback, void *arg);
+
+/****************************************************************************
+ * Name: sam_dmastart_circular
+ *
+ * Description:
+ *   Start the DMA transfer with two circular buffers.
+ *
+ ****************************************************************************/
+
+int sam_dmastart_circular(DMA_HANDLE handle, dma_callback_t callback, void *arg);
 
 /****************************************************************************
  * Name: sam_dmastop
