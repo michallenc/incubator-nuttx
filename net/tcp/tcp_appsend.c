@@ -328,7 +328,8 @@ void tcp_rexmit(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
     {
 #if !defined(CONFIG_NET_TCP_WRITE_BUFFERS) || defined(CONFIG_NET_SENDFILE)
       if ((result & TCP_REXMIT) != 0 &&
-          dev->d_sndlen > 0 && conn->tx_unacked > 0)
+          dev->d_sndlen > 0 && conn->tx_unacked > 0 &&
+          conn->rexmit_seq > 0)
         {
           uint32_t saveseq;
 

@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/samv7/sam_xdmac.h
+ * arch/arm/src/samv7/sam_serial.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -38,7 +38,8 @@
 /* Is RS-485 used? */
 
 #undef SERIAL_HAVE_RS485
-#if defined(CONFIG_SAMV7_USART0_RS485MODE) || defined(CONFIG_SAMV7_USART1_RS485MODE) || \
+#if defined(CONFIG_SAMV7_USART0_RS485MODE) || \
+    defined(CONFIG_SAMV7_USART1_RS485MODE) || \
     defined(CONFIG_SAMV7_USART2_RS485MODE)
 #  define SERIAL_HAVE_RS485 1
 #endif

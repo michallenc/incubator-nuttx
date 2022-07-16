@@ -113,10 +113,19 @@
 #ifndef __XTENSA_CALL0_ABI__
   /* Temporary space for saving stuff during window spill. */
 
-#  define REG_TMP0          (_REG_WINDOW_TMPS + 0)
-#  define _REG_OVLY_START   (_REG_WINDOW_TMPS + 1)
+#  define REG_TMP0            (_REG_WINDOW_TMPS + 0)
+#  define _REG_INT_CTX_START  (_REG_WINDOW_TMPS + 1)
 #else
-#  define _REG_OVLY_START   _REG_WINDOW_TMPS
+#  define _REG_INT_CTX_START  _REG_WINDOW_TMPS
+#endif
+
+#ifndef CONFIG_BUILD_FLAT
+/* Temporary space for saving Interrupt Context information */
+
+#  define REG_INT_CTX       (_REG_INT_CTX_START + 0)
+#  define _REG_OVLY_START   (_REG_INT_CTX_START + 1)
+#else
+#  define _REG_OVLY_START   _REG_INT_CTX_START
 #endif
 
 #ifdef CONFIG_XTENSA_USE_OVLY
@@ -155,6 +164,9 @@
 struct xcpt_syscall_s
 {
   uintptr_t sysreturn;   /* The return PC */
+#ifndef CONFIG_BUILD_FLAT
+  uintptr_t int_ctx;     /* Interrupt context */
+#endif
 };
 #endif
 
@@ -230,6 +242,21 @@ static inline void xtensa_setps(uint32_t ps)
     : "r"(ps)
     : "memory"
   );
+}
+
+/* Return the current value of the stack pointer */
+
+static inline uint32_t up_getsp(void)
+{
+  register uint32_t sp;
+
+  __asm__ __volatile__
+  (
+    "mov %0, sp\n"
+    : "=r" (sp)
+  );
+
+  return sp;
 }
 
 /* Restore the value of the PS register */

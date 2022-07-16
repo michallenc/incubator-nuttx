@@ -29,8 +29,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <queue.h>
 
+#include <nuttx/list.h>
 #include <nuttx/sdio.h>
 #include <nuttx/semaphore.h>
 
@@ -86,10 +86,11 @@ struct bcmf_sdio_dev_s
 
   volatile bool ready;             /* Current device status */
   bool sleeping;                   /* Current sleep status */
+  bool kso_enable;                 /* Current Keep sdio on status */
+  bool support_sr;                 /* Firmware support save restore */
 
   pid_t thread_id;                 /* Processing thread id */
   sem_t thread_signal;             /* Semaphore for processing thread event */
-  struct wdog_s waitdog;           /* Processing thread waitdog */
 
   uint32_t backplane_current_addr; /* Current function 1 backplane base addr */
 
@@ -102,9 +103,9 @@ struct bcmf_sdio_dev_s
   bool    flow_ctrl;               /* Current flow control status */
 
   sem_t queue_mutex;               /* Lock for TX/RX/free queues */
-  dq_queue_t free_queue;           /* Queue of available frames */
-  dq_queue_t tx_queue;             /* Queue of frames to transmit */
-  dq_queue_t rx_queue;             /* Queue of frames used to receive */
+  struct list_node free_queue;     /* Queue of available frames */
+  struct list_node tx_queue;       /* Queue of frames to transmit */
+  struct list_node rx_queue;       /* Queue of frames used to receive */
   volatile int tx_queue_count;     /* Count of items in TX queue */
 };
 
@@ -114,7 +115,7 @@ struct bcmf_sdio_frame
 {
   struct bcmf_frame_s header;
   bool                tx;
-  dq_entry_t          list_entry;
+  struct list_node    list_entry;
   uint8_t             pad[CONFIG_IEEE80211_BROADCOM_DMABUF_ALIGNMENT -
                           FIRST_WORD_SIZE]
   aligned_data(CONFIG_IEEE80211_BROADCOM_DMABUF_ALIGNMENT);
@@ -140,6 +141,8 @@ struct bcmf_sdio_frame
 
 int bcmf_bus_sdio_initialize(FAR struct bcmf_dev_s *priv,
           int minor, FAR struct sdio_dev_s *dev);
+
+int bcmf_bus_sdio_active(FAR struct bcmf_dev_s *priv, bool active);
 
 /* FIXME: Low level bus data transfer function
  * To avoid bus error, len will be aligned to:

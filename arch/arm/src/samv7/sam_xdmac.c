@@ -1795,6 +1795,8 @@ int sam_dmatxsetup(DMA_HANDLE handle, uint32_t paddr, uint32_t maddr,
   DEBUGASSERT(xdmach);
   dmainfo("llhead: %p lltail: %p\n", xdmach->llhead, xdmach->lltail);
 
+  xdmach->circular = false;
+
   /* The maximum transfer size in bytes depends upon the maximum number of
    * transfers and the number of bytes per transfer.
    */
@@ -1874,6 +1876,8 @@ int sam_dmarxsetup(DMA_HANDLE handle, uint32_t paddr, uint32_t maddr,
   DEBUGASSERT(xdmach);
   dmainfo("llhead: %p lltail: %p\n", xdmach->llhead, xdmach->lltail);
 
+  xdmach->circular = false;
+
   /* The maximum transfer size in bytes depends upon the maximum number of
    * transfers and the number of bytes per transfer.
    */
@@ -1937,18 +1941,30 @@ int sam_dmarxsetup(DMA_HANDLE handle, uint32_t paddr, uint32_t maddr,
  *
  * Description:
  *   Configure DMA for receipt of two circular buffers for peripheral to
- *   memory transfer.
+ *   memory transfer. Function sam_dmastart_circular() needs to be called
+ *   to start the transfer. Only peripheral to memory transfer is currently
+ *   supported.
+ *
+ * Input Parameters:
+ *   handle - DMA handler
+ *   descr - array with DMA descriptors
+ *   maddr - array of memory addresses (i.e. destination addresses)
+ *   paddr - peripheral address (i.e. source address)
+ *   nbytes - number of bytes to transfer
+ *   ndescrs - number of descriptors (i.e. the lenght of descr array)
  *
  ****************************************************************************/
 
 int sam_dmarxsetup_circular(DMA_HANDLE handle,
-                            struct chnext_view1_s *descr[2],
-                            uint32_t maddr[2],
+                            struct chnext_view1_s *descr[],
+                            uint32_t maddr[],
                             uint32_t paddr,
-                            size_t nbytes)
+                            size_t nbytes,
+                            uint8_t ndescrs)
 {
   struct sam_xdmach_s *xdmach = (struct sam_xdmach_s *)handle;
   uint32_t cubc;
+  uint8_t nextdescr;
   int i;
 
   /* Set circular as true */
@@ -1960,31 +1976,31 @@ int sam_dmarxsetup_circular(DMA_HANDLE handle,
   /* Calculate the number of transfers for CUBC */
 
   cubc  = sam_cubc(xdmach, nbytes);
-  cubc |= (CHNEXT_UBC_NDE | CHNEXT_UBC_NVIEW_1 | CHNEXT_UBC_NDEN | \
+  cubc |= (CHNEXT_UBC_NDE | CHNEXT_UBC_NVIEW_1 | CHNEXT_UBC_NDEN |
            CHNEXT_UBC_NSEN);
 
-  for (i = 0; i < 2; i++)
-    {
-      /* Initialize descriptors */
+  nextdescr = 0;
 
-      descr[i]->cnda  = 0;          /* Next Descriptor Address */
-      descr[i]->cubc  = cubc;       /* Channel Microblock Control Register */
-      descr[i]->csa   = paddr;      /* Source address */
-      descr[i]->cda   = maddr[i];   /* Destination address */
+  for (i = ndescrs - 1; i >= 0; i--)
+    {
+      descr[i]->cnda  = (uint32_t)descr[nextdescr];   /* Next Descriptor Address */
+      descr[i]->cubc  = cubc;                         /* Channel Microblock Control Register */
+      descr[i]->csa   = paddr;                        /* Source address */
+      descr[i]->cda   = maddr[i];                     /* Destination address */
+
+      /* Clean data cache */
 
       up_clean_dcache((uintptr_t)descr[i],
-                      (uintptr_t)descr[i] + \
-                        sizeof(struct chnext_view1_s));
+                      (uintptr_t)descr[i] +
+                       sizeof(struct chnext_view1_s));
+      up_clean_dcache((uintptr_t)maddr[i], (uintptr_t)maddr[i] + nbytes);
+      nextdescr = i;
     }
 
-  /* Now set the next descriptor address. For descr[0] it is descr[1]
-   * and vica versa.
-   */
+  /* Settup of llhead and lltail does not really matter in this case */
 
-  descr[0]->cnda = (uint32_t)descr[1];
-  descr[1]->cnda = (uint32_t)descr[0];
   xdmach->llhead = descr[0];
-  xdmach->lltail = descr[1];
+  xdmach->lltail = descr[0];
 
   return OK;
 }
@@ -1993,7 +2009,7 @@ int sam_dmarxsetup_circular(DMA_HANDLE handle,
  * Name: sam_dmastart_circular
  *
  * Description:
- *   Start the DMA transfer with two circular buffers.
+ *   Start the DMA transfer with circular buffers.
  *
  ****************************************************************************/
 
@@ -2013,11 +2029,6 @@ int sam_dmastart_circular(DMA_HANDLE handle, dma_callback_t callback,
   xdmach->callback = callback;
   xdmach->arg      = arg;
 
-  if (xdmach->rx)
-    {
-      up_flush_dcache(xdmach->rxaddr, xdmach->rxaddr + xdmach->rxsize);
-    }
-
   /* Clear pending interrupts */
 
   sam_getdmach(xdmach, SAM_XDMACH_CIS_OFFSET);
@@ -2026,7 +2037,7 @@ int sam_dmastart_circular(DMA_HANDLE handle, dma_callback_t callback,
 
   /* Setup next descriptor */
 
-  regval = (XDMACH_CNDC_NDE | XDMACH_CNDC_NDVIEW_NDV1 | \
+  regval = (XDMACH_CNDC_NDE | XDMACH_CNDC_NDVIEW_NDV1 |
             XDMACH_CNDC_NDDUP | XDMACH_CNDC_NDSUP);
   sam_putdmach(xdmach, regval, SAM_XDMACH_CNDC_OFFSET);
 

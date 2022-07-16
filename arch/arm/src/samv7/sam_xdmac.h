@@ -325,15 +325,37 @@ int sam_dmarxsetup(DMA_HANDLE handle, uint32_t paddr,
  *
  * Description:
  *   Configure DMA for receipt of two circular buffers for peripheral to
- *   memory transfer.
+ *   memory transfer. Function sam_dmastart_circular() needs to be called
+ *   to start the transfer. Only peripheral to memory transfer is currently
+ *   supported.
+ *
+ * Input Parameters:
+ *   handle - DMA handler
+ *   descr - array with DMA descriptors
+ *   maddr - array of memory addresses (i.e. destination addresses)
+ *   paddr - peripheral address (i.e. source address)
+ *   nbytes - number of bytes to transfer
+ *   ndescrs - number of descriptors (i.e. the lenght of descr array)
  *
  ****************************************************************************/
 
 int sam_dmarxsetup_circular(DMA_HANDLE handle,
-                            struct chnext_view1_s *descr[2],
-                            uint32_t maddr[2],
+                            struct chnext_view1_s *descr[],
+                            uint32_t maddr[],
                             uint32_t paddr,
-                            size_t nbytes);
+                            size_t nbytes,
+                            uint8_t ndescrs);
+
+/****************************************************************************
+ * Name: sam_dmastart_circular
+ *
+ * Description:
+ *   Start the DMA transfer with circular buffers.
+ *
+ ****************************************************************************/
+
+int sam_dmastart_circular(DMA_HANDLE handle, dma_callback_t callback,
+                          void *arg);
 
 /****************************************************************************
  * Name: sam_dmastart

@@ -118,8 +118,12 @@ config RP2040_SPI_DRIVER
 endif
 
 config RP2040_I2C
-	bool "I2C"
+	bool "I2C Master"
 	select I2C
+	---help---
+		Build in support for I2C master mode.
+
+		Note: Do not configure the same port as both master and slave.
 
 if RP2040_I2C
 
@@ -138,6 +142,162 @@ config RP2040_I2C_DRIVER
 		used to perform I2C bus transfers from applications.  The intent of
 		this driver is to support I2C testing.  It is not suitable for use
 		in any real driver application.
+
+endif
+
+config RP2040_I2C_SLAVE
+	bool "I2C Slave"
+	select I2C_SLAVE
+	---help---
+		Build in support for I2C slave mode.
+
+		Note: Do not configure the same port as both master and slave.
+
+if RP2040_I2C_SLAVE
+
+config RP2040_I2C0_SLAVE
+	bool "I2C0"
+
+if RP2040_I2C0_SLAVE
+
+config RP2040_I2C0_SLAVE_SDA
+	int "GPIO pin number for SDA (data) line"
+	default 4
+	---help---
+		This pin must be one of: 0, 4, 8, 12, 16, 20, 24, or 28
+
+config RP2040_I2C0_SLAVE_SCL
+	int "GPIO pin number for SCL (clock) line"
+	default 5
+	---help---
+		This pin must be one of: 1, 5, 9, 13, 17, 21, 25, or 29
+
+config RP2040_I2C0_SLAVE_ADDRESS
+	int "Slave Address (in decimal)"
+	default 42
+	---help---
+		This is the default address of this device on the I2C bus.
+		It should be the canonical address (not the shifted address)
+		in the range 8-119 for 7-bit mode and in the range 0-1023
+		for 10-bit mode.
+
+config RP2040_I2C0_SLAVE_10BIT
+	bool "Enable 10-bit slave address"
+	default n
+	---help---
+		Set to enable 10-bit mode addressing.
+
+endif
+
+config RP2040_I2C1_SLAVE
+	bool "I2C1"
+
+if RP2040_I2C1_SLAVE
+
+config RP2040_I2C1_SLAVE_SDA
+	int "GPIO pin number for SDA (data) line"
+	default 6
+	---help---
+		This pin must be one of: 2, 6, 10, 14, 18, 22, or 26
+
+config RP2040_I2C1_SLAVE_SCL
+	int "GPIO pin number for SCL (clock) line"
+	default 7
+	---help---
+		This pin must be one of: 3, 7, 11, 15, 19, 23, or 27
+
+config RP2040_I2C1_SLAVE_ADDRESS
+	int "Slave Address (in decimal)"
+	default 42
+	---help---
+		This is the default address of this device on the I2C bus.
+		It should be the canonical address (not the shifted address)
+		in the range 8-119 for 7-bit mode and in the range 0-1023
+		for 10-bit mode.
+
+config RP2040_I2C1_SLAVE_10BIT
+	bool "Enable 10-bit slave address"
+	default n
+	---help---
+		Set to enable 10-bit mode addressing.
+
+endif
+
+endif
+
+menuconfig RP2040_PWM
+	bool "PWM"
+	select PWM
+	---help---
+		After enabling PWM support here, configure the GPIO pins to use
+		under the Board Selection menu.
+
+if RP2040_PWM
+
+config PWM_MULTICHAN
+	bool "Support Multi-Channel PWM"
+	default y
+	---help---
+		If support for multi-channel PWM is disabled, the generated code
+		will only support the A channel of the PWM slices.
+
+	if PWM_MULTICHAN
+		config PWM_NCHANNELS
+	int "Number of channels"
+		default 2
+	---help---
+		If the number of channels is set to 1, the generated code will
+		only support the A channel of the PWM slices.  This is functionally
+		identical to disabling multi-channel PWM support.
+	endif
+
+	config RP2040_PWM0
+		bool "PWM0"
+		---help---
+			Drives GPIO pin  0 or 16 with the A channel, and
+			drives GPIO pin  1 or 17 with the B channel.
+
+	config RP2040_PWM1
+		bool "PWM1"
+		---help---
+			Drives GPIO pin  2 or 18 with the A channel, and
+			drives GPIO pin  3 or 19 with the B channel.
+
+	config RP2040_PWM2
+		bool "PWM2"
+		---help---
+			Drives GPIO pin  4 or 20 with the A channel, and
+			drives GPIO pin  5 or 21 with the B channel.
+
+	config RP2040_PWM3
+		bool "PWM3"
+		---help---
+			Drives GPIO pin  6 or 22 with the A channel, and
+			drives GPIO pin  7 or 23 with the B channel.
+
+	config RP2040_PWM4
+		bool "PWM4"
+		---help---
+			Drives GPIO pin  8 or 24 with the A channel, and
+			drives GPIO pin  9 or 25 with the B channel.
+
+	config RP2040_PWM5
+		bool "PWM5"
+		---help---
+			Drives GPIO pin 10 or 26 with the A channel, and
+			drives GPIO pin 11 or 27 with the B channel.
+
+	config RP2040_PWM6
+		bool "PWM6"
+		---help---
+			Drives GPIO pin 12 or 28 with the A channel, and
+			drives GPIO pin 13 or 29 with the B channel.
+
+	config RP2040_PWM7
+		bool "PWM7"
+		---help---
+			Drives GPIO pin 14 with the A channel, and
+			drives GPIO pin 15 with the B channel.
 
 endif
 
@@ -205,3 +365,14 @@ config RP2040_SPISD_SPI_CH
 		Select spi channel number to use spi sd card.
 
 endif # SPISD Configuration
+
+config RP2040_BOARD_HAS_WS2812
+	bool "Has ws2812 pixels"
+	default n
+	depends on WS2812
+
+menuconfig RP2040_WS2812_GPIO_PIN
+	int "GPIO pin for ws2812 pixels"
+	default 0
+	range 0 29
+	depends on RP2040_BOARD_HAS_WS2812

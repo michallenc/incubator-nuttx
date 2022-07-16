@@ -25,6 +25,9 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
@@ -34,6 +37,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/signal.h>
 
 #include "bcmf_core.h"
 #include "bcmf_sdio.h"
@@ -328,24 +332,107 @@ errout_with_file:
 
 int bcmf_upload_nvram(FAR struct bcmf_sdio_dev_s *sbus)
 {
-  int ret;
-  uint32_t nvram_sz;
+  FAR uint8_t *nvram_buf = sbus->chip->nvram_image;
+  uint32_t nvram_sz = *sbus->chip->nvram_image_size;
   uint32_t token;
+  int ret;
+
+#ifdef CONFIG_IEEE80211_BROADCOM_FWFILES
+  FAR const char *nvfile = CONFIG_IEEE80211_BROADCOM_NVFILENAME;
+  bool skipline = false;
+  struct file finfo;
+  struct stat stat;
+  FAR uint8_t *buf;
+  int i;
+
+  if (strlen(nvfile) <= 0)
+    {
+      goto out;
+    }
+
+  ret = file_open(&finfo, nvfile, O_RDONLY);
+  if (ret < 0)
+    {
+      goto out;
+    }
+
+  ret = file_fstat(&finfo, &stat);
+  if (ret < 0 || stat.st_size <= 0)
+    {
+      goto out;
+    }
+
+  /* Round up the ram buffer size */
+
+  stat.st_size = (stat.st_size + 63) & (~63);
+
+  buf = (FAR uint8_t *)kmm_malloc(stat.st_size);
+  if (buf == NULL)
+    {
+      goto out;
+    }
+
+  /* Convert text pattern:
+   *  1. Remove the comment line (Prefix with '#')
+   *  2. Convert LF('\n') to NULL'\0'
+   */
+
+  ret = file_read(&finfo, buf, stat.st_size);
+  if (ret <= 0)
+    {
+      kmm_free(buf);
+      goto out;
+    }
+
+  nvram_buf = buf;
+
+  for (i = 0; i < ret; i++)
+    {
+      if (nvram_buf[i] == '\n')
+        {
+          if (buf != nvram_buf && *(buf - 1) != '\0')
+            {
+              *buf++ = '\0';
+            }
+
+          skipline = false;
+        }
+      else if (nvram_buf[i] == '#')
+        {
+          skipline = true;
+        }
+      else if (!skipline && (nvram_buf + i) != buf)
+        {
+          *buf++ = nvram_buf[i];
+        }
+    }
+
+  nvram_sz = buf - nvram_buf;
+
+out:
+  file_close(&finfo);
+#endif
 
   /* Round up the size of the image */
 
-  nvram_sz = (*sbus->chip->nvram_image_size + 63) & (-64);
+  nvram_sz = (nvram_sz + 63) & (~63);
 
-  wlinfo("nvram size is %" PRId32 " %d bytes\n",
-         nvram_sz, *sbus->chip->nvram_image_size);
+  wlinfo("nvram size is %" PRId32 " bytes\n", nvram_sz);
 
   /* Write image */
 
   ret = bcmf_upload_binary(sbus,
                            sbus->chip->ram_size - 4 - nvram_sz
                            + sbus->chip->ram_base,
-                           sbus->chip->nvram_image,
-                           *sbus->chip->nvram_image_size);
+                           nvram_buf, nvram_sz);
+
+#ifdef CONFIG_IEEE80211_BROADCOM_FWFILES
+  if (nvram_buf != sbus->chip->nvram_image)
+    {
+      kmm_free(nvram_buf);
+    }
+#endif
+
   if (ret != OK)
     {
       return ret;
@@ -358,15 +445,9 @@ int bcmf_upload_nvram(FAR struct bcmf_sdio_dev_s *sbus)
 
   /* Write the length token to the last word */
 
-  ret = bcmf_write_sbreg(sbus,
-                         sbus->chip->ram_size - 4 + sbus->chip->ram_base,
-                         (FAR uint8_t *)&token, 4);
-  if (ret != OK)
-    {
-      return ret;
-    }
-
-  return OK;
+  return bcmf_write_sbreg(sbus,
+                          sbus->chip->ram_size - 4 + sbus->chip->ram_base,
+                          (FAR uint8_t *)&token, 4);
 }
 
 /****************************************************************************
@@ -484,10 +565,10 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
 #endif
 
       default:
-        DEBUGASSERT(false);
+        DEBUGPANIC();
     }
 
-  up_mdelay(50);
+  nxsig_usleep(50 * 1000);
 
   /* Flash chip firmware */
 
@@ -532,12 +613,12 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
       case SDIO_DEVICE_ID_BROADCOM_43013:
       case SDIO_DEVICE_ID_BROADCOM_43362:
       case SDIO_DEVICE_ID_BROADCOM_43430:
-        up_mdelay(10);
+        nxsig_usleep(10 * 1000);
         bcmf_core_reset(sbus, WLAN_ARMCM3_CORE_ID, 0, 0, 0);
 
         /* Check ARMCM3 core is running */
 
-        up_mdelay(10);
+        nxsig_usleep(10 * 1000);
         if (!bcmf_core_isup(sbus, WLAN_ARMCM3_CORE_ID))
           {
             wlerr("Cannot start ARMCM3 core\n");
@@ -576,7 +657,7 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
 
         /* Check ARMCR4 core is running */
 
-        up_mdelay(10);
+        nxsig_usleep(10 * 1000);
         if (!bcmf_core_isup(sbus, WLAN_ARMCR4_CORE_ID))
           {
             wlerr("Cannot start ARMCR4 core\n");
@@ -587,7 +668,7 @@ int bcmf_core_upload_firmware(FAR struct bcmf_sdio_dev_s *sbus)
 #endif
 
       default:
-        DEBUGASSERT(false);
+        DEBUGPANIC();
     }
 
   return OK;
@@ -645,7 +726,7 @@ void bcmf_core_disable(FAR struct bcmf_sdio_dev_s *sbus,
 
       /*  Ensure no backplane operation is pending */
 
-      up_mdelay(10);
+      nxsig_usleep(10 * 1000);
 
       bcmf_write_sbregw(sbus,
                         base + BCMA_IOCTL,
