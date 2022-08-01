@@ -59,6 +59,14 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* CONFIG_LIBC_LONG_LONG is not a valid selection of the compiler does not
+ * support long long types.
+ */
+
+#ifndef CONFIG_HAVE_LONG_LONG
+#  undef CONFIG_LIBC_LONG_LONG
+#endif
+
 /* [Re]define putc() */
 
 #ifdef putc
@@ -143,7 +151,8 @@ static const char g_nullstring[] = "(null)";
 
 static int vsprintf_internal(FAR struct lib_outstream_s *stream,
                              FAR struct arg_s *arglist, int numargs,
-                             FAR const IPTR char *fmt, va_list ap);
+                             FAR const IPTR char *fmt, va_list ap)
+           printflike(4, 0);
 
 /****************************************************************************
  * Private Functions
@@ -176,7 +185,7 @@ static int vsprintf_internal(FAR struct lib_outstream_s *stream,
   int prec;
   union
   {
-#if defined (CONFIG_HAVE_LONG_LONG) || (ULONG_MAX > 4294967295UL)
+#if defined (CONFIG_LIBC_LONG_LONG) || (ULONG_MAX > 4294967295UL)
     unsigned char __buf[22]; /* Size for -1 in octal, without '\0' */
 #else
     unsigned char __buf[11]; /* Size for -1 in octal, without '\0' */
@@ -1031,6 +1040,9 @@ static int vsprintf_internal(FAR struct lib_outstream_s *stream,
             }
           else
             {
+#if !defined(CONFIG_LIBC_LONG_LONG) && defined(CONFIG_HAVE_LONG_LONG)
+              DEBUGASSERT(x >= 0 && x <= ULONG_MAX);
+#endif
               c = __ultoa_invert(x, (FAR char *)buf, 10) - (FAR char *)buf;
             }
         }
@@ -1203,6 +1215,9 @@ static int vsprintf_internal(FAR struct lib_outstream_s *stream,
             }
           else
             {
+#if !defined(CONFIG_LIBC_LONG_LONG) && defined(CONFIG_HAVE_LONG_LONG)
+              DEBUGASSERT(x <= ULONG_MAX);
+#endif
               c = __ultoa_invert(x, (FAR char *)buf, base) - (FAR char *)buf;
             }
 

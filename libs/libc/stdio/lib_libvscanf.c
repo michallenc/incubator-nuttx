@@ -42,6 +42,14 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* CONFIG_LIBC_LONG_LONG is not a valid selection of the compiler does not
+ * support long long types.
+ */
+
+#ifndef CONFIG_HAVE_LONG_LONG
+#  undef CONFIG_LIBC_LONG_LONG
+#endif
+
 #define MAXLN   128
 
 #define HH_MOD -2
@@ -828,11 +836,19 @@ int lib_vscanf(FAR struct lib_instream_s *obj, FAR int *lastc,
                     case LL_MOD:
                       if (sign)
                         {
+#  ifdef CONFIG_LIBC_LONG_LONG
                           tmplonglong = strtoll(tmp, &endptr, base);
+#  else
+                          tmplonglong = strtol(tmp, &endptr, base);
+#  endif
                         }
                       else
                         {
+#  ifdef CONFIG_LIBC_LONG_LONG
                           tmplonglong = strtoull(tmp, &endptr, base);
+#  else
+                          tmplonglong = strtoul(tmp, &endptr, base);
+#  endif
                         }
                       break;
 #endif
