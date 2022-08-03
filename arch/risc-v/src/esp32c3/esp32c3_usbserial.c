@@ -40,8 +40,7 @@
 #include <nuttx/serial/serial.h>
 #include <arch/irq.h>
 
-#include "riscv_arch.h"
-
+#include "riscv_internal.h"
 #include "hardware/esp32c3_soc.h"
 #include "hardware/esp32c3_system.h"
 #include "hardware/esp32c3_usb_serial_jtag.h"
@@ -403,7 +402,7 @@ static int esp32c3_ioctl(struct file *filep, int cmd, unsigned long arg)
   struct inode      *inode = filep->f_inode;
   struct uart_dev_s *dev   = inode->i_private;
 #endif
-  int                ret    = OK;
+  int                ret   = OK;
 
   switch (cmd)
     {

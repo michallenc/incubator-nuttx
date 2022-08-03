@@ -187,10 +187,10 @@ out:
 }
 
 /****************************************************************************
- * Name: nxsem_timedwait_uninterruptible
+ * Name: nxsem_clockwait_uninterruptible
  *
  * Description:
- *   This function is wrapped version of nxsem_timedwait(), which is
+ *   This function is wrapped version of nxsem_clockwait(), which is
  *   uninterruptible and convenient for use.
  *
  * Input Parameters:

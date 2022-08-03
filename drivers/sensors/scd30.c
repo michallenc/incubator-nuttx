@@ -443,7 +443,7 @@ static int scd30_read_values(FAR struct scd30_dev_s *priv, FAR float *temp,
   struct timespec ts;
   int ret;
 
-  clock_gettime(CLOCK_REALTIME, &ts);
+  clock_systime_timespec(&ts);
 
   if (wait || !priv->valid ||
       has_time_passed(ts, priv->last_update,
@@ -596,7 +596,7 @@ static int scd30_configure(FAR struct scd30_dev_s *priv, bool start)
 static int scd30_open(FAR struct file *filep)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct scd30_dev_s *priv  = inode->i_private;
+  FAR struct scd30_dev_s *priv = inode->i_private;
   int ret = OK;
 
   /* Get exclusive access */
@@ -835,7 +835,7 @@ static int scd30_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_SET_INTERVAL:
         {
-          if (arg < 2 && arg > 1800)
+          if (arg < 2 || arg > 1800)
             {
               ret = -EINVAL;
               break;
@@ -851,7 +851,7 @@ static int scd30_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_SET_TEMP_OFFSET:
         {
-          if (arg < 0 && arg > UINT16_MAX)
+          if (arg > UINT16_MAX)
             {
               ret = -EINVAL;
               break;
@@ -867,7 +867,7 @@ static int scd30_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_SET_PRESSURE_COMP:
         {
-          if (arg != 0 && arg < 700 && arg > 1200)
+          if (arg != 0 && (arg < 700 || arg > 1200))
             {
               ret = -EINVAL;
               break;
@@ -891,7 +891,7 @@ static int scd30_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_SET_ALTITUDE_COMP:
         {
-          if (arg < 0 && arg > UINT16_MAX)
+          if (arg > UINT16_MAX)
             {
               ret = -EINVAL;
               break;
@@ -908,7 +908,7 @@ static int scd30_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_SET_FRC:
         {
-          if (arg < 0 && arg > UINT16_MAX)
+          if (arg > UINT16_MAX)
             {
               ret = -EINVAL;
               break;

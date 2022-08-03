@@ -35,6 +35,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>
 #include <nuttx/signal.h>
+#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "pthread/pthread.h"
@@ -501,7 +502,7 @@ static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
  *
  * Input Parameters:
  *   tcb  - Address of the new task's TCB
- *   argv - A pointer to an array of input parameters. The arrau should be
+ *   argv - A pointer to an array of input parameters. The array should be
  *          terminated with a NULL argv[] value. If no parameters are
  *          required, argv may be NULL.
  *
@@ -544,6 +545,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            */
 
           strtablen += (strlen(argv[argc]) + 1);
+          DEBUGASSERT(strtablen < tcb->cmn.adj_stack_size);
           if (strtablen >= tcb->cmn.adj_stack_size)
             {
               return -ENAMETOOLONG;
@@ -555,6 +557,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            * happens in normal usage.
            */
 
+          DEBUGASSERT(argc <= MAX_STACK_ARGS);
           if (++argc > MAX_STACK_ARGS)
             {
               return -E2BIG;

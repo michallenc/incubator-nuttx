@@ -724,9 +724,9 @@ int regulator_get_voltage(FAR struct regulator_s *regulator)
  ****************************************************************************/
 
 FAR struct regulator_dev_s *
-regulator_register(const FAR struct regulator_desc_s *regulator_desc,
-                   const struct regulator_ops_s *regulator_ops,
-                   void *priv)
+regulator_register(FAR const struct regulator_desc_s *regulator_desc,
+                   FAR const struct regulator_ops_s *regulator_ops,
+                   FAR void *priv)
 {
   FAR struct regulator_dev_s *rdev;
 
@@ -821,7 +821,7 @@ void regulator_unregister(FAR struct regulator_dev_s *rdev)
   nxsem_wait_uninterruptible(&g_reg_sem);
   if (rdev->open_count)
     {
-      pwrerr("unregister, open %PRIu32\n", rdev->open_count);
+      pwrerr("unregister, open %" PRIu32 "\n", rdev->open_count);
       nxsem_post(&g_reg_sem);
       return;
     }

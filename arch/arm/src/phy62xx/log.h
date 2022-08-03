@@ -27,8 +27,8 @@
  ****************************************************************************/
 
 #ifndef ENABLE_LOG_ROM
-#ifndef __LOG_H__
-#define __LOG_H__
+#ifndef __ARCH_ARM_SRC_PHY62XX_LOG_H
+#define __ARCH_ARM_SRC_PHY62XX_LOG_H
 
 #ifdef __cplusplus
 extern "C"
@@ -40,9 +40,9 @@ extern "C"
  ****************************************************************************/
 
 #include "uart.h"
-void dbg_printf_(const char *format, ...);
+void dbg_printf_(const char *format, ...) printflike(1, 2);
 void dbg_printf_init(void);
-void my_dump_byte(uint8_t *pData, int dlen);
+void my_dump_byte(uint8_t *pdata, int dlen);
 #ifndef DEBUG_INFO
 #error "DEBUG_INFO undefined!"
 #endif
@@ -84,12 +84,12 @@ typedef void(*std_putc)(char *data, uint16_t size);
 }
 #endif
 
-#endif //__LOG_H__
+#endif /* __ARCH_ARM_SRC_PHY62XX_LOG_H */
 
 #else
 
-#ifndef __PHY_LOG_H
-#define __PHY_LOG_H
+#ifndef __ARCH_ARM_SRC_PHY62XX_LOG_H
+#define __ARCH_ARM_SRC_PHY62XX_LOG_H
 
 #ifdef __cplusplus
 extern "C"
@@ -104,7 +104,7 @@ extern "C"
 #define LOG_LEVEL_NONE  0 /* no log output */
 #define LOG_LEVEL_ERROR 1 /* only log error */
 #define LOG_LEVEL_DEBUG 2 /* output debug info and error info */
-#define LOG_LEVEL_LOG   3 /* output all infomation */
+#define LOG_LEVEL_LOG   3 /* output all information */
 
 #define LOG_INIT()                  {hal_uart_init(115200, P9, P10, NULL);}
 
@@ -125,8 +125,9 @@ extern volatile uint32_t s_rom_debug_level;
 
 typedef void(*std_putc)(char *data, int size);
 
-void log_vsprintf(std_putc putc, const char *fmt, va_list args);
-void log_printf(const char *format, ...);
+void log_vsprintf(std_putc putc, const char *fmt, va_list args)
+     printflike(2, 0);
+void log_printf(const char *format, ...) printflike(1, 2);
 void log_set_putc(std_putc putc);
 void log_clr_putc(std_putc putc);
 int log_debug_level(uint8_t level);
@@ -136,6 +137,6 @@ uint32_t log_get_debug_level(void);
 }
 #endif
 
-#endif
+#endif /* __ARCH_ARM_SRC_PHY62XX_LOG_H */
 
 #endif

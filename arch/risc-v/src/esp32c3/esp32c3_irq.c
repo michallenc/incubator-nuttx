@@ -24,17 +24,14 @@
 
 #include <nuttx/config.h>
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
-
-#include <arch/irq.h>
-#include <arch/rv32im/mcause.h>
 
 #include "riscv_internal.h"
 #include "hardware/esp32c3_interrupt.h"
@@ -60,7 +57,7 @@
  * Public Data
  ****************************************************************************/
 
-volatile uint32_t *g_current_regs;
+volatile uintptr_t *g_current_regs[1];
 
 /****************************************************************************
  * Private Data
@@ -115,9 +112,9 @@ void up_irqinitialize(void)
 
   putreg32(ESP32C3_DEFAULT_INT_THRESHOLD, INTERRUPT_CPU_INT_THRESH_REG);
 
-  /* Attach the ECALL interrupt. */
+  /* Attach the common interrupt handler */
 
-  irq_attach(ESP32C3_IRQ_ECALL_M, riscv_swint, NULL);
+  riscv_exception_attach();
 
 #ifdef CONFIG_ESP32C3_GPIO_IRQ
   /* Initialize GPIO interrupt support */
@@ -131,23 +128,6 @@ void up_irqinitialize(void)
 
   up_irq_enable();
 #endif
-}
-
-/****************************************************************************
- * Name: riscv_get_newintctx
- *
- * Description:
- *   Return initial mstatus when a task is created.
- *
- ****************************************************************************/
-
-uint32_t riscv_get_newintctx(void)
-{
-  /* Set machine previous privilege mode to machine mode.
-   * Also set machine previous interrupt enable
-   */
-
-  return (MSTATUS_MPPM | MSTATUS_MPIE);
 }
 
 /****************************************************************************
@@ -359,7 +339,7 @@ void esp32c3_free_cpuint(uint8_t periphid)
 }
 
 /****************************************************************************
- * Name: esp32c3_dispatch_irq
+ * Name: riscv_dispatch_irq
  *
  * Description:
  *   Process interrupt and its callback function.
@@ -373,73 +353,52 @@ void esp32c3_free_cpuint(uint8_t periphid)
  *
  ****************************************************************************/
 
-IRAM_ATTR uint32_t *esp32c3_dispatch_irq(uint32_t mcause, uint32_t *regs)
+IRAM_ATTR uintptr_t *riscv_dispatch_irq(uintptr_t mcause, uintptr_t *regs)
 {
   int irq;
+  uint8_t cpuint = mcause & RISCV_IRQ_MASK;
+  bool is_irq = (RISCV_IRQ_BIT & mcause) != 0;
 
-  if (((MCAUSE_INTERRUPT & mcause) == 0) &&
-      (mcause != MCAUSE_ECALL_M))
-    {
 #ifdef CONFIG_ESP32C3_EXCEPTION_ENABLE_CACHE
+  if (!is_irq &&
+      (mcause != RISCV_IRQ_ECALLM))
+    {
       if (!spi_flash_cache_enabled())
         {
           spi_flash_enable_cache(0);
           _err("ERROR: Cache was disabled and re-enabled\n");
         }
+    }
 #endif
-    }
-  else
+
+  irqinfo("INFO: mcause=%08" PRIXPTR "\n", mcause);
+
+  DEBUGASSERT(cpuint <= ESP32C3_CPUINT_MAX);
+
+  irqinfo("INFO: cpuint=%" PRIu8 "\n", cpuint);
+
+  if (is_irq)
     {
-      /* Check "g_current_regs" only in interrupt or ecall */
-
-      DEBUGASSERT(g_current_regs == NULL);
-    }
-
-  g_current_regs = regs;
-
-  irqinfo("INFO: mcause=%08" PRIX32 "\n", mcause);
-
-  /* If the board supports LEDs, turn on an LED now to indicate that we are
-   * processing an interrupt.
-   */
-
-  board_autoled_on(LED_INIRQ);
-
-  if ((MCAUSE_INTERRUPT & mcause) != 0)
-    {
-      uint8_t cpuint = mcause & MCAUSE_INTERRUPT_MASK;
-
-      DEBUGASSERT(cpuint <= ESP32C3_CPUINT_MAX);
-
-      irqinfo("INFO: cpuint=%" PRIu8 "\n", cpuint);
-
       /* Clear edge interrupts. */
 
       putreg32(1 << cpuint, INTERRUPT_CPU_INT_CLEAR_REG);
-
       irq = g_cpuint_map[cpuint] + ESP32C3_IRQ_FIRSTPERIPH;
-      irq_dispatch(irq, regs);
-
-      /* Toggle the bit back to zero. */
-
-      putreg32(0, INTERRUPT_CPU_INT_CLEAR_REG);
     }
   else
     {
-      if (mcause == MCAUSE_ECALL_M)
-        {
-          irq_dispatch(ESP32C3_IRQ_ECALL_M, regs);
-        }
-      else
-        {
-          riscv_exception(mcause, regs);
-        }
+      /* It's exception */
+
+      irq = mcause;
     }
 
-  regs = (uint32_t *)g_current_regs;
-  g_current_regs = NULL;
+  regs = riscv_doirq(irq, regs);
 
-  board_autoled_off(LED_INIRQ);
+  /* Toggle the bit back to zero. */
+
+  if (is_irq)
+    {
+      putreg32(0, INTERRUPT_CPU_INT_CLEAR_REG);
+    }
 
   return regs;
 }
@@ -454,17 +413,10 @@ IRAM_ATTR uint32_t *esp32c3_dispatch_irq(uint32_t mcause, uint32_t *regs)
 
 irqstate_t up_irq_enable(void)
 {
-  uint32_t flags;
+  irqstate_t flags;
 
   /* Read mstatus & set machine interrupt enable (MIE) in mstatus */
 
-  __asm__ __volatile__
-    (
-      "csrrs %0, mstatus, %1\n"
-      : "=r" (flags)
-      : "r"(MSTATUS_MIE)
-      : "memory"
-    );
-
+  flags = READ_AND_SET_CSR(mstatus, MSTATUS_MIE);
   return flags;
 }

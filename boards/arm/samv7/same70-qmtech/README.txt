@@ -66,21 +66,21 @@ SD Card
 Card Slot
 ---------
 The SAM E70 QMTECH has one standard SD card connector that is connected to
-the High Speed Multimedia Card Interface (HSMCI) of the SAM
-E70. SD card connector:
+the High Speed Multimedia Card Interface (HSMCI) of the SAM E70.
+SD card connector:
 
-  ------ ----------------- ---------------------
-  SAME70 SAME70            Shared functionality
+  ------ -----------------
+  SAME70 SAME70
   Pin    Function
-  ------ ----------------- ---------------------
+  ------ -----------------
   PA30   MCDA0 (DAT0)
   PA31   MCDA1 (DAT1)
   PA26   MCDA2 (DAT2)
   PA27   MCDA3 (DAT3)
-  PA25   MCCK (CLK)        Shield
+  PA25   MCCK (CLK)
   PA28   MCCDA (CMD)
-  PD17   Card Detect (C/D) Shield
-  ------ ----------------- ---------------------
+  N/A    Card Detect (C/D)
+  ------ -----------------
 
 Configuration Settings
 ----------------------
@@ -99,7 +99,7 @@ the SD slots can be enabled with the following settings:
   Device Drivers -> MMC/SD Driver Support
     CONFIG_MMCSD=y                        : Enable MMC/SD support
     CONFIG_MMSCD_NSLOTS=1                 : One slot per driver instance
-    CONFIG_MMCSD_MULTIBLOCK_DISABLE=y     : (REVISIT)
+    CONFIG_MMCSD_MULTIBLOCK_LIMIT=1       : (REVISIT)
     CONFIG_MMCSD_HAVE_CARDDETECT=y        : Supports card-detect PIOs
     CONFIG_MMCSD_MMCSUPPORT=n             : Interferes with some SD cards
     CONFIG_MMCSD_SPI=n                    : No SPI-based MMC/SD support
@@ -173,12 +173,12 @@ Auto-Mounter
       CONFIG_FS_AUTOMOUNTER=y
 
     Board-Specific Options
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT=y
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_FSTYPE="vfat"
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_BLKDEV="/dev/mmcsd0"
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_MOUNTPOINT="/mnt/sdcard"
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_DDELAY=1000
-      CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_UDELAY=2000
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT=y
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT_FSTYPE="vfat"
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT_BLKDEV="/dev/mmcsd0"
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT_MOUNTPOINT="/mnt/sdcard"
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT_DDELAY=1000
+      CONFIG_SAMV7_HSMCI0_AUTOMOUNT_UDELAY=2000
 
   WARNING:  SD cards should never be removed without first unmounting
   them.  This is to avoid data and possible corruption of the file
@@ -229,7 +229,7 @@ button.
 SPI Slave
 =========
 
-  An interrutp driven SPI slave driver as added on 2015-08-09 but has not
+  An interrupt driven SPI slave driver as added on 2015-08-09 but has not
   been verified as of this writing. See discussion in include/nuttx/spi/slave.h
   and below.
 
@@ -700,7 +700,7 @@ NOTES:
        CONFIG_WINDOWS_CYGWIN=y             : Cywin under Windows
 
      System Type -> Toolchain:
-       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIW=y : GNU ARM EABI toolchain
+       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABI=y  : GNU ARM EABI toolchain
 
      NOTE: As of this writing, there are issues with using this tool at
      the -Os level of optimization.  This has not been proven to be a
@@ -718,7 +718,7 @@ Configuration sub-directories
     running application "adc" in NuttShell.
 
     The ADC is triggered by Timer/counter at 1 kHz frequency and uses
-    DMA to transfer samples. Number of transfered samples can be set
+    DMA to transfer samples. Number of transferred samples can be set
     by configuring CONFIG_SAMV7_AFEC_DMASAMPLES.
 
   nsh:
@@ -742,7 +742,7 @@ Configuration sub-directories
 
          CONFIG_ARCH_INTERRUPTSTACK=2048
          CONFIG_IDLETHREAD_STACKSIZE=1024
-         CONFIG_USERMAIN_STACKSIZE=2048
+         CONFIG_INIT_STACKSIZE=2048
          CONFIG_PTHREAD_STACK_DEFAULT=2048
          ... and others ...
 
@@ -794,26 +794,24 @@ Configuration sub-directories
       CONFIG_MCUBOOT_BOOTLOADER=y
       CONFIG_MCUBOOT_ENABLE_LOGGING=y
 
-      CONFIG_SAME70QMTECH_FORMAT_MCUBOOT=y
-      CONFIG_SAME70QMTECH_MCUBOOT_BOOTLOADER=y
-      CONFIG_USER_ENTRYPOINT="mcuboot_loader_main"
+      CONFIG_SAMV7_FORMAT_MCUBOOT=y
+      CONFIG_INIT_ENTRYPOINT="mcuboot_loader_main"
 
-  mcuboot-confirm:
+  mcuboot-slot-confirm:
     This configuration exercises the MCUboot compatible application slot
     confirm example.
 
     Generate signed binaries for MCUboot compatible application:
       ./apps/boot/mcuboot/mcuboot/scripts/imgtool.py sign \
         --key apps/boot/mcuboot/mcuboot/root-rsa-2048.pem --align 8 \
-        --version 1.0.0 --header-size 0x200 --pad-header --slot-size 0xe0000 \
+        --version 1.0.0 --header-size 0x200 --pad-header --slot-size 0x28000 \
         nuttx/nuttx.bin signed_app_1_0_0.bin
 
     Relevant configuration settings:
 
       CONFIG_BOARD_LATE_INITIALIZE=y
 
-      CONFIG_BOOT_MCUBOOT=y
-      CONFIG_MCUBOOT_SLOT_CONFIRM_EXAMPLE=y
+      CONFIG_EXAMPLES_MCUBOOT_SLOT_CONFIRM=y
 
-      CONFIG_SAME70QMTECH_FORMAT_MCUBOOT=y
-      CONFIG_USER_ENTRYPOINT="mcuboot_confirm_main"
+      CONFIG_SAMV7_FORMAT_MCUBOOT=y
+      CONFIG_INIT_ENTRYPOINT="mcuboot_confirm_main"

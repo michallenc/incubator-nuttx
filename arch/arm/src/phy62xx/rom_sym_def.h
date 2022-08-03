@@ -22,14 +22,16 @@
  * Included Files
  ****************************************************************************/
 
-#ifndef __ROM_SYM_H__
-#define __ROM_SYM_H__
+#ifndef __ARCH_ARM_SRC_PHY62XX_ROM_SYM_DEF_H
+#define __ARCH_ARM_SRC_PHY62XX_ROM_SYM_DEF_H
+
 #ifdef USE_ROMSYM_ALIAS
 
   /* #define x _symrom_
    * #define x _symrom_
    */
 
+  #define TIM2_IRQHandler _symrom_TIM2_IRQHandler
   #define gpio_write _symrom_gpio_write
   #define ll_processExtInitIRQ _symrom_ll_processExtInitIRQ
   #define ll_processExtScanIRQ _symrom_ll_processExtScanIRQ
@@ -955,6 +957,7 @@
   #define spif_wrdata _symrom_spif_wrdata
   #define spif_write _symrom_spif_write
   #define spif_write_protect _symrom_spif_write_protect
+  #define spif_write_dma _symrom_spif_write_dma
   #define sram_ret_patch _symrom_sram_ret_patch
   #define supportedCmdsTable _symrom_supportedCmdsTable
   #define syncInfo _symrom_syncInfo
@@ -973,6 +976,5 @@
   #define zigbee_crc16_gen _symrom_zigbee_crc16_gen
   #define WaitUs _symrom_WaitUs
 
-#endif
-#endif
-
+#endif /* USE_ROMSYM_ALIAS */
+#endif /* __ARCH_ARM_SRC_PHY62XX_ROM_SYM_DEF_H */

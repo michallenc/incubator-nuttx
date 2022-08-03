@@ -24,12 +24,10 @@ config PM_NDOMAINS
 		Network domain, shutting down the network when it is not be used,
 		from the UI domain, shutting down the UI when it is not in use.
 
-choice
-	prompt "PM system governor"
-	default PM_GOVERNOR_ACTIVITY
+config PM_PROCFS
+	bool "PM proc fs support"
 	---help---
-		A PM governor applies a policy to control the change in power
-		states.
+		Enable procfs for pm.
 
 config PM_GOVERNOR_GREEDY
 	bool "Greedy governor"
@@ -46,33 +44,27 @@ config PM_GOVERNOR_ACTIVITY
 		The governor will then switch between power states given a set of
 		activity thresholds for each state.
 
-config PM_GOVERNOR_CUSTOM
-	bool "Custom governor"
-	---help---
-		By selecting this option, a custom governor can be supplied from
-		board-logic.
-
-endchoice
-
 menu "Governor options"
 
-if PM_GOVERNOR_GREEDY
-
 config PM_GOVERNOR_EXPLICIT_RELAX
-	bool "Stay initially at PM_NORMAL"
+	int "Stay initially at PM_NORMAL"
+	default 0
 	---help---
-		If you boot into NSH, when using the greedy PM governor, since NuttX will
-		almost immediately go idle (when waiting for a prompt), he lowest possible
-		run-level will be selected, which may not be desirable.
+		If you boot into NSH, especially using the greedy PM governor, since
+		NuttX will almost immediately go idle (when waiting for a prompt), the
+		lowest possible run-level will be selected, which may not be desirable.
 		This is not a problem if you directly run you application at boot, which
 		can hold off power levels using pm_stay() (via boardctl).
 
-		This option will initialize all run levels as if pm_stay() were to be
-		called once for each, so that your application needs to call pm_relax()
-		(via boardctl()) for every run-level you wish to allow to enter.
+		This option will initialize all run levels as if
+		pm_stay/pm_staytimeout() were to be called once for each.
 
-endif
+		if set to -1, that means pm_stay(), so that your application
+		needs to call pm_relax() (via boardctl()) for every run-level you
+		wish to allow to enter.
 
+		if set to timeout (unit: ms), that means pm_staytimeout(ms).
+		pm_relax() will be auto called after timeout.
 
 if PM_GOVERNOR_ACTIVITY
 
@@ -353,6 +345,7 @@ config REGULATOR
 
 config REGULATOR_RPMSG
 	bool "Regulator rpmsg driver support"
+	depends on RPTUN
 	default n
 	---help---
 		The rpmsg regulator driver implements the common regulator APIs, inside which
@@ -381,6 +374,7 @@ config BQ2425X
 	select I2C
 	select I2C_BQ2425X
 	depends on BATTERY_CHARGER
+	depends on ALLOW_BSD_COMPONENTS
 	---help---
 		The BQ24250/BQ24251 are battery charger for lithium-ion batteries.
 

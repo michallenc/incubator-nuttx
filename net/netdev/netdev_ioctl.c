@@ -120,17 +120,6 @@
 #endif
 #endif /* CONFIG_NETDEV_IOCTL */
 
-/* This is really kind of bogus.. When asked for an IP address, this is
- * family that is returned in the ifr structure.  Probably could just skip
- * this since the address family has nothing to do with the Ethernet address.
- */
-
-#ifdef CONFIG_NET_IPv6
-#  define AF_INETX AF_INET6
-#else
-#  define AF_INETX AF_INET
-#endif
-
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -889,7 +878,7 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
                 {
                   /* Yes.. bring the interface up */
 
-                  netdev_ifup(dev);
+                  ret = netdev_ifup(dev);
                 }
 
               /* Is this a request to take the interface down? */
@@ -898,11 +887,13 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
                 {
                   /* Yes.. take the interface down */
 
-                  netdev_ifdown(dev);
+                  ret = netdev_ifdown(dev);
                 }
             }
-
-          ret = OK;
+          else
+            {
+              ret = -ENODEV;
+            }
         }
         break;
 
@@ -932,7 +923,7 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
               if (dev->d_lltype == NET_LL_ETHERNET ||
                   dev->d_lltype == NET_LL_IEEE80211)
                 {
-                  req->ifr_hwaddr.sa_family = AF_INETX;
+                  req->ifr_hwaddr.sa_family = NET_SOCK_FAMILY;
                   memcpy(req->ifr_hwaddr.sa_data,
                          dev->d_mac.ether.ether_addr_octet, IFHWADDRLEN);
                   ret = OK;
@@ -944,7 +935,7 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
               if (dev->d_lltype == NET_LL_IEEE802154 ||
                   dev->d_lltype == NET_LL_PKTRADIO)
                 {
-                  req->ifr_hwaddr.sa_family = AF_INETX;
+                  req->ifr_hwaddr.sa_family = NET_SOCK_FAMILY;
                   memcpy(req->ifr_hwaddr.sa_data,
                          dev->d_mac.radio.nv_addr,
                          dev->d_mac.radio.nv_addrlen);
@@ -1083,9 +1074,27 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
           if (dev && dev->d_ioctl)
             {
               struct can_ioctl_data_s *can_bitrate_data =
-                            &req->ifr_ifru.ifru_can_data;
+                &req->ifr_ifru.ifru_can_data;
               ret = dev->d_ioctl(dev, cmd,
                             (unsigned long)(uintptr_t)can_bitrate_data);
+            }
+        }
+        break;
+#endif
+
+#if defined(CONFIG_NETDEV_IOCTL) && defined(CONFIG_NETDEV_CAN_FILTER_IOCTL)
+      case SIOCACANEXTFILTER:  /* Add an extended-ID filter */
+      case SIOCDCANEXTFILTER:  /* Delete an extended-ID filter */
+      case SIOCACANSTDFILTER:  /* Add a standard-ID filter */
+      case SIOCDCANSTDFILTER:  /* Delete a standard-ID filter */
+        {
+          dev = netdev_ifr_dev(req);
+          if (dev && dev->d_ioctl)
+            {
+              struct can_ioctl_filter_s *can_filter =
+                &req->ifr_ifru.ifru_can_filter;
+              ret = dev->d_ioctl(dev, cmd,
+                            (unsigned long)(uintptr_t)can_filter);
             }
         }
         break;
@@ -1097,7 +1106,7 @@ static int netdev_ifr_ioctl(FAR struct socket *psock, int cmd,
           dev = netdev_findbyindex(req->ifr_ifindex);
           if (dev != NULL)
             {
-              strncpy(req->ifr_name, dev->d_ifname, IFNAMSIZ);
+              strlcpy(req->ifr_name, dev->d_ifname, IFNAMSIZ);
               ret = OK;
             }
           else
@@ -1484,6 +1493,74 @@ static int netdev_rt_ioctl(FAR struct socket *psock, int cmd,
 #endif
 
 /****************************************************************************
+ * Name: netdev_file_ioctl
+ *
+ * Description:
+ *   Perform file ioctl operations.
+ *
+ * Parameters:
+ *   psock    Socket structure
+ *   cmd      The ioctl command
+ *   arg      The argument of the ioctl cmd
+ *
+ * Return:
+ *   >=0 on success (positive non-zero values are cmd-specific)
+ *   Negated errno returned on failure.
+ *
+ ****************************************************************************/
+
+static int netdev_file_ioctl(FAR struct socket *psock, int cmd,
+                             unsigned long arg)
+{
+  int ret;
+
+  switch (cmd)
+    {
+      case FIONBIO:
+        {
+          FAR struct socket_conn_s *conn = psock->s_conn;
+          FAR int *nonblock = (FAR int *)(uintptr_t)arg;
+          sockcaps_t sockcaps;
+
+           /* Non-blocking is the only configurable option.  And it applies
+            * only Unix domain sockets and to read operations on TCP/IP
+            * and UDP/IP sockets when read-ahead is enabled.
+            */
+
+          DEBUGASSERT(psock->s_sockif != NULL &&
+                      psock->s_sockif->si_sockcaps != NULL);
+          sockcaps = psock->s_sockif->si_sockcaps(psock);
+
+          if ((sockcaps & SOCKCAP_NONBLOCKING) != 0)
+            {
+               if (nonblock && *nonblock)
+                 {
+                   conn->s_flags |= _SF_NONBLOCK;
+                 }
+               else
+                 {
+                   conn->s_flags &= ~_SF_NONBLOCK;
+                 }
+
+               ret = -ENOTTY; /* let file_vioctl update f_oflags */
+            }
+          else
+            {
+              nerr("ERROR: Non-blocking not supported for this socket\n");
+              ret = -ENOSYS;
+            }
+        }
+        break;
+
+      default:
+        ret = -ENOTTY;
+        break;
+    }
+
+  return ret;
+}
+
+/****************************************************************************
  * Name: netdev_ioctl
  *
  * Description:
@@ -1544,6 +1621,8 @@ ssize_t net_ioctl_arglen(int cmd)
 {
   switch (cmd)
     {
+      case FIONBIO:
+      case FIONSPACE:
       case FIONREAD:
         return sizeof(int);
 
@@ -1683,13 +1762,21 @@ int psock_vioctl(FAR struct socket *psock, int cmd, va_list ap)
 
   arg = va_arg(ap, unsigned long);
 
-  /* Check for a USRSOCK ioctl command */
+  /* Check for socket specific ioctl command */
 
   ret = netdev_ioctl(psock, cmd, arg);
+
+  /* Check for file ioctl command */
+
   if (ret == -ENOTTY)
     {
-      /* Check for a standard network IOCTL command. */
+      ret = netdev_file_ioctl(psock, cmd, arg);
+    }
 
+  /* Check for a standard network IOCTL command. */
+
+  if (ret == -ENOTTY)
+    {
       ret = netdev_ifr_ioctl(psock, cmd, (FAR struct ifreq *)(uintptr_t)arg);
     }
 
@@ -1792,8 +1879,10 @@ int psock_ioctl(FAR struct socket *psock, int cmd, ...)
  *
  ****************************************************************************/
 
-void netdev_ifup(FAR struct net_driver_s *dev)
+int netdev_ifup(FAR struct net_driver_s *dev)
 {
+  int ret = -ENOSYS;
+
   /* Make sure that the device supports the d_ifup() method */
 
   if (dev->d_ifup != NULL)
@@ -1804,7 +1893,7 @@ void netdev_ifup(FAR struct net_driver_s *dev)
         {
           /* No, bring the interface up now */
 
-          if (dev->d_ifup(dev) == OK)
+          if ((ret = dev->d_ifup(dev)) == OK)
             {
               /* Mark the interface as up */
 
@@ -1815,11 +1904,19 @@ void netdev_ifup(FAR struct net_driver_s *dev)
               netlink_device_notify(dev);
             }
         }
+      else
+        {
+          ret = OK;
+        }
     }
+
+  return ret;
 }
 
-void netdev_ifdown(FAR struct net_driver_s *dev)
+int netdev_ifdown(FAR struct net_driver_s *dev)
 {
+  int ret = -ENOSYS;
+
   /* Check sure that the device supports the d_ifdown() method */
 
   if (dev->d_ifdown != NULL)
@@ -1830,28 +1927,34 @@ void netdev_ifdown(FAR struct net_driver_s *dev)
         {
           /* No, take the interface down now */
 
-          if (dev->d_ifdown(dev) == OK)
+          if ((ret = dev->d_ifdown(dev)) == OK)
             {
               /* Mark the interface as down */
 
-              dev->d_flags &= ~IFF_UP;
+              dev->d_flags &= ~(IFF_UP | IFF_RUNNING);
 
               /* Update the driver status */
 
               netlink_device_notify(dev);
-            }
-        }
 
-      /* Notify clients that the network has been taken down */
+              /* Notify clients that the network has been taken down */
 
-      devif_dev_event(dev, NULL, NETDEV_DOWN);
+              devif_dev_event(dev, NULL, NETDEV_DOWN);
 
 #ifdef CONFIG_NETDOWN_NOTIFIER
-      /* Provide signal notifications to threads that want to be
-       * notified of the network down state via signal.
-       */
+              /* Provide signal notifications to threads that want to be
+               * notified of the network down state via signal.
+               */
 
-      netdown_notifier_signal(dev);
+              netdown_notifier_signal(dev);
 #endif
+            }
+        }
+      else
+        {
+          ret = OK;
+        }
     }
+
+  return ret;
 }

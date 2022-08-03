@@ -28,12 +28,12 @@ MEMORY
 OUTPUT_ARCH("riscv")
 
 ENTRY(_stext)
-EXTERN(_vectors)
+EXTERN(__start)
 SECTIONS
 {
     .text : {
         _stext = ABSOLUTE(.);
-        *(.vectors)
+        *(.start .start.*)
         *(.text .text.*)
         *(.fixup)
         *(.gnu.warning)
@@ -75,10 +75,8 @@ SECTIONS
         *(.gnu.linkonce.b.*)
         *(.gnu.linkonce.sb.*)
         *(COMMON)
-        . = ALIGN(4);
-        _ebss = ABSOLUTE(.);
         . = ALIGN(32);
-        _default_stack_limit = ABSOLUTE(.);
+        _ebss = ABSOLUTE(.);
     } > lim
 
     /* Stabs debugging sections. */

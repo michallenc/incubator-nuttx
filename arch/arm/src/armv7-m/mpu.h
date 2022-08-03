@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_ARMV7M_MPU_H
-#define __ARCH_ARM_SRC_ARMV7M_MPU_H
+#ifndef __ARCH_ARM_SRC_ARMV7_M_MPU_H
+#define __ARCH_ARM_SRC_ARMV7_M_MPU_H
 
 /****************************************************************************
  * Included Files
@@ -33,8 +33,6 @@
 #  include <stdbool.h>
 #  include <assert.h>
 #  include <debug.h>
-
-#  include "arm_arch.h"
 #endif
 
 /****************************************************************************
@@ -473,4 +471,4 @@ void mpu_configure_region(uintptr_t base, size_t size,
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_ARM_MPU */
-#endif /* __ARCH_ARM_SRC_ARMV7M_MPU_H */
+#endif /* __ARCH_ARM_SRC_ARMV7_M_MPU_H */

@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __MCU_BUMBEE_M0__
-#define __MCU_BUMBEE_M0__
+#ifndef __ARCH_ARM_SRC_PHY62XX_MCU_PHY_BUMBEE_H
+#define __ARCH_ARM_SRC_PHY62XX_MCU_PHY_BUMBEE_H
 
 #ifdef __cplusplus
 extern "C"
@@ -31,7 +31,7 @@ extern "C"
  ****************************************************************************/
 
 #include "types.h"
-
+#include "bus_dev.h"
 typedef enum
 {
     MOD_NONE        = 0, MOD_CK802_CPU   = 0,
@@ -837,4 +837,4 @@ typedef struct
 #define IRQ_PRIO_THREAD       3
 #define IRQ_PRIO_APP          3
 
-#endif
+#endif /* __ARCH_ARM_SRC_PHY62XX_MCU_PHY_BUMBEE_H */

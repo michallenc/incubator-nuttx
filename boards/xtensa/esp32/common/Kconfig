@@ -2,6 +2,7 @@
 # For a description of the syntax of this configuration file,
 # see the file kconfig-language.txt in the NuttX tools repository.
 #
+
 config ESP32_MERGE_BINS
 	bool "Merge raw binary files into a single file"
 	default n
@@ -32,14 +33,26 @@ choice ESP32_SPIFLASH_FS
 		bool "SmartFS"
 		select FS_SMARTFS
 		select MTD_SMART
+		depends on !ESP32_SECURE_FLASH_ENC_ENABLED
+
+	comment "SmartFS not supported with Flash Encryption"
+		depends on ESP32_SECURE_FLASH_ENC_ENABLED
 
 	config ESP32_SPIFLASH_NXFFS
 		bool "NXFFS"
 		select FS_NXFFS
+		depends on !ESP32_SECURE_FLASH_ENC_ENABLED
+
+	comment "NXFFS not supported with Flash Encryption"
+		depends on ESP32_SECURE_FLASH_ENC_ENABLED
 
 	config ESP32_SPIFLASH_SPIFFS
 		bool "SPIFFS"
 		select FS_SPIFFS
+		depends on !ESP32_SECURE_FLASH_ENC_ENABLED
+
+	comment "SPIFFS not supported with Flash Encryption"
+		depends on ESP32_SECURE_FLASH_ENC_ENABLED
 
 	config ESP32_SPIFLASH_LITTLEFS
 		bool "LittleFS"

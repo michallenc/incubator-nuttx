@@ -25,14 +25,10 @@
 #include <nuttx/config.h>
 
 #include <nuttx/power/pm.h>
+#include <nuttx/semaphore.h>
+#include <nuttx/sched.h>
 
 #include "pm.h"
-
-#if defined(CONFIG_PM_GOVERNOR_ACTIVITY)
-#  include "activity_governor.h"
-#elif defined(CONFIG_PM_GOVERNOR_GREEDY)
-#  include "greedy_governor.h"
-#endif
 
 #ifdef CONFIG_PM
 
@@ -50,7 +46,7 @@
 
 struct pm_global_s g_pmglobals =
 {
-  .regsem = SEM_INITIALIZER(1)
+  SEM_INITIALIZER(1)
 };
 
 /****************************************************************************
@@ -77,23 +73,41 @@ struct pm_global_s g_pmglobals =
 
 void pm_initialize(void)
 {
+  FAR const struct pm_governor_s *gov;
+#if CONFIG_PM_GOVERNOR_EXPLICIT_RELAX
+  int state;
+#endif
+  int i;
+
+  pm_wakelock_global_init();
+
   /* Select governor */
 
-#if defined(CONFIG_PM_GOVERNOR_ACTIVITY)
-  g_pmglobals.governor = pm_activity_governor_initialize();
-#elif defined(CONFIG_PM_GOVERNOR_GREEDY)
-  g_pmglobals.governor = pm_greedy_governor_initialize();
-#elif defined(CONFIG_PM_GOVERNOR_CUSTOM)
-  /* TODO: call to board function to retrieve custom governor,
-   * such as board_pm_governor_initialize()
-   */
-
-#  error "Not supported yet"
+  for (i = 0; i < CONFIG_PM_NDOMAINS; i++)
+    {
+#if defined(CONFIG_PM_GOVERNOR_GREEDY)
+      gov = pm_greedy_governor_initialize();
+#elif defined(CONFIG_PM_GOVERNOR_ACTIVITY)
+      gov = pm_activity_governor_initialize();
+#else
+      static struct pm_governor_s null;
+      gov = &null;
 #endif
+      pm_set_governor(i, gov);
 
-  /* Initialize selected governor */
+      nxrmutex_init(&g_pmglobals.domain[i].lock);
 
-  g_pmglobals.governor->initialize();
+#if CONFIG_PM_GOVERNOR_EXPLICIT_RELAX
+      for (state = 0; state < PM_COUNT; state++)
+        {
+#  if CONFIG_PM_GOVERNOR_EXPLICIT_RELAX < 0
+          pm_stay(i, state);
+#  else
+          pm_staytimeout(i, state, CONFIG_PM_GOVERNOR_EXPLICIT_RELAX);
+#  endif
+        }
+#endif
+    }
 }
 
 #endif /* CONFIG_PM */

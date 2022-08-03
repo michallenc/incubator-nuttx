@@ -32,8 +32,7 @@
 #include <nuttx/semaphore.h>
 #include <nuttx/crypto/crypto.h>
 
-#include "riscv_arch.h"
-
+#include "riscv_internal.h"
 #include "esp32c3.h"
 #include "esp32c3_aes.h"
 
@@ -588,8 +587,8 @@ int esp32c3_aes_init(void)
 
 #ifdef CONFIG_CRYPTO_AES
 
-int aes_cypher(void *out, const void *in, uint32_t size,
-               const void *iv, const void *key, uint32_t keysize,
+int aes_cypher(void *out, const void *in, size_t size,
+               const void *iv, const void *key, size_t keysize,
                int mode, int encrypt)
 {
   int ret;

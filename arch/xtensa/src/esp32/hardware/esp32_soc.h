@@ -245,6 +245,8 @@
 #define DR_REG_I2C1_EXT_BASE                    0x3ff67000
 #define DR_REG_SDMMC_BASE                       0x3ff68000
 #define DR_REG_EMAC_BASE                        0x3ff69000
+#define DR_REG_TWAI_BASE                        0x3ff6b000
+#define DR_REG_CAN_BASE                         DR_REG_TWAI_BASE
 #define DR_REG_PWM1_BASE                        0x3ff6c000
 #define DR_REG_I2S1_BASE                        0x3ff6d000
 #define DR_REG_UART2_BASE                       0x3ff6e000
@@ -620,7 +622,7 @@ extern int rom_i2c_writereg(int block, int block_id, int reg_add,
                                     (REG_GET_FIELD(EFUSE_BLK0_RDATA5_REG, \
                                      EFUSE_RD_VOL_LEVEL_HP_INV)))
 
-#ifdef CONFIG_ESPTOOLPY_FLASHFREQ_80M
+#ifdef CONFIG_ESP32_FLASH_FREQ_80M
 #define DIG_DBIAS_80M_160M          RTC_CNTL_DBIAS_HP_VOLT
 #else
 #define DIG_DBIAS_80M_160M          RTC_CNTL_DBIAS_1V10
@@ -803,6 +805,10 @@ extern int rom_i2c_writereg(int block, int block_id, int reg_add,
 /* MMU invalid value */
 
 #define INVALID_MMU_VAL             0x100
+
+/*  phy registers and memory size */
+
+#define SOC_PHY_DIG_REGS_MEM_SIZE   (21*4)
 
 /****************************************************************************
  * Inline Functions

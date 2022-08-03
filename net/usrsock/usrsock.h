@@ -69,7 +69,7 @@ enum usrsock_conn_state_e
   USRSOCK_CONN_STATE_UNINITIALIZED = 0,
   USRSOCK_CONN_STATE_ABORTED,
   USRSOCK_CONN_STATE_READY,
-  USRSOCK_CONN_STATE_CONNECTING,
+  USRSOCK_CONN_STATE_CONNECTING
 };
 
 struct usrsock_poll_s
@@ -83,14 +83,7 @@ struct usrsock_conn_s
 {
   /* Common prologue of all connection structures. */
 
-  dq_entry_t node;                   /* Supports a doubly linked list */
-
-  /* This is a list of usrsock callbacks.  Each callback represents a thread
-   * that is stalled, waiting for a specific event.
-   */
-
-  FAR struct devif_callback_s *list; /* Usersock callbacks */
-  FAR struct devif_callback_s *list_tail;
+  struct socket_conn_s sconn;
 
   /* usrsock-specific content follows */
 
@@ -106,7 +99,7 @@ struct usrsock_conn_s
   struct
   {
     sem_t    sem;               /* Request semaphore (only one outstanding request) */
-    uint8_t  xid;               /* Expected message exchange id */
+    uint64_t xid;               /* Expected message exchange id */
     bool     inprogress;        /* Request was received but daemon is still processing */
     uint16_t valuelen;          /* Length of value from daemon */
     uint16_t valuelen_nontrunc; /* Actual length of value at daemon */
@@ -208,12 +201,6 @@ void usrsock_free(FAR struct usrsock_conn_s *conn);
  ****************************************************************************/
 
 FAR struct usrsock_conn_s *usrsock_nextconn(FAR struct usrsock_conn_s *conn);
-
-/****************************************************************************
- * Name: usrsock_connidx()
- ****************************************************************************/
-
-int usrsock_connidx(FAR struct usrsock_conn_s *conn);
 
 /****************************************************************************
  * Name: usrsock_active()

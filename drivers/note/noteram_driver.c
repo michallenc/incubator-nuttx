@@ -43,10 +43,10 @@
 
 struct noteram_info_s
 {
+  unsigned int ni_overwrite;
   volatile unsigned int ni_head;
   volatile unsigned int ni_tail;
   volatile unsigned int ni_read;
-  unsigned int ni_overwrite;
   uint8_t ni_buffer[CONFIG_DRIVER_NOTERAM_BUFSIZE];
 };
 
@@ -88,16 +88,16 @@ static const struct file_operations g_noteram_fops =
   noteram_ioctl, /* ioctl */
   NULL           /* poll */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , 0            /* unlink */
+  , NULL         /* unlink */
 #endif
 };
 
 static struct noteram_info_s g_noteram_info =
 {
 #ifdef CONFIG_DRIVER_NOTERAM_DEFAULT_NOOVERWRITE
-  .ni_overwrite = NOTERAM_MODE_OVERWRITE_DISABLE
+  NOTERAM_MODE_OVERWRITE_DISABLE
 #else
-  .ni_overwrite = NOTERAM_MODE_OVERWRITE_ENABLE
+  NOTERAM_MODE_OVERWRITE_ENABLE
 #endif
 };
 

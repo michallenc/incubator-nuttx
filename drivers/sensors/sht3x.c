@@ -168,12 +168,10 @@ static const struct file_operations g_sht3xfops =
   sht3x_read,     /* read */
   sht3x_write,    /* write */
   NULL,           /* seek */
-  sht3x_ioctl     /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  , NULL          /* poll */
-#endif
+  sht3x_ioctl,    /* ioctl */
+  NULL            /* poll */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , sht3x_unlink /* unlink */
+  , sht3x_unlink  /* unlink */
 #endif
 };
 
@@ -393,7 +391,7 @@ static int sht3x_read_values(FAR struct sht3x_dev_s *priv,
   struct timespec ts;
   int ret;
 
-  clock_gettime(CLOCK_REALTIME, &ts);
+  clock_systime_timespec(&ts);
 
   /* Read the raw data */
 

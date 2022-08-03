@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include <debug.h>
 #include <endian.h>
+#include <inttypes.h>
 
 #include <nuttx/kmalloc.h>
 
@@ -164,8 +165,8 @@ static const struct gpt_guid_s g_null_guid;
 
 static inline blkcnt_t gpt_last_lba(FAR struct partition_state_s *state)
 {
-  return (state->nblocks * state->blocksize + GPT_BLOCK_SIZE - 1) /
-         GPT_BLOCK_SIZE - 1;
+  return (((uint64_t)state->nblocks) * state->blocksize + GPT_BLOCK_SIZE - 1)
+         / GPT_BLOCK_SIZE - 1;
 }
 
 /****************************************************************************
@@ -261,7 +262,7 @@ static int gpt_header_is_valid(FAR struct partition_state_s *state,
   if (le64toh(gpt->signature) != GPT_HEADER_SIGNATURE)
     {
       ferr("GUID Partition Table Header signature is wrong:"
-            "0x%" PRIx64 " != 0x%" PRIx64 "\n",
+            "0x%" PRIx64 " != 0x%llx\n",
             le64toh(gpt->signature), GPT_HEADER_SIGNATURE);
       return -EINVAL;
     }
@@ -287,7 +288,7 @@ static int gpt_header_is_valid(FAR struct partition_state_s *state,
 
   if (le64toh(gpt->my_lba) != lba)
     {
-      ferr("GPT: my_lba incorrect: %" PRIx64 " != %" PRIx64 "\n",
+      ferr("GPT: my_lba incorrect: %" PRIx64 " != %" PRIxOFF "\n",
            le64toh(gpt->my_lba), lba);
       return -EINVAL;
     }
@@ -297,14 +298,14 @@ static int gpt_header_is_valid(FAR struct partition_state_s *state,
   lastlba = gpt_last_lba(state);
   if (le64toh(gpt->first_usable_lba) > lastlba)
     {
-      ferr("GPT: first_usable_lba incorrect: %" PRId64 " > %" PRId64 "\n",
+      ferr("GPT: first_usable_lba incorrect: %" PRId64 " > %" PRIdOFF "\n",
            le64toh(gpt->first_usable_lba), lastlba);
       return -EINVAL;
     }
 
   if (le64toh(gpt->last_usable_lba) > lastlba)
     {
-      ferr("GPT: last_usable_lba incorrect: %" PRId64 " > %" PRId64 "\n",
+      ferr("GPT: last_usable_lba incorrect: %" PRId64 " > %" PRIdOFF "\n",
            le64toh(gpt->last_usable_lba), lastlba);
       return -EINVAL;
     }

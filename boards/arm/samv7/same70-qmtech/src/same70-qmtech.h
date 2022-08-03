@@ -88,38 +88,12 @@
 
 #if !defined(CONFIG_FS_AUTOMOUNTER) || !defined(HAVE_HSMCI)
 #  undef HAVE_AUTOMOUNTER
-#  undef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT
+#  undef CONFIG_SAMV7_HSMCI0_AUTOMOUNT
 #endif
 
-#ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT
+#ifndef CONFIG_SAMV7_HSMCI0_AUTOMOUNT
 #  undef HAVE_AUTOMOUNTER
 #endif
-
-#ifdef HAVE_AUTOMOUNTER
-#  ifdef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT
-  /* HSMCI0 Automounter defaults */
-
-#    ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_FSTYPE
-#      define CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_FSTYPE "vfat"
-#    endif
-
-#    ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_BLKDEV
-#      define CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_BLKDEV "/dev/mmcds0"
-#    endif
-
-#    ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_MOUNTPOINT
-#      define CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_MOUNTPOINT "/mnt/sdcard0"
-#    endif
-
-#    ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_DDELAY
-#      define CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_DDELAY 1000
-#    endif
-
-#    ifndef CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_UDELAY
-#      define CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT_UDELAY 2000
-#    endif
-#  endif /* CONFIG_SAME70QMTECH_HSMCI0_AUTOMOUNT */
-#endif /* HAVE_AUTOMOUNTER */
 
 /* On-chip Programming Memory */
 
@@ -170,26 +144,36 @@
 /* HSMCI SD Card Detect
  *
  * The SAM E70 QMTECH has one standard SD card connector that is connected
- * to the High Speed Multimedia Card Interface (HSMCI) of the SAM E70. SD
- * card connector:
+ * to the High Speed Multimedia Card Interface (HSMCI) of the SAM E70.
+ * SD card connector:
  *
- *   ------ ----------------- ---------------------
- *   SAME70 SAME70            Shared functionality
+ *   ------ -----------------
+ *   SAME70 SAME70
  *   Pin    Function
- *   ------ ----------------- ---------------------
+ *   ------ -----------------
  *   PA30   MCDA0 (DAT0)
  *   PA31   MCDA1 (DAT1)
  *   PA26   MCDA2 (DAT2)
- *   PA27   MCDA3 (DAT3)      Camera
- *   PA25   MCCK (CLK)        Shield
+ *   PA27   MCDA3 (DAT3)
+ *   PA25   MCCK (CLK)
  *   PA28   MCCDA (CMD)
- *   PD17   Card Detect (C/D) Shield
- *   ------ ----------------- ---------------------
+ *   N/A    Card Detect (C/D)
+ *   ------ -----------------
+ *
+ * The SD card connector does not have CD signal connected to SAM E70 pin,
+ * but in order to provide automounter support the HW rework can be done and
+ * CD signal can be connected to SAM E70 PD17 (connector J3 pin 17).
  */
 
-#define GPIO_MCI0_CD (GPIO_INPUT | GPIO_CFG_PULLDOWN | GPIO_CFG_DEGLITCH | \
-                      GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN17)
-#define IRQ_MCI0_CD   SAM_IRQ_PD17
+#define GPIO_HSMCI0_CD (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_CFG_DEGLITCH | \
+                        GPIO_INT_BOTHEDGES | GPIO_PORT_PIOD | GPIO_PIN17)
+#define IRQ_HSMCI0_CD  SAM_IRQ_PD17
+
+/* GPIO pins used by the GPIO Subsystem */
+
+#define BOARD_NGPIOIN     0 /* Amount of GPIO Input pins */
+#define BOARD_NGPIOOUT    0 /* Amount of GPIO Output pins */
+#define BOARD_NGPIOINT    0 /* Amount of GPIO Input w/ Interruption pins */
 
 /****************************************************************************
  * Public Types
@@ -255,31 +239,6 @@ void sam_spidev_initialize(void);
 #endif
 
 /****************************************************************************
- * Name: sam_hsmci_initialize
- *
- * Description:
- *   Initialize HSMCI support
- *
- ****************************************************************************/
-
-#ifdef HAVE_HSMCI
-int sam_hsmci_initialize(int slot, int minor);
-#else
-# define sam_hsmci_initialize(s,m) (-ENOSYS)
-#endif
-
-/****************************************************************************
- * Name: sam_progmem_init
- *
- * Description:
- *   Initialize the FLASH and register the MTD device.
- ****************************************************************************/
-
-#ifdef HAVE_PROGMEM_CHARDEV
-int sam_progmem_init(void);
-#endif
-
-/****************************************************************************
  * Name: sam_can_setup
  *
  * Description:
@@ -292,89 +251,15 @@ int sam_can_setup(void);
 #endif
 
 /****************************************************************************
- * Name: sam_cardinserted
+ * Name: sam_gpio_initialize
  *
  * Description:
- *   Check if a card is inserted into the selected HSMCI slot
+ *   Initialize GPIO drivers for use with /apps/examples/gpio
  *
  ****************************************************************************/
 
-#ifdef HAVE_HSMCI
-bool sam_cardinserted(int slotno);
-#else
-#  define sam_cardinserted(slotno) (false)
-#endif
-
-/****************************************************************************
- * Name: sam_writeprotected
- *
- * Description:
- *   Check if the card in the MMCSD slot is write protected
- *
- ****************************************************************************/
-
-#ifdef HAVE_HSMCI
-bool sam_writeprotected(int slotno);
-#endif
-
-/****************************************************************************
- * Name:  sam_automount_initialize
- *
- * Description:
- *   Configure auto-mounters for each enable and so configured HSMCI
- *
- * Input Parameters:
- *   None
- *
- *  Returned Value:
- *    None
- *
- ****************************************************************************/
-
-#ifdef HAVE_AUTOMOUNTER
-void sam_automount_initialize(void);
-#endif
-
-/****************************************************************************
- * Name:  sam_automount_event
- *
- * Description:
- *   The HSMCI card detection logic has detected an insertion or removal
- *   event.  It has already scheduled the MMC/SD block driver operations.
- *   Now we need to schedule the auto-mount event which will occur with a
- *   substantial delay to make sure that everything has settle down.
- *
- * Input Parameters:
- *   slotno - Identifies the HSMCI0 slot: HSMCI0 or HSMCI1_SLOTNO.
- *       There is a terminology problem here:  Each HSMCI supports two slots,
- *      slot A and slot B. Only slot A is used.  So this is not a really a
- *      slot, but an HSCMI peripheral number.
- *   inserted - True if the card is inserted in the slot.  False otherwise.
- *
- *  Returned Value:
- *    None
- *
- *  Assumptions:
- *    Interrupts are disabled.
- *
- ****************************************************************************/
-
-#ifdef HAVE_AUTOMOUNTER
-void sam_automount_event(int slotno, bool inserted);
-#endif
-
-/****************************************************************************
- * Name: sam_writeprotected
- *
- * Description:
- *   Check if the card in the MMCSD slot is write protected
- *
- ****************************************************************************/
-
-#ifdef HAVE_HSMCI
-bool sam_writeprotected(int slotno);
-#else
-#  define sam_writeprotected(slotno) (false)
+#ifdef CONFIG_DEV_GPIO
+int sam_gpio_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

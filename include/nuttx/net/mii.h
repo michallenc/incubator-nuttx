@@ -324,7 +324,7 @@
 
 /* Auto-negotiation next page advertisement */
 
-#define MII_NPADVERTISE_CODE         0x07ff    /* Bits 0-10: message/un-formated code field */
+#define MII_NPADVERTISE_CODE         0x07ff    /* Bits 0-10: message/un-formatted code field */
 #define MII_NPADVERTISE_TOGGLE       (1 << 11) /* Bit 11: Toggle */
 #define MII_NPADVERTISE_ACK2         (1 << 12) /* Bit 12: Acknowledgement 2 */
 #define MII_NPADVERTISE_MSGPAGE      (1 << 13) /* Bit 13: Message page */
@@ -384,8 +384,8 @@
 
 /* PHYSTS Register (0x10) */
 
-#define MII_DP83825I_PHYSTS_SPEED   (1 << 1)   /* Bit 2: Speed Status Register */
-#define MII_DP83825I_PHYSTS_DUPLEX  (1 << 2)   /* Bit 3: Duplex Status Register */
+#define MII_DP83825I_PHYSTS_SPEED   (1 << 1)   /* Bit 1: Speed Status Register */
+#define MII_DP83825I_PHYSTS_DUPLEX  (1 << 2)   /* Bit 2: Duplex Status Register */
 
 /* RCSC Register (0x17) */
 
@@ -807,6 +807,36 @@
 #  define MII_CONFIG2_SLP_T_1             (1 << MII_CONFIG2_SLP_T_SHIFT)  /* sleep request timeout 1 ms */
 #  define MII_CONFIG2_SLP_T_4             (2 << MII_CONFIG2_SLP_T_SHIFT)  /* sleep request timeout 4 ms */
 #  define MII_CONFIG2_SLP_T_16            (3 << MII_CONFIG2_SLP_T_SHIFT)  /* sleep request timeout 16 ms */
+
+/* DP83848C-specific register bit settings **********************************/
+
+/* DP83848C Register 0x10: PHY Status */
+
+#define MII_DP83848C_PHYSTS_SPEED     (1 << 1)  /* Bit 1: Speed Status Register */
+#define MII_DP83848C_PHYSTS_DUPLEX    (1 << 2)  /* Bit 2: Duplex Status Register */
+
+/* DP83848C Register 0x11: Interrupt control/status */
+
+#define MII_DP83848C_INT_TEST         (1 << 2)  /* Test Interrupt */
+#define MII_DP83848C_INT_EN           (1 << 1)  /* Interrupt enable */
+#define MII_DP83848C_INT_OEN          (1 << 0)  /* Interrupt output enable */
+
+/* DP83848C Register 0x12: Interrupt control/status */
+
+#define MII_DP83848C_ED_INT           (1 << 14) /* Energy Detect interrupt: */
+#define MII_DP83848C_LINK_INT         (1 << 13) /* Change of Link Status interrupt: */
+#define MII_DP83848C_SPD_INT          (1 << 12) /* Change of speed status interrupt: */
+#define MII_DP83848C_DUP_INT          (1 << 11) /* Change of duplex status interrupt: */
+#define MII_DP83848C_ANC_INT          (1 << 10) /* Auto-Negotiation Complete interrupt: */
+#define MII_DP83848C_FHF_INT          (1 << 9)  /* False Carrier Counter half-full interrupt: */
+#define MII_DP83848C_RHF_INT          (1 << 8)  /* Receive Error Counter half-full interrupt: */
+#define MII_DP83848C_ED_INT_EN        (1 << 6)  /* Enable Interrupt on energy detect event. */
+#define MII_DP83848C_LINK_INT_EN      (1 << 5)  /* Enable Interrupt on change of link status. */
+#define MII_DP83848C_SPD_INT_EN       (1 << 4)  /* Enable Interrupt on change of speed status. */
+#define MII_DP83848C_DUP_INT_EN       (1 << 3)  /* Enable Interrupt on change of duplex status. */
+#define MII_DP83848C_ANC_INT_EN       (1 << 2)  /* Enable Interrupt on Auto-negotiation complete event. */
+#define MII_DP83848C_FHF_INT_EN       (1 << 1)  /* Enable Interrupt on False Carrier Counter Register half-full event. */
+#define MII_DP83848C_RHF_INT_EN       (1 << 0)  /* Enable Interrupt on Receive Error Counter Register half-full event. */
 
 /****************************************************************************
  * Type Definitions

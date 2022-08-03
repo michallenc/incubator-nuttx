@@ -276,6 +276,22 @@ config ARCH_CHIP_STM32L475VC
 	---help---
 		STM32 L4 Cortex M4, 256Kb FLASH, 96+32 Kb SRAM, LQFP64
 
+config ARCH_CHIP_STM32L476JG
+	bool "STM32L476JG"
+	select STM32L4_STM32L476XX
+	select STM32L4_FLASH_CONFIG_G
+	select STM32L4_IO_CONFIG_J
+	---help---
+		STM32 L4 Cortex M4, 1024Kb FLASH, 96+32 Kb SRAM
+
+config ARCH_CHIP_STM32L476JE
+	bool "STM32L476JE"
+	select STM32L4_STM32L476XX
+	select STM32L4_FLASH_CONFIG_E
+	select STM32L4_IO_CONFIG_J
+	---help---
+		STM32 L4 Cortex M4, 512Kb FLASH, 96+32 Kb SRAM
+
 config ARCH_CHIP_STM32L476RG
 	bool "STM32L476RG"
 	select STM32L4_STM32L476XX
@@ -1771,7 +1787,7 @@ config STM32L4_FLASH_PREFETCH
 config STM32L4_FLASH_WORKAROUND_DATA_CACHE_CORRUPTION_ON_RWW
 	bool "Workaround for FLASH data cache corruption"
 	default n
-	depends on STM32L4_STM32L475XX || STM32L4_STM32L476XX || STM32L4_STM32L486XX || STM32L4_STM32L496XX || STM32L4_STM32L4A6XX
+	depends on STM32L4_STM32L4X5 || STM32L4_STM32L4X6 || STM32L4_STM32L4XR
 	---help---
 		Enable the workaround to fix flash data cache corruption when reading
 		from one flash bank while writing on other flash bank.  See your STM32

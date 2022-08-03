@@ -159,9 +159,9 @@ static int do_recvfrom_request(FAR struct usrsock_conn_s *conn,
       addrlen = UINT16_MAX;
     }
 
-  if (buflen > UINT16_MAX)
+  if (buflen > UINT32_MAX)
     {
-      buflen = UINT16_MAX;
+      buflen = UINT32_MAX;
     }
 
   /* Prepare request for daemon to read. */
@@ -302,7 +302,8 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
       if (!(conn->flags & USRSOCK_EVENT_RECVFROM_AVAIL))
         {
-          if (_SS_ISNONBLOCK(psock->s_flags) || (flags & MSG_DONTWAIT) != 0)
+          if (_SS_ISNONBLOCK(conn->sconn.s_flags) ||
+              (flags & MSG_DONTWAIT) != 0)
             {
               /* Nothing to receive from daemon side. */
 
@@ -318,14 +319,14 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
               USRSOCK_EVENT_REMOTE_CLOSED);
           if (ret < 0)
             {
-              nwarn("usrsock_setup_request_callback failed: %d\n", ret);
+              nwarn("usrsock_setup_request_callback failed: %zd\n", ret);
               goto errout_unlock;
             }
 
           /* Wait for receive-avail (or abort, or timeout, or signal). */
 
           ret = net_timedwait(&state.reqstate.recvsem,
-                              _SO_TIMEOUT(psock->s_rcvtimeo));
+                              _SO_TIMEOUT(conn->sconn.s_rcvtimeo));
           if (ret < 0)
             {
               if (ret == -ETIMEDOUT)
@@ -340,8 +341,8 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
                 }
               else
                 {
-                  nerr("net_timedwait errno: %d\n", ret);
-                  DEBUGASSERT(false);
+                  nerr("net_timedwait errno: %zd\n", ret);
+                  DEBUGPANIC();
                 }
             }
 
@@ -381,7 +382,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
           USRSOCK_EVENT_ABORT | USRSOCK_EVENT_REQ_COMPLETE);
       if (ret < 0)
         {
-          nwarn("usrsock_setup_request_callback failed: %d\n", ret);
+          nwarn("usrsock_setup_request_callback failed: %zd\n", ret);
           goto errout_unlock;
         }
 

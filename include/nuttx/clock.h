@@ -182,7 +182,7 @@
 #define TICK2SEC(tick)        (((tick)+(TICK_PER_SEC/2))/TICK_PER_SEC)   /* Rounds */
 
 #if defined(CONFIG_DEBUG_FEATURES) && defined(CONFIG_SYSTEM_TIME64) && \
-    defined(CONFIG_CLOCK_MONOTONIC) && !defined(CONFIG_SCHED_TICKLESS)
+    !defined(CONFIG_SCHED_TICKLESS)
 /* Initial system timer ticks value close to maximum 32-bit value, to test
  * 64-bit system-timer after going over 32-bit value. This is to make errors
  * of casting 64-bit system-timer to 32-bit variables more visible.
@@ -322,7 +322,7 @@ void clock_timespec_subtract(FAR const struct timespec *ts1,
  *   timers and delays.  So use this interface with care.
  *
  * Input Parameters:
- *   None
+ *   tp: rtc time should be synced, set NULL to re-get time
  *
  * Returned Value:
  *   None
@@ -332,7 +332,7 @@ void clock_timespec_subtract(FAR const struct timespec *ts1,
  ****************************************************************************/
 
 #ifdef CONFIG_RTC
-void clock_synchronize(void);
+void clock_synchronize(FAR const struct timespec *tp);
 #endif
 
 /****************************************************************************

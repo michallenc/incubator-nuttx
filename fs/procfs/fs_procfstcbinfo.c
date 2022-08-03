@@ -136,14 +136,6 @@ static int tcbinfo_open(FAR struct file *filep, FAR const char *relpath,
       return -EACCES;
     }
 
-  /* "tcbinfo" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "tcbinfo") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* Allocate a container to hold the file attributes */
 
   attr = (FAR struct tcbinfo_file_s *)
@@ -203,7 +195,7 @@ static ssize_t tcbinfo_read(FAR struct file *filep, FAR char *buffer,
   if (filep->f_pos == 0)
     {
       linesize = procfs_snprintf(attr->line, TCBINFO_LINELEN,
-                                 "pointer %p size %d\n", g_tcbinfo,
+                                 "pointer %p size %d\n", &g_tcbinfo,
                                   sizeof(struct tcbinfo_s));
 
       /* Save the linesize in case we are re-entered with f_pos > 0 */
@@ -274,14 +266,6 @@ static int tcbinfo_dup(FAR const struct file *oldp, FAR struct file *newp)
 
 static int tcbinfo_stat(FAR const char *relpath, FAR struct stat *buf)
 {
-  /* "tcbinfo" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "tcbinfo") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* "tcbinfo" is the name for a read-only file */
 
   memset(buf, 0, sizeof(struct stat));

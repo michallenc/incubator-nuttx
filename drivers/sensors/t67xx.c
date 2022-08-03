@@ -136,10 +136,6 @@ static int t67xx_reset(FAR struct t67xx_dev_s *priv);
 
 /* Character driver methods */
 
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-static int     t67xx_open(FAR struct file *filep);
-static int     t67xx_close(FAR struct file *filep);
-#endif
 static ssize_t t67xx_read(FAR struct file *filep, FAR char *buffer,
                           size_t buflen);
 static ssize_t t67xx_write(FAR struct file *filep, FAR const char *buffer,
@@ -153,13 +149,8 @@ static int     t67xx_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_t67xxfops =
 {
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  t67xx_open,     /* open */
-  t67xx_close,    /* close */
-#else
   NULL,           /* open */
   NULL,           /* close */
-#endif
   t67xx_read,     /* read */
   t67xx_write,    /* write */
   NULL,           /* seek */
@@ -428,7 +419,7 @@ static int t67xx_read_gas_ppm(FAR struct t67xx_dev_s *priv,
   struct timespec ts;
   int ret;
 
-  clock_gettime(CLOCK_REALTIME, &ts);
+  clock_systime_timespec(&ts);
 
   if (!has_time_passed(ts, priv->boot_time, T67XX_UPTIME_MINIMAL_SEC))
     {
@@ -562,48 +553,10 @@ static int t67xx_reset(FAR struct t67xx_dev_s *priv)
 
   /* Sensor uptime starting again from zero. */
 
-  clock_gettime(CLOCK_REALTIME, &priv->boot_time);
+  clock_systime_timespec(&priv->boot_time);
 
   return ret;
 }
-
-/****************************************************************************
- * Name: t67xx_open
- *
- * Description:
- *   This function is called whenever the T67XX device is opened.
- *
- ****************************************************************************/
-
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-static int t67xx_open(FAR struct file *filep)
-{
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct t67xx_dev_s *priv = inode->i_private;
-
-  UNUSED(priv);
-  return OK;
-}
-#endif
-
-/****************************************************************************
- * Name: t67xx_close
- *
- * Description:
- *   This routine is called when the T67XX device is closed.
- *
- ****************************************************************************/
-
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-static int t67xx_close(FAR struct file *filep)
-{
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct t67xx_dev_s *priv = inode->i_private;
-
-  UNUSED(priv);
-  return OK;
-}
-#endif
 
 /****************************************************************************
  * Name: t67xx_read
@@ -770,7 +723,7 @@ int t67xx_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   nxsem_init(&priv->devsem, 0, 1);
 
-  clock_gettime(CLOCK_REALTIME, &priv->boot_time);
+  clock_systime_timespec(&priv->boot_time);
 
   /* Register the character driver. */
 

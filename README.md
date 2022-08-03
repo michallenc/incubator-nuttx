@@ -987,7 +987,6 @@ The `menuconfig` make target depends on two things:
      the more detailed build instructions in the top-level README.txt
      file of the tools repository at <https://bitbucket.org/nuttx/tools>.
 
-
      The `make install` step will, by default, install the `kconfig-mconf`
      tool at `/usr/local/bin/mconf`.  Where ever you choose to
      install `kconfig-mconf`, make certain that your PATH variable includes
@@ -1325,7 +1324,7 @@ damage your configuration (see
   environment:
 
   1. You can run the configuration tool using Cygwin.  However, the
-     Cygwin `Makefile.win` will complain so to do this will, you have
+     Cygwin `Win.mk` will complain so to do this will, you have
      to manually edit the `.config` file:
 
      a. Delete the line: `CONFIG_WINDOWS_NATIVE=y`

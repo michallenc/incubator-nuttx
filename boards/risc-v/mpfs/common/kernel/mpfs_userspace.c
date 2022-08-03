@@ -43,10 +43,6 @@
 #  error "CONFIG_NUTTX_USERSPACE not defined"
 #endif
 
-#if CONFIG_NUTTX_USERSPACE != 0x00001000
-#  error "CONFIG_NUTTX_USERSPACE must match the value in memory.ld"
-#endif
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -75,13 +71,13 @@ extern uintptr_t *__ld_usram_end; /* End+1 of user ram section */
 
 /* This is the user space entry point */
 
-int CONFIG_USER_ENTRYPOINT(int argc, char *argv[]);
+int CONFIG_INIT_ENTRYPOINT(int argc, char *argv[]);
 
 const struct userspace_s userspace locate_data(".userspace") =
 {
   /* General memory map */
 
-  .us_entrypoint    = (main_t)CONFIG_USER_ENTRYPOINT,
+  .us_entrypoint    = (main_t)CONFIG_INIT_ENTRYPOINT,
   .us_textstart     = (uintptr_t)&_stext,
   .us_textend       = (uintptr_t)&_etext,
   .us_datasource    = (uintptr_t)&_eronly,
@@ -99,9 +95,6 @@ const struct userspace_s userspace locate_data(".userspace") =
   /* Task/thread startup routines */
 
   .task_startup     = nxtask_startup,
-#ifndef CONFIG_DISABLE_PTHREAD
-  .pthread_startup  = pthread_startup,
-#endif
 
   /* Signal handler trampoline */
 

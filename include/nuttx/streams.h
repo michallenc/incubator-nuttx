@@ -26,7 +26,20 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <lzf.h>
 #include <stdio.h>
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+#include <nuttx/fs/fs.h>
+#endif
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifdef CONFIG_LIBC_LZF
+#define LZF_STREAM_BLOCKSIZE  ((1 << CONFIG_STREAM_LZF_BLOG) - 1)
+#endif
 
 /****************************************************************************
  * Public Types
@@ -173,20 +186,29 @@ struct lib_rawsostream_s
   int                    fd;
 };
 
-/* This is a special stream that does buffered character I/O.  NOTE that is
- * CONFIG_SYSLOG_BUFFER is not defined, it is the same as struct
- * lib_outstream_s
- */
+/* LZF compressed stream pipeline */
 
-struct iob_s;  /* Forward reference */
+#ifdef CONFIG_LIBC_LZF
+struct lib_lzfoutstream_s
+{
+  struct lib_outstream_s      public;
+  FAR struct lib_outstream_s *backend;
+  lzf_state_t                 state;
+  size_t                      offset;
+  char                        in[LZF_STREAM_BLOCKSIZE];
+  char                        out[LZF_MAX_HDR_SIZE + LZF_STREAM_BLOCKSIZE];
+};
+#endif
 
-struct lib_syslogstream_s
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+struct lib_blkoutstream_s
 {
   struct lib_outstream_s public;
-#ifdef CONFIG_SYSLOG_BUFFER
-  FAR struct iob_s *iob;
-#endif
+  FAR struct inode      *inode;
+  struct geometry        geo;
+  FAR unsigned char     *cache;
 };
+#endif
 
 /****************************************************************************
  * Public Data
@@ -345,42 +367,64 @@ void lib_nullinstream(FAR struct lib_instream_s *nullinstream);
 void lib_nulloutstream(FAR struct lib_outstream_s *nulloutstream);
 
 /****************************************************************************
- * Name: syslogstream_create
+ * Name: lib_lzfoutstream
  *
  * Description:
- *   Initializes a stream for use with the configured syslog interface.
- *   Only accessible from with the OS SYSLOG logic.
+ *  LZF compressed pipeline stream
  *
  * Input Parameters:
- *   stream - User allocated, uninitialized instance of struct
- *            lib_syslogstream_s to be initialized.
+ *   stream  - User allocated, uninitialized instance of struct
+ *                lib_lzfoutstream_s to be initialized.
+ *   backend - Stream backend port.
  *
  * Returned Value:
  *   None (User allocated instance initialized).
  *
  ****************************************************************************/
 
-void syslogstream_create(FAR struct lib_syslogstream_s *stream);
+#ifdef CONFIG_LIBC_LZF
+void lib_lzfoutstream(FAR struct lib_lzfoutstream_s *stream,
+                      FAR struct lib_outstream_s *backend);
+#endif
 
 /****************************************************************************
- * Name: syslogstream_destroy
+ * Name: lib_blkoutstream_open
  *
  * Description:
- *   Free resources held by the syslog stream.
+ *  open block driver stream backend
  *
  * Input Parameters:
- *   stream - User allocated, uninitialized instance of struct
- *            lib_syslogstream_s to be initialized.
+ *   stream  - User allocated, uninitialized instance of struct
+ *                lib_blkoutstream_s to be initialized.
+ *   name    - The full path to the block driver to be opened.
  *
  * Returned Value:
- *   None (Resources freed).
+ *   Returns zero on success or a negated errno on failure
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SYSLOG_BUFFER
-void syslogstream_destroy(FAR struct lib_syslogstream_s *stream);
-#else
-#  define syslogstream_destroy(s)
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+int lib_blkoutstream_open(FAR struct lib_blkoutstream_s *stream,
+                          FAR const char *name);
+#endif
+
+/****************************************************************************
+ * Name: lib_blkoutstream_close
+ *
+ * Description:
+ *  close block driver stream backend
+ *
+ * Input Parameters:
+ *   stream  - User allocated, uninitialized instance of struct
+ *                lib_blkoutstream_s to be initialized.
+ *
+ * Returned Value:
+ *   None (User allocated instance initialized).
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+void lib_blkoutstream_close(FAR struct lib_blkoutstream_s *stream);
 #endif
 
 /****************************************************************************

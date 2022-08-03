@@ -84,20 +84,18 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
       return;
     }
 
-  kasan_poison(mem, mm_malloc_size(mem));
-
   if (mm_takesemaphore(heap) == false)
     {
-      kasan_unpoison(mem, mm_malloc_size(mem));
-
-      /* We are in IDLE task & can't get sem, or meet -ESRCH return,
-       * which means we are in situations during context switching(See
-       * mm_takesemaphore() & getpid()). Then add to the delay list.
+      /* Meet -ESRCH return, which means we are in situations
+       * during context switching(See mm_takesemaphore() & getpid()).
+       * Then add to the delay list.
        */
 
       mm_add_delaylist(heap, mem);
       return;
     }
+
+  kasan_poison(mem, mm_malloc_size(mem));
 
   DEBUGASSERT(mm_heapmember(heap, mem));
 
@@ -175,5 +173,6 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
   /* Add the merged node to the nodelist */
 
   mm_addfreechunk(heap, node);
+
   mm_givesemaphore(heap);
 }

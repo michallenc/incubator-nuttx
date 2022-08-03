@@ -45,6 +45,12 @@
 #include "rpmsgfs.h"
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define RPMSGFS_RETRY_DELAY_MS       10
+
+/****************************************************************************
  * Private Types
  ****************************************************************************/
 
@@ -71,6 +77,8 @@ struct rpmsgfs_mountpt_s
   FAR struct rpmsgfs_ofile_s *fs_head; /* Singly-linked list of open files */
   char                       fs_root[PATH_MAX];
   void                       *handle;
+  int                        timeout;  /* Connect timeout */
+  struct statfs              statfs;
 };
 
 /****************************************************************************
@@ -200,7 +208,7 @@ static void rpmsgfs_semgive(FAR struct rpmsgfs_mountpt_s *fs)
  *
  ****************************************************************************/
 
-static void rpmsgfs_mkpath(FAR struct rpmsgfs_mountpt_s  *fs,
+static void rpmsgfs_mkpath(FAR struct rpmsgfs_mountpt_s *fs,
                            FAR const char *relpath,
                            FAR char *path, int pathlen)
 {
@@ -210,7 +218,7 @@ static void rpmsgfs_mkpath(FAR struct rpmsgfs_mountpt_s  *fs,
 
   /* Copy base host path to output */
 
-  strncpy(path, fs->fs_root, pathlen);
+  strlcpy(path, fs->fs_root, pathlen);
 
   /* Be sure we aren't trying to use ".." to display outside of our
    * mounted path.
@@ -251,6 +259,21 @@ static void rpmsgfs_mkpath(FAR struct rpmsgfs_mountpt_s  *fs,
   if (depth >= 0)
     {
       strncat(path, &relpath[first], pathlen - strlen(path) - 1);
+    }
+
+  while (fs->timeout > 0)
+    {
+      struct stat buf;
+      int ret;
+
+      ret = rpmsgfs_client_stat(fs->handle, fs->fs_root, &buf);
+      if (ret == 0)
+        {
+          break;
+        }
+
+      usleep(RPMSGFS_RETRY_DELAY_MS * USEC_PER_MSEC);
+      fs->timeout -= RPMSGFS_RETRY_DELAY_MS;
     }
 }
 
@@ -505,21 +528,7 @@ static ssize_t rpmsgfs_write(FAR struct file *filep, const char *buffer,
   FAR struct rpmsgfs_ofile_s *hf;
   ssize_t ret;
 
-  /* Sanity checks.  I have seen the following assertion misfire if
-   * CONFIG_DEBUG_MM is enabled while re-directing output to a
-   * file.  In this case, the debug output can get generated while
-   * the file is being opened,  FAT data structures are being allocated,
-   * and things are generally in a perverse state.
-   */
-
-#ifdef CONFIG_DEBUG_MM
-  if (filep->f_priv == NULL || filep->f_inode == NULL)
-    {
-      return -ENXIO;
-    }
-#else
   DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
-#endif
 
   /* Recover our private data from the struct file instance */
 
@@ -1055,6 +1064,7 @@ static int rpmsgfs_bind(FAR struct inode *blkdriver, FAR const void *data,
 
   /* The options we support are:
    *  "fs=whatever,cpu=cpuname", remote dir
+   *  "timeout=xx", connect timeout, unit (ms)
    */
 
   options = strdup(data);
@@ -1064,16 +1074,24 @@ static int rpmsgfs_bind(FAR struct inode *blkdriver, FAR const void *data,
       return -ENOMEM;
     }
 
+  /* Set timeout default value */
+
+  fs->timeout = INT_MAX;
+
   ptr = strtok_r(options, ",", &saveptr);
   while (ptr != NULL)
     {
       if ((strncmp(ptr, "fs=", 3) == 0))
         {
-          strncpy(fs->fs_root, &ptr[3], sizeof(fs->fs_root));
+          strlcpy(fs->fs_root, &ptr[3], sizeof(fs->fs_root));
         }
       else if ((strncmp(ptr, "cpu=", 4) == 0))
         {
           cpuname = &ptr[4];
+        }
+      else if ((strncmp(ptr, "timeout=", 8) == 0))
+        {
+          fs->timeout = atoi(&ptr[8]);
         }
 
       ptr = strtok_r(NULL, ",", &saveptr);
@@ -1201,11 +1219,20 @@ static int rpmsgfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
       return ret;
     }
 
+  if (fs->statfs.f_type == RPMSGFS_MAGIC)
+    {
+      memcpy(buf, &fs->statfs, sizeof(struct statfs));
+      rpmsgfs_semgive(fs);
+      return 0;
+    }
+
   /* Call the host fs to perform the statfs */
 
   memset(buf, 0, sizeof(struct statfs));
   ret = rpmsgfs_client_statfs(fs->handle, fs->fs_root, buf);
   buf->f_type = RPMSGFS_MAGIC;
+
+  memcpy(&fs->statfs, buf, sizeof(struct statfs));
 
   rpmsgfs_semgive(fs);
   return ret;
@@ -1362,10 +1389,10 @@ int rpmsgfs_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
 
   /* Append to the host's root directory */
 
-  strncpy(oldpath, fs->fs_root, sizeof(oldpath));
-  strncat(oldpath, oldrelpath, sizeof(oldpath)-strlen(oldpath)-1);
-  strncpy(newpath, fs->fs_root, sizeof(newpath));
-  strncat(newpath, newrelpath, sizeof(newpath)-strlen(newpath)-1);
+  strlcpy(oldpath, fs->fs_root, sizeof(oldpath));
+  strlcat(oldpath, oldrelpath, sizeof(oldpath));
+  strlcpy(newpath, fs->fs_root, sizeof(newpath));
+  strlcat(newpath, newrelpath, sizeof(newpath));
 
   /* Call the host FS to do the mkdir */
 

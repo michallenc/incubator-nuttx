@@ -96,6 +96,10 @@
 #  include <nuttx/irq.h>
 #endif
 
+#ifdef CONFIG_BOARDCTL_RESET_CAUSE
+#  include <sys/boardctl.h>
+#endif
+
 /****************************************************************************
  * Public Function Prototypes
  *
@@ -427,6 +431,23 @@ int board_composite_initialize(int port);
 
 #if defined(CONFIG_BOARDCTL_USBDEVCTRL) && defined(CONFIG_USBDEV_COMPOSITE)
 FAR void *board_composite_connect(int port, int configid);
+#endif
+
+/****************************************************************************
+ * Name:  board_usbdev_serialstr
+ *
+ * Description:
+ *   Use board unique serial number string to iSerialNumber field in the
+ *   device descriptor. This is for determining the board when multiple
+ *   boards on the same host.
+ *
+ * Returned Value:
+ *   The board unique serial number string.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_BOARD_USBDEV_SERIALSTR)
+FAR const char *board_usbdev_serialstr(void);
 #endif
 
 /****************************************************************************
@@ -800,6 +821,20 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
 
 #ifdef CONFIG_BOARD_INITRNGSEED
 void board_init_rngseed(void);
+#endif
+
+/****************************************************************************
+ * Name: board_reset_cause
+ *
+ * Description:
+ *   This interface may be used by application specific logic to get the
+ *   cause of last reset. Support for this function is required by
+ *   board-level logic if CONFIG_BOARDCTL_RESET is selected.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_BOARDCTL_RESET_CAUSE
+int board_reset_cause(FAR struct boardioc_reset_cause_s *cause);
 #endif
 
 #undef EXTERN

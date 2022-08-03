@@ -57,6 +57,21 @@ void mm_seminitialize(FAR struct mm_heap_s *heap)
 }
 
 /****************************************************************************
+ * Name: mm_seminitialize
+ *
+ * Description:
+ *   Uninitialize the MM mutex
+ *
+ ****************************************************************************/
+
+void mm_semuninitialize(FAR struct mm_heap_s *heap)
+{
+  /* Uninitialize the MM semaphore */
+
+  _SEM_DESTROY(&heap->mm_semaphore);
+}
+
+/****************************************************************************
  * Name: mm_takesemaphore
  *
  * Description:
@@ -80,10 +95,18 @@ bool mm_takesemaphore(FAR struct mm_heap_s *heap)
 
   if (up_interrupt_context())
     {
-#ifdef CONFIG_DEBUG_MM
-      return _SEM_TRYWAIT(&heap->mm_semaphore) >= 0;
+#if !defined(CONFIG_SMP)
+      int val;
+
+      /* Check the semaphore value, if held by someone, then return false.
+       * Or, touch the heap internal data directly.
+       */
+
+      _SEM_GETVALUE(&heap->mm_semaphore, &val);
+
+      return val > 0;
 #else
-      /* Can't take semaphore in the interrupt handler */
+      /* Can't take semaphore in SMP interrupt handler */
 
       return false;
 #endif
@@ -105,14 +128,6 @@ bool mm_takesemaphore(FAR struct mm_heap_s *heap)
     {
       return false;
     }
-#if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
-  else if (sched_idletask())
-    {
-      /* Try to take the semaphore */
-
-      return _SEM_TRYWAIT(&heap->mm_semaphore) >= 0;
-    }
-#endif
   else
     {
       int ret;
@@ -149,5 +164,12 @@ bool mm_takesemaphore(FAR struct mm_heap_s *heap)
 
 void mm_givesemaphore(FAR struct mm_heap_s *heap)
 {
+#if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
+  if (up_interrupt_context())
+    {
+      return;
+    }
+#endif
+
   DEBUGVERIFY(_SEM_POST(&heap->mm_semaphore));
 }

@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_ARMV7R_MPU_H
-#define __ARCH_ARM_SRC_ARMV7R_MPU_H
+#ifndef __ARCH_ARM_SRC_ARMV7_R_MPU_H
+#define __ARCH_ARM_SRC_ARMV7_R_MPU_H
 
 /****************************************************************************
  * Included Files
@@ -33,7 +33,6 @@
 #  include <stdbool.h>
 #  include <debug.h>
 
-#  include "arm_arch.h"
 #  include "sctlr.h"
 #  include "cp15.h"
 #endif
@@ -845,4 +844,4 @@ static inline void mpu_user_intsram_wb(uintptr_t base, size_t size)
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_ARMV7R_MPU_H */
+#endif /* __ARCH_ARM_SRC_ARMV7_R_MPU_H */

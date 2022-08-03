@@ -33,6 +33,7 @@
 
 #include "esp32c3_wifi_adapter.h"
 #include "esp32c3_wifi_utils.h"
+#include "esp32c3_wireless.h"
 #include "espidf_wifi.h"
 
 /****************************************************************************
@@ -250,7 +251,6 @@ int esp_wifi_start_scan(struct iwreq *iwr)
 int esp_wifi_get_scan_results(struct iwreq *iwr)
 {
   int ret = OK;
-  struct timespec abstime;
   static bool scan_block = false;
   struct wifi_scan_result_s *priv = &g_scan_priv;
 
@@ -261,9 +261,7 @@ int esp_wifi_get_scan_results(struct iwreq *iwr)
         {
           scan_block = true;
           leave_critical_section(irqstate);
-          clock_gettime(CLOCK_REALTIME, &abstime);
-          abstime.tv_sec += SCAN_TIME_SEC;
-          nxsem_timedwait(&priv->scan_signal, &abstime);
+          nxsem_tickwait(&priv->scan_signal, SEC2TICK(SCAN_TIME_SEC));
           scan_block = false;
         }
       else

@@ -46,7 +46,7 @@
 #include <arch/board/board.h>
 
 #include "mpfs_emmcsd.h"
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "hardware/mpfs_emmcsd.h"
 
 /****************************************************************************
@@ -442,7 +442,11 @@ struct mpfs_dev_s g_emmcsd_dev =
   },
   .hw_base           = MPFS_EMMC_SD_BASE,
   .plic_irq          = MPFS_IRQ_MMC_MAIN,
-  .emmc              = false,               /* Set true for emmc operation */
+#ifdef CONFIG_MPFS_EMMCSD_MUX_EMMC
+  .emmc              = true,
+#else
+  .emmc              = false,
+#endif
   .blocksize         = 512,
   .onebit            = false,
   .polltransfer      = true,
@@ -992,8 +996,8 @@ static void mpfs_endtransfer(struct mpfs_dev_s *priv,
 
   /* Clear Buffer Read Ready (BRR), BWR and DMA statuses */
 
-  putreg32(MPFS_EMMCSD_SRS12, MPFS_EMMCSD_SRS12_BRR |
-           MPFS_EMMCSD_SRS12_BWR | MPFS_EMMCSD_SRS12_DMAINT);
+  putreg32(MPFS_EMMCSD_SRS12_BRR | MPFS_EMMCSD_SRS12_BWR |
+           MPFS_EMMCSD_SRS12_DMAINT, MPFS_EMMCSD_SRS12);
 
   /* Mark the transfer finished */
 
@@ -2892,7 +2896,7 @@ static void mpfs_callback(void *arg)
           mcinfo("Queuing callback to %p(%p)\n",
                  priv->callback, priv->cbarg);
 
-          work_queue(HPWORK, &priv->cbwork, (worker_t)priv->callback,
+          work_queue(HPWORK, &priv->cbwork, priv->callback,
                      priv->cbarg, 0);
         }
       else

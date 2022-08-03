@@ -31,7 +31,6 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
 #include "nvic.h"
 #include "arm_internal.h"
 
@@ -58,7 +57,7 @@
  *
  ****************************************************************************/
 
-int arm_busfault(int irq, FAR void *context, FAR void *arg)
+int arm_busfault(int irq, void *context, void *arg)
 {
   uint32_t cfsr = getreg32(NVIC_CFAULTS);
 

@@ -24,7 +24,7 @@
 
 #include <nuttx/config.h>
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
 
 #include <queue.h>
 #include <assert.h>
@@ -48,16 +48,11 @@
 #include "esp32_wlan.h"
 #include "esp32_wifi_utils.h"
 #include "esp32_wifi_adapter.h"
+#include "esp32_systemreset.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define WLAN_WDDELAY              (1 * CLK_TCK)
 
 /* TX timeout = 1 minute */
 
@@ -139,11 +134,10 @@ struct wlan_ops
 
 struct wlan_priv_s
 {
-  bool   ref;                   /* Referernce count */
+  int    ref;                   /* Referernce count */
 
   bool   ifup;                  /* true:ifup false:ifdown */
 
-  struct wdog_s txpoll;         /* TX poll timer */
   struct wdog_s txtimeout;      /* TX timeout timer */
 
   struct work_s rxwork;         /* Send packet work */
@@ -181,6 +175,10 @@ struct wlan_priv_s
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+/* Reference count of register Wi-Fi handler */
+
+static uint8_t g_callback_register_ref = 0;
 
 static struct wlan_priv_s g_wlan_priv[ESP32_WLAN_DEVS];
 
@@ -245,9 +243,6 @@ static void wlan_dopoll(struct wlan_priv_s *priv);
 
 static void wlan_txtimeout_work(void *arg);
 static void wlan_txtimeout_expiry(wdparm_t arg);
-
-static void wlan_poll_work(void *arg);
-static void wlan_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -526,7 +521,7 @@ static void wlan_transmit(struct wlan_priv_s *priv)
   while ((pktbuf = wlan_txframe(priv)))
     {
       ret = priv->ops->send(pktbuf->buffer, pktbuf->len);
-      if (ret < 0)
+      if (ret == -ENOMEM)
         {
           wlan_add_txpkt_head(priv, pktbuf);
           wd_start(&priv->txtimeout, WLAN_TXTOUT,
@@ -535,6 +530,11 @@ static void wlan_transmit(struct wlan_priv_s *priv)
         }
       else
         {
+          if (ret < 0)
+            {
+              nwarn("WARN: Failed to send pkt, ret: %d\n", ret);
+            }
+
           wlan_free_buffer(priv, pktbuf->buffer);
         }
     }
@@ -792,7 +792,7 @@ static void wlan_rxpoll(void *arg)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (eth_hdr->type == htons(ETHTYPE_ARP))
+      if (eth_hdr->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
@@ -1048,101 +1048,6 @@ static void wlan_txtimeout_expiry(wdparm_t arg)
 }
 
 /****************************************************************************
- * Name: wlan_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void wlan_poll_work(void *arg)
-{
-  int32_t delay = WLAN_WDDELAY;
-  struct wlan_priv_s *priv = (struct wlan_priv_s *)arg;
-  struct net_driver_s *dev = &priv->dev;
-  struct wlan_pktbuf *pktbuf;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-  pktbuf = wlan_alloc_buffer(priv);
-  if (!pktbuf)
-    {
-      delay = 1;
-      goto exit;
-    }
-
-  dev->d_buf = pktbuf->buffer;
-  dev->d_len = WLAN_BUF_SIZE;
-
-  /* Check if there is room in the send another TX packets. We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   *
-   * If there is no room, we should reset the timeout value to be 1 to
-   * trigger the timer as soon as possible.
-   */
-
-  /* Update TCP timing states and poll the network for new XMIT data. */
-
-  devif_timer(&priv->dev, delay, wlan_txpoll);
-
-  if (dev->d_buf)
-    {
-      wlan_free_buffer(priv, dev->d_buf);
-
-      dev->d_buf = NULL;
-      dev->d_len = 0;
-    }
-
-  /* Try to send all cached TX packets */
-
-  wlan_transmit(priv);
-
-exit:
-  wd_start(&priv->txpoll, delay, wlan_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: wlan_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer callback handler.
- *
- * Input Parameters:
- *   argc - The number of available arguments
- *   arg  - The first argument
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-static void wlan_poll_expiry(wdparm_t arg)
-{
-  struct wlan_priv_s *priv = (struct wlan_priv_s *)arg;
-
-  if (priv->ifup)
-    {
-      work_queue(WLAN_WORK, &priv->pollwork, wlan_poll_work, priv, 0);
-    }
-}
-
-/****************************************************************************
  * Name: wlan_txavail_work
  *
  * Description:
@@ -1244,12 +1149,17 @@ static int wlan_ifup(struct net_driver_s *dev)
 
   wlan_init_buffer(priv);
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, WLAN_WDDELAY, wlan_poll_expiry, (wdparm_t)priv);
-
   priv->ifup = true;
+  if (g_callback_register_ref == 0)
+    {
+      ret = esp32_register_shutdown_handler(esp_wifi_stop_callback);
+      if (ret < 0)
+        {
+          nwarn("WARN: Failed to register handler ret=%d\n", ret);
+        }
+    }
 
+  ++g_callback_register_ref;
   net_unlock();
 
   return OK;
@@ -1284,7 +1194,6 @@ static int wlan_ifdown(struct net_driver_s *dev)
 
   /* Cancel the TX poll timer and TX timeout timers */
 
-  wd_cancel(&priv->txpoll);
   wd_cancel(&priv->txtimeout);
 
   /* Mark the device "down" */
@@ -1295,6 +1204,16 @@ static int wlan_ifdown(struct net_driver_s *dev)
   if (ret < 0)
     {
       nerr("ERROR: Failed to stop Wi-Fi ret=%d\n", ret);
+    }
+
+  --g_callback_register_ref;
+  if (g_callback_register_ref == 0)
+    {
+      ret = esp32_unregister_shutdown_handler(esp_wifi_stop_callback);
+      if (ret < 0)
+        {
+          nwarn("WARN: Failed to unregister handler ret=%d\n", ret);
+        }
     }
 
   net_unlock();
@@ -1954,4 +1873,4 @@ int esp32_wlan_softap_initialize(void)
 }
 #endif
 
-#endif  /* CONFIG_ESP32_WIRELESS */
+#endif  /* CONFIG_ESP32_WIFI */

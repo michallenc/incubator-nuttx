@@ -56,28 +56,15 @@
 
 int pm_register(FAR struct pm_callback_s *callbacks)
 {
-  int ret;
-
   DEBUGASSERT(callbacks);
 
   /* Add the new entry to the end of the list of registered callbacks */
 
-  if (OSINIT_OS_READY())
-    {
-      ret = pm_lock();
-      if (ret == OK)
-        {
-          dq_addlast(&callbacks->entry, &g_pmglobals.registry);
-          pm_unlock();
-        }
-    }
-  else
-    {
-      dq_addlast(&callbacks->entry, &g_pmglobals.registry);
-      ret = OK;
-    }
+  nxsem_wait(&g_pmglobals.regsem);
+  dq_addlast(&callbacks->entry, &g_pmglobals.registry);
+  nxsem_post(&g_pmglobals.regsem);
 
-  return ret;
+  return 0;
 }
 
 #endif /* CONFIG_PM */

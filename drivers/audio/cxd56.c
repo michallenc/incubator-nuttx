@@ -62,8 +62,8 @@
 #define CXD56_IRQ1_BIT_MIC  (1 << 6)   /* AU0 */
 #define CXD56_IRQ1_BIT_I2S1 (1 << 7)   /* AU1 */
 
-#define CXD56_VOL_MIN            -1020
-#define CXD56_VOL_MAX            120
+#define CXD56_VOL_MIN            (-1020)
+#define CXD56_VOL_MAX            (-30)
 #define CXD56_VOL_MUTE           (CXD56_VOL_MIN - 1)
 #define CXD56_VOL_RANGE          ((CXD56_VOL_MAX - CXD56_VOL_MIN) / 2)
 #define CXD56_VOL_NX_TO_CXD56(v) ((int)((float)((v) / 1000.0) * CXD56_VOL_RANGE) \
@@ -1397,7 +1397,7 @@ static void _process_audio(cxd56_dmahandle_t hdl, uint16_t err_code)
       if (dev->state != CXD56_DEV_STATE_PAUSED &&
           dev->state != CXD56_DEV_STATE_STOPPED)
         {
-          audinfo("DMA_TRANS up_pendq=%d \n",
+          audinfo("DMA_TRANS up_pendq=%d\n",
                  dq_count(&dev->up_pendq));
           msg.msg_id = AUDIO_MSG_STOP;
           msg.u.data = 0;
@@ -2054,7 +2054,7 @@ static int cxd56_power_on_micbias(FAR struct cxd56_dev_s *dev)
 
   /* Set mic boot time */
 
-  if (clock_gettime(CLOCK_REALTIME, &start) < 0)
+  if (clock_systime_timespec(&start) < 0)
     {
       dev->mic_boot_start = 0x0ull;
     }
@@ -2733,8 +2733,8 @@ static int cxd56_configure(FAR struct audio_lowerhalf_s *lower,
                 priv->volume = CXD56_VOL_NX_TO_CXD56(volume);
 
                 cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_OUT, priv->volume);
-                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN1, priv->volume);
-                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN2, priv->volume);
+                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN1, 0);
+                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN2, 0);
               }
             else
               {
@@ -2762,8 +2762,8 @@ static int cxd56_configure(FAR struct audio_lowerhalf_s *lower,
             else
               {
                 cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_OUT, priv->volume);
-                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN1, priv->volume);
-                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN2, priv->volume);
+                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN1, 0);
+                cxd56_set_volume(CXD56_AUDIO_VOLID_MIXER_IN2, 0);
               }
 
             if (CXD56_AUDIO_ECODE_OK != ret)
@@ -2922,7 +2922,7 @@ static int cxd56_start(FAR struct audio_lowerhalf_s *lower)
       if (priv->mic_boot_start != 0x0ull)
         {
           struct timespec end;
-          if (clock_gettime(CLOCK_REALTIME, &end) >= 0)
+          if (clock_systime_timespec(&end) == 0)
             {
               uint64_t time = (uint64_t)end.tv_sec * 1000 +
                               (uint64_t)end.tv_nsec / 1000000 -
@@ -3114,7 +3114,7 @@ static int cxd56_resume(FAR struct audio_lowerhalf_s *lower)
           cxd56_power_on_analog_output(dev);
         }
 
-      audinfo("START DMA up_pendq=%d \n", dq_count(&dev->up_pendq));
+      audinfo("START DMA up_pendq=%d\n", dq_count(&dev->up_pendq));
       ret = cxd56_start_dma(dev);
       if (ret != OK)
         {
@@ -3200,12 +3200,12 @@ static int cxd56_start_dma(FAR struct cxd56_dev_s *dev)
     {
       /* Underrun occurred, stop DMA and change state for buffering */
 
-      audwarn("Underrun \n");
+      audwarn("Underrun\n");
 
       spin_unlock_irqrestore(&dev->lock, flags);
       ret = cxd56_stop_dma(dev);
       flags = spin_lock_irqsave(&dev->lock);
-      audwarn("STOP DMA due to underrun \n");
+      audwarn("STOP DMA due to underrun\n");
       if (ret != CXD56_AUDIO_ECODE_OK)
         {
           auderr("ERROR: Could not stop DMA transfer (%d)\n", ret);
@@ -3387,7 +3387,7 @@ static int cxd56_start_dma(FAR struct cxd56_dev_s *dev)
             {
               /* If the apb is final, send stop message */
 
-              audinfo("Final apb \n");
+              audinfo("Final apb\n");
               struct audio_msg_s msg;
               msg.msg_id = AUDIO_MSG_STOP;
               msg.u.data = 0;
@@ -3607,7 +3607,7 @@ static void *cxd56_workerthread(pthread_addr_t pvarg)
           case AUDIO_MSG_ENQUEUE:
             if (priv->state == CXD56_DEV_STATE_BUFFERING)
               {
-                audwarn("Buffering up_pendq=%d \n",
+                audwarn("Buffering up_pendq=%d\n",
                         dq_count(&priv->up_pendq));
 
                 FAR struct ap_buffer_s *apb;
@@ -3683,9 +3683,9 @@ static int cxd56_init_worker(FAR struct audio_lowerhalf_s *dev)
 
   pthread_attr_init(&t_attr);
   sparam.sched_priority = sched_get_priority_max(SCHED_FIFO) - 3;
-  (void)pthread_attr_setschedparam(&t_attr, &sparam);
-  (void)pthread_attr_setstacksize(&t_attr,
-                                  CONFIG_CXD56_AUDIO_WORKER_STACKSIZE);
+  pthread_attr_setschedparam(&t_attr, &sparam);
+  pthread_attr_setstacksize(&t_attr,
+                            CONFIG_CXD56_AUDIO_WORKER_STACKSIZE);
 
   ret = pthread_create(&priv->threadid, &t_attr, cxd56_workerthread,
                        (pthread_addr_t)priv);

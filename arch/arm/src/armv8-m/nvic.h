@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H
-#define __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H
+#ifndef __ARCH_ARM_SRC_ARMV8_M_NVIC_H
+#define __ARCH_ARM_SRC_ARMV8_M_NVIC_H
 
 /****************************************************************************
  * Included Files
@@ -823,6 +823,11 @@
 #define NVIC_DSCEMCR_CLR_MON_PEND       (1 << 17) /* Bit 17: Clear monitor pend */
 #define NVIC_DSCEMCR_CLR_MON_REQ        (1 << 19) /* Bit 19: Clear monitor request */
 
+/* Debug Authentication Control Register (DAUTHCTRL) */
+
+#define NVIC_DAUTHCTRL_SPIDENSEL        (1 << 0)  /* Bit 0:  Secure invasive debug enable select */
+#define NVIC_DAUTHCTRL_INTSPIDEN        (1 << 1)  /* Bit 1:  Internal Secure invasive debug enable */
+
 /*  Floating-Point Context Control Register (FPCCR) */
 
 #define NVIC_FPCCR_LSPACT               (1 << 0)  /* Bit 0:  Lazy state preservation active */
@@ -896,4 +901,4 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H */
+#endif /* __ARCH_ARM_SRC_ARMV8_M_NVIC_H */

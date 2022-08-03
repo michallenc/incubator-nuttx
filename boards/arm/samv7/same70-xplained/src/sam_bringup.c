@@ -45,17 +45,62 @@
 #include "sam_twihs.h"
 #include "same70-xplained.h"
 
+#ifdef HAVE_HSMCI
+#  include "board_hsmci.h"
+#endif /* HAVE_HSMCI */
+
+#ifdef HAVE_AUTOMOUNTER
+#  include "sam_automount.h"
+#endif /* HAVE_AUTOMOUNTER */
+
 #ifdef HAVE_ROMFS
 #  include <arch/board/boot_romfsimg.h>
+#endif
+
+#ifdef HAVE_PROGMEM_CHARDEV
+#  include "board_progmem.h"
 #endif
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
+#define ARRAY_SIZE(x)   (sizeof(x) / sizeof((x)[0]))
+
 #define NSECTORS(n) \
   (((n)+CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_SECTSIZE-1) / \
    CONFIG_SAME70XPLAINED_ROMFS_ROMDISK_SECTSIZE)
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#if defined(CONFIG_SAMV7_PROGMEM_OTA_PARTITION)
+static struct mtd_partition_s g_mtd_partition_table[] =
+{
+  {
+    .offset  = CONFIG_SAMV7_OTA_PRIMARY_SLOT_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SLOT_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_PRIMARY_SLOT_DEVPATH
+  },
+  {
+    .offset  = CONFIG_SAMV7_OTA_SECONDARY_SLOT_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SLOT_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_SECONDARY_SLOT_DEVPATH
+  },
+  {
+    .offset  = CONFIG_SAMV7_OTA_SCRATCH_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SCRATCH_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_SCRATCH_DEVPATH
+  }
+};
+
+static const size_t g_mtd_partition_table_size =
+    ARRAY_SIZE(g_mtd_partition_table);
+#else
+#  define g_mtd_partition_table         NULL
+#  define g_mtd_partition_table_size    0
+#endif /* CONFIG_SAMV7_PROGMEM_OTA_PARTITION */
 
 /****************************************************************************
  * Private Functions
@@ -72,7 +117,7 @@
 #ifdef HAVE_I2CTOOL
 static void sam_i2c_register(int bus)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = sam_i2cbus_initialize(bus);
@@ -85,8 +130,8 @@ static void sam_i2c_register(int bus)
       ret = i2c_register(i2c, bus);
       if (ret < 0)
         {
-          syslog(LOG_ERR,
-                 "ERROR: Failed to register I2C%d driver: %d\n", bus, ret);
+          syslog(LOG_ERR, "ERROR: Failed to register I2C%d driver: %d\n",
+                 bus, ret);
           sam_i2cbus_uninitialize(i2c);
         }
     }
@@ -176,33 +221,37 @@ int sam_bringup(void)
 #ifdef HAVE_HSMCI
   /* Initialize the HSMCI0 driver */
 
-  ret = sam_hsmci_initialize(HSMCI0_SLOTNO, HSMCI0_MINOR);
+  ret = sam_hsmci_initialize(HSMCI0_SLOTNO, HSMCI0_MINOR, GPIO_HSMCI0_CD,
+                             IRQ_HSMCI0_CD);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: sam_hsmci_initialize(%d,%d) failed: %d\n",
              HSMCI0_SLOTNO, HSMCI0_MINOR, ret);
     }
 
-#ifdef CONFIG_SAME70XPLAINED_HSMCI0_MOUNT
+#ifdef CONFIG_SAMV7_HSMCI0_MOUNT
   else
     {
-      /* REVISIT: A delay seems to be required here or the mount will fail */
-
-      /* Mount the volume on HSMCI0 */
-
-      ret = nx_mount(CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_BLKDEV,
-                     CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT,
-                     CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_FSTYPE,
-                     0, NULL);
-
-      if (ret < 0)
+      if (sam_cardinserted(HSMCI0_SLOTNO))
         {
-          syslog(LOG_ERR, "ERROR: Failed to mount %s: %d\n",
-                 CONFIG_SAME70XPLAINED_HSMCI0_MOUNT_MOUNTPOINT, ret);
+          usleep(1000 * 1000);
+
+          /* Mount the volume on HSMCI0 */
+
+          ret = nx_mount(CONFIG_SAMV7_HSMCI0_MOUNT_BLKDEV,
+                         CONFIG_SAMV7_HSMCI0_MOUNT_MOUNTPOINT,
+                         CONFIG_SAMV7_HSMCI0_MOUNT_FSTYPE,
+                         0, NULL);
+
+          if (ret < 0)
+            {
+              syslog(LOG_ERR, "ERROR: Failed to mount %s: %d\n",
+                     CONFIG_SAMV7_HSMCI0_MOUNT_MOUNTPOINT, ret);
+            }
         }
     }
 
-#endif /* CONFIG_SAME70XPLAINED_HSMCI0_MOUNT */
+#endif /* CONFIG_SAMV7_HSMCI0_MOUNT */
 #endif /* HAVE_HSMCI */
 
 #ifdef HAVE_AUTOMOUNTER
@@ -240,7 +289,8 @@ int sam_bringup(void)
 #ifdef HAVE_PROGMEM_CHARDEV
   /* Initialize the SAME70 FLASH programming memory library */
 
-  ret = sam_progmem_init();
+  ret = board_progmem_init(PROGMEM_MTD_MINOR, g_mtd_partition_table,
+                           g_mtd_partition_table_size);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize progmem: %d\n", ret);
@@ -300,6 +350,16 @@ int sam_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_SAMV7_PWM
+  /* Initialize PWM and register the driver. */
+
+  ret = sam_pwm_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sam_afec_initialize failed: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_SAMV7_AFEC
   /* Initialize AFEC and register the ADC driver. */
 
@@ -314,8 +374,8 @@ int sam_bringup(void)
   ret = sam_dacdev_initialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Initialization of the DAC module failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: Initialization of the DAC module failed: %d\n",
+             ret);
     }
 #endif
 

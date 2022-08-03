@@ -86,13 +86,16 @@ static int     bat_monitor_poll(FAR struct file *filep,
 
 static const struct file_operations g_batteryops =
 {
-  bat_monitor_open,
-  bat_monitor_close,
-  bat_monitor_read,
-  bat_monitor_write,
-  NULL,
-  bat_monitor_ioctl,
-  bat_monitor_poll
+  bat_monitor_open,    /* open */
+  bat_monitor_close,   /* close */
+  bat_monitor_read,    /* read */
+  bat_monitor_write,   /* write */
+  NULL,                /* seek */
+  bat_monitor_ioctl,   /* ioctl */
+  bat_monitor_poll     /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL               /* unlink */
+#endif
 };
 
 /****************************************************************************
@@ -169,6 +172,7 @@ static int bat_monitor_open(FAR struct file *filep)
   nxsem_init(&priv->lock, 0, 1);
   nxsem_init(&priv->wait, 0, 0);
   nxsem_set_protocol(&priv->wait, SEM_PRIO_NONE);
+  priv->mask = dev->mask;
   list_add_tail(&dev->flist, &priv->node);
   nxsem_post(&dev->batsem);
   filep->f_priv = priv;
@@ -512,6 +516,7 @@ int battery_monitor_changed(FAR struct battery_monitor_dev_s *dev,
       return ret;
     }
 
+  dev->mask |= mask;
   list_for_every_entry(&dev->flist, priv,
                        struct battery_monitor_priv_s, node)
     {

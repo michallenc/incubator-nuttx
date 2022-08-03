@@ -175,6 +175,25 @@ struct touch_lowerhalf_s
 
   CODE int (*control)(FAR struct touch_lowerhalf_s *lower,
                       int cmd, unsigned long arg);
+
+  /**************************************************************************
+   * Name: write
+   *
+   * Description:
+   *   Users can use this interface to implement custom write.
+   *
+   * Arguments:
+   *   lower   - The instance of lower half of touchscreen device.
+   *   buffer  - User defined specific buffer.
+   *   buflen  - User defined specific buffer size.
+   *
+   * Return Value:
+   *   Number of bytes written；a negated errno value on failure.
+   *
+   **************************************************************************/
+
+  CODE ssize_t (*write)(FAR struct touch_lowerhalf_s *lower,
+                        FAR const char *buffer, size_t buflen);
 };
 
 /****************************************************************************
@@ -185,11 +204,7 @@ static inline uint64_t touch_get_time(void)
 {
   struct timespec ts;
 
-#ifdef CONFIG_CLOCK_MONOTONIC
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#else
-  clock_gettime(CLOCK_REALTIME, &ts);
-#endif
+  clock_systime_timespec(&ts);
   return 1000000ull * ts.tv_sec + ts.tv_nsec / 1000;
 }
 
@@ -221,7 +236,7 @@ void touch_event(FAR void *priv, FAR const struct touch_sample_s *sample);
  * Arguments:
  *   lower     - A pointer of lower half instance.
  *   path      - The path of touchscreen device. such as "/dev/input0"
- *   buff_nums - Number of the touch points structure.
+ *   nums      - Number of the touch points structure.
  *
  * Return:
  *   OK if the driver was successfully registered; A negated errno value is
@@ -230,7 +245,7 @@ void touch_event(FAR void *priv, FAR const struct touch_sample_s *sample);
  ****************************************************************************/
 
 int touch_register(FAR struct touch_lowerhalf_s *lower,
-                   FAR const char *path, uint8_t buff_nums);
+                   FAR const char *path, uint8_t nums);
 
 /****************************************************************************
  * Name: touch_unregister

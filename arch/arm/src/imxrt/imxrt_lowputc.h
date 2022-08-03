@@ -18,8 +18,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_LOWPUTC_H
-#define __ARCH_ARM_SRC_IMXRT_LOWPUTC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_IMXRT_LOWPUTC_H
+#define __ARCH_ARM_SRC_IMXRT_IMXRT_LOWPUTC_H
 
 /****************************************************************************
  * Included Files
@@ -83,7 +83,7 @@ void imxrt_lowsetup(void);
 
 #ifdef HAVE_LPUART_DEVICE
 int imxrt_lpuart_configure(uint32_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 /****************************************************************************
@@ -102,4 +102,4 @@ void imxrt_lowputc(int ch);
 #  define imxrt_lowputc(ch)
 #endif
 
-#endif /* __ARCH_ARM_SRC_IMXRT_LOWPUTC_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_IMXRT_LOWPUTC_H */

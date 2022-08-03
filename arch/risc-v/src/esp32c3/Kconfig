@@ -70,13 +70,21 @@ config ESP32C3_FLASH_16M
 	bool
 	default n
 
+config ESP32C3_ESPTOOLPY_NO_STUB
+	bool "Disable download stub"
+	default n
+	---help---
+		The flasher tool sends a precompiled download stub first by default.
+		That stub allows things like compressed downloads and more.
+		Usually you should not need to disable that feature.
+		It is only required to be disabled in certain scenarios when either
+		Secure Boot V2 or Flash Encryption is enabled.
+
 config ESP32C3_FLASH_DETECT
-	bool "Auto-detect FLASH size (to be used with master esptool)"
+	bool "Auto-detect FLASH size"
 	default n
 	---help---
 		Auto detect flash size when flashing.
-		Current released version of esptool doesn't support auto-detecting flash size.
-		Use latest master from https://github.com/espressif/esptool.
 
 choice ESP32C3_FLASH_MODE
 	prompt "SPI FLASH mode"
@@ -104,7 +112,7 @@ choice ESP32C3_FLASH_FREQ
 	default ESP32C3_FLASH_FREQ_40M
 	---help---
 		SPI FLASH frequency
-		
+
 config ESP32C3_FLASH_FREQ_80M
 	bool "80 MHz"
 
@@ -148,6 +156,13 @@ config ESP32C3_CPU_FREQ_MHZ
 	default 80 if ESP32C3_CPU_FREQ_80
 	default 160 if ESP32C3_CPU_FREQ_160
 
+config ESP32C3_REGION_PROTECTION
+	bool "Enable region protection"
+	default y
+	select ARCH_USE_MPU
+	---help---
+		Configure the MPU to disable access to invalid memory regions.
+
 config ESP32C3_RT_TIMER
 	bool "Real-time Timer"
 	default n
@@ -155,19 +170,10 @@ config ESP32C3_RT_TIMER
 	---help---
 		Real-time Timer is relying upon the Systimer 1.
 
-config ESP32C3_DISABLE_STDC_ATOMIC
-	bool "Disable standard C atomic"
-	default n
-
 config ESP32C3_RTC_HEAP
 	bool "Use the RTC memory as a separate heap"
 	select ARCH_HAVE_EXTRA_HEAPS
 	default n
-
-config ESP32C3_WIRELESS
-	bool
-	default n
-	select ESP32C3_RT_TIMER
 
 config ESP32C3_EXCEPTION_ENABLE_CACHE
 	bool
@@ -192,6 +198,11 @@ config ESP32C3_UART
 config ESP32C3_I2C
 	bool
 	default n
+
+config ESP32C3_TWAI
+	bool
+	default n
+	select CAN
 
 config ESP32C3_TIMER
 	bool
@@ -247,6 +258,11 @@ config ESP32C3_I2C0
 	bool "I2C 0"
 	default n
 	select ESP32C3_I2C
+
+config ESP32C3_TWAI0
+	bool "TWAI (CAN) 0"
+	default n
+	select ESP32C3_TWAI
 
 config ESP32C3_RNG
 	bool "Random Number Generator (RNG)"
@@ -317,7 +333,7 @@ config ESP32C3_ADC1
 	select ESP32C3_ADC
 
 config ESP32C3_WIRELESS
-	bool "Wireless"
+	bool
 	default n
 	select NET
 	select ARCH_PHY_INTERRUPT
@@ -349,8 +365,6 @@ config ESP32C3_RSA_ACCELERATOR
 config ESP32C3_WIFI
 	bool "Wi-Fi"
 	default n
-	select NET
-	select ARCH_PHY_INTERRUPT
 	select ESP32C3_WIRELESS
 	---help---
 		Enable Wi-Fi support
@@ -403,6 +417,58 @@ config ESP32C3_I2CTIMEOMS
 	default 500
 
 endmenu # I2C configuration
+
+menu "TWAI driver options"
+	depends on ESP32C3_TWAI
+
+if ESP32C3_TWAI0
+
+config ESP32C3_TWAI0_TXPIN
+	int "TWAI0 TX Pin"
+	default 2
+
+config ESP32C3_TWAI0_RXPIN
+	int "TWAI0 RX Pin"
+	default 3
+
+config ESP32C3_TWAI0_BITRATE
+	int "TWAI0 bitrate"
+	default 1000000
+	---help---
+		TWAI0 bit rate.  Required if ESP32C3_TWAI0 is defined.
+
+config ESP32C3_TWAI0_SAMPLEP
+	int "TWAI0 sample point"
+	default 80
+	---help---
+		TWAI0 sample point location as a percent value.  Required
+		if ESP32C3_TWAI0 is defined.
+
+config ESP32C3_TWAI0_SJW
+	int "TWAI0 synchronization jump width"
+	default 3
+	---help---
+		SJW limits the number of Time Quanta corrections during bit
+		Resynchronization. Default: 3
+
+config ESP32C3_TWAI0_SAM
+	bool "TWAI0 sampling"
+	default n
+	---help---
+		The bus is sampled 3 times (recommended for low to medium speed buses
+		to spikes on the bus-line).
+
+endif # ESP32C3_TWAI0
+
+config ESP32C3_TWAI_REGDEBUG
+	bool "TWAI register level debug"
+	depends on DEBUG_CAN_INFO
+	default n
+	---help---
+		Output detailed register-level TWAI debug information. Requires also
+		CONFIG_DEBUG_CAN_INFO.
+
+endmenu #ESP32C3_TWAI
 
 menu "SPI configuration"
 	depends on ESP32C3_SPI
@@ -770,6 +836,11 @@ config ESP32C3_WIFI_FS_MOUNTPT
 	---help---
 		Mount point of Wi-Fi storage file system.
 
+config ESP32C3_WIFI_MTD_ENCRYPT
+	bool "Encrypt Wi-Fi MTD partition"
+	default y
+	depends on ESP32C3_SECURE_FLASH_ENC_ENABLED
+
 config ESP32C3_WIFI_MTD_OFFSET
 	hex "Wi-Fi MTD partition offset"
 	default 0x280000 if !ESP32C3_HAVE_OTA_PARTITION
@@ -830,7 +901,7 @@ choice ESP32C3_WIFI_LOG_LEVEL
 	depends on DEBUG_INFO
 	prompt "WiFi debug log level"
 	default WIFI_LOG_LEVEL_INFO
-	help
+	---help---
 		The WiFi log is divided into the following levels: ERROR,WARNING,INFO,DEBUG,VERBOSE.
 
 	config WIFI_LOG_LEVEL_NONE
@@ -883,9 +954,14 @@ if ESP32C3_HAVE_OTA_PARTITION
 
 comment "Application Image OTA Update support"
 
+config ESP32C3_OTA_PARTITION_ENCRYPT
+	bool "Encrypt OTA partitions"
+	default y
+	depends on ESP32C3_SECURE_FLASH_ENC_ENABLED
+
 config ESP32C3_OTA_PRIMARY_SLOT_OFFSET
 	hex "Application image primary slot offset"
-	default "0x10000"
+	default 0x10000
 
 config ESP32C3_OTA_PRIMARY_SLOT_DEVPATH
 	string "Application image primary slot device path"
@@ -893,7 +969,7 @@ config ESP32C3_OTA_PRIMARY_SLOT_DEVPATH
 
 config ESP32C3_OTA_SECONDARY_SLOT_OFFSET
 	hex "Application image secondary slot offset"
-	default "0x110000"
+	default 0x110000
 
 config ESP32C3_OTA_SECONDARY_SLOT_DEVPATH
 	string "Application image secondary slot device path"
@@ -901,15 +977,15 @@ config ESP32C3_OTA_SECONDARY_SLOT_DEVPATH
 
 config ESP32C3_OTA_SLOT_SIZE
 	hex "Application image slot size (in bytes)"
-	default "0x100000"
+	default 0x100000
 
 config ESP32C3_OTA_SCRATCH_OFFSET
 	hex "Scratch partition offset"
-	default "0x210000"
+	default 0x210000
 
 config ESP32C3_OTA_SCRATCH_SIZE
 	hex "Scratch partition size"
-	default "0x40000"
+	default 0x40000
 
 config ESP32C3_OTA_SCRATCH_DEVPATH
 	string "Scratch partition device path"
@@ -926,28 +1002,13 @@ config ESP32C3_MTD
 	select MTD_BYTE_WRITE
 	select MTD_PARTITION
 	---help---
-	       Initialize an MTD driver for the ESP32-C3 SPI Flash, which will
-               add an entry at /dev for application access from userspace.
+		Initialize an MTD driver for the ESP32-C3 SPI Flash, which will
+		add an entry at /dev for application access from userspace.
 
-config ESP32C3_STORAGE_MTD_BLKSIZE
+config ESP32C3_SPIFLASH_MTD_BLKSIZE
 	int "Storage MTD block size"
 	default 64
 	depends on ESP32C3_MTD
-
-config ESP32C3_STORAGE_MTD_OFFSET
-	hex "Storage MTD base address in SPI Flash"
-	default 0x180000 if !ESP32C3_HAVE_OTA_PARTITION
-	default 0x250000 if ESP32C3_HAVE_OTA_PARTITION
-	depends on ESP32C3_MTD
-	---help---
-		MTD base address in SPI Flash.
-
-config ESP32C3_STORAGE_MTD_SIZE
-	hex "Storage MTD size in SPI Flash"
-	default 0x100000
-	depends on ESP32C3_MTD
-	---help---
-		MTD size in SPI Flash.
 
 config ESP32C3_STORAGE_MTD_DEBUG
 	bool "Storage MTD Debug"
@@ -1086,8 +1147,20 @@ config ESP32C3_APP_MCUBOOT_HEADER_SIZE
 
 config ESP32C3_PARTITION_TABLE_OFFSET
 	hex "Partition Table offset"
-	default "0x8000"
+	default 0x8000
 	depends on ESP32C3_APP_FORMAT_LEGACY
+
+if BUILD_PROTECTED
+
+config ESP32C3_USER_IMAGE_OFFSET
+	hex "User image offset"
+	default 0x90000
+	---help---
+		Offset in SPI Flash for flashing the User application firmware image.
+
+endif
+
+source "arch/risc-v/src/esp32c3/Kconfig.security"
 
 endmenu # Application Image Configuration
 

@@ -36,7 +36,7 @@
 #include "phyplus_tim.h"
 
 #include "mcu_phy_bumbee.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 struct phyplus_tim_priv_s
 {
@@ -51,33 +51,7 @@ struct phyplus_tim_priv_s
  * Private Function prototypes
  ****************************************************************************/
 
-void phyplus_tim_start(FAR struct phyplus_tim_dev_s *dev);
-void phyplus_tim_stop(FAR struct phyplus_tim_dev_s *dev);
-
-void phyplus_tim_clear(FAR struct phyplus_tim_dev_s *dev);
-void phyplus_tim_setmode(FAR struct phyplus_tim_dev_s *dev, uint8_t mode);
-
-void phyplus_tim_getcounter(FAR struct phyplus_tim_dev_s *dev,
-    uint32_t *value);
-
-void phyplus_tim_setcounter(FAR struct phyplus_tim_dev_s *dev,
-    uint32_t value);
-
-int phyplus_tim_setisr(FAR struct phyplus_tim_dev_s *dev, xcpt_t handler,
-    void *arg);
-
-void phyplus_tim_enableint(FAR struct phyplus_tim_dev_s *dev);
-void phyplus_tim_disableint(FAR struct phyplus_tim_dev_s *dev);
-
-void phyplus_tim_ackint(FAR struct phyplus_tim_dev_s *dev);
-
-void phyplus_tim_getcurrent(FAR struct phyplus_tim_dev_s *dev,
-    uint32_t *value);
-
-void phyplus_tim_getcontrolreg(FAR struct phyplus_tim_dev_s *dev,
-    uint32_t *value);
-
-/* static int  phyplus_tim_checkint(FAR struct phyplus_tim_dev_s *dev,
+/* static int  phyplus_tim_checkint(struct phyplus_tim_dev_s *dev,
  *     int source);
  */
 
@@ -108,7 +82,7 @@ struct phyplus_tim_ops_s phyplus_tim_ops =
 struct phyplus_tim_priv_s phyplus_tim1_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM1,
+  .base                =  (long unsigned int)AP_TIM1,
   .inuse               = false,
 };
 
@@ -119,7 +93,7 @@ struct phyplus_tim_priv_s phyplus_tim1_priv =
 struct phyplus_tim_priv_s phyplus_tim2_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM2,
+  .base                =  (long unsigned int)AP_TIM2,
   .inuse               = false,
 };
 
@@ -130,7 +104,7 @@ struct phyplus_tim_priv_s phyplus_tim2_priv =
 struct phyplus_tim_priv_s phyplus_tim3_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM3,
+  .base                =  (long unsigned int)AP_TIM3,
   .inuse               = false,
 };
 
@@ -141,7 +115,7 @@ struct phyplus_tim_priv_s phyplus_tim3_priv =
 struct phyplus_tim_priv_s phyplus_tim4_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM4,
+  .base                =  (long unsigned int)AP_TIM4,
   .inuse               = false,
 };
 
@@ -152,7 +126,7 @@ struct phyplus_tim_priv_s phyplus_tim4_priv =
 struct phyplus_tim_priv_s phyplus_tim5_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM5,
+  .base                =  (long unsigned int)AP_TIM5,
   .inuse               = false,
 };
 
@@ -163,7 +137,7 @@ struct phyplus_tim_priv_s phyplus_tim5_priv =
 struct phyplus_tim_priv_s phyplus_tim6_priv =
 {
   .ops                 = &phyplus_tim_ops,
-  .base                = AP_TIM6,
+  .base                =  (long unsigned int)AP_TIM6,
   .inuse               = false,
 };
 
@@ -181,8 +155,8 @@ struct phyplus_tim_priv_s phyplus_tim6_priv =
  *
  ****************************************************************************/
 
-uint32_t phyplus_tim_getreg32(FAR struct phyplus_tim_dev_s *dev,
-                                 uint32_t offset)
+uint32_t phyplus_tim_getreg32(struct phyplus_tim_dev_s *dev,
+                              uint32_t offset)
 {
   DEBUGASSERT(dev);
 
@@ -197,9 +171,9 @@ uint32_t phyplus_tim_getreg32(FAR struct phyplus_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-void phyplus_tim_putreg32(FAR struct phyplus_tim_dev_s *dev,
-                             uint32_t offset,
-                             uint32_t value)
+void phyplus_tim_putreg32(struct phyplus_tim_dev_s *dev,
+                          uint32_t offset,
+                          uint32_t value)
 {
   DEBUGASSERT(dev);
 
@@ -214,10 +188,10 @@ void phyplus_tim_putreg32(FAR struct phyplus_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-void phyplus_tim_modifyreg32(FAR struct phyplus_tim_dev_s *dev,
-                                  uint32_t offset,
-                                  uint32_t clearbits,
-                                  uint32_t setbits)
+void phyplus_tim_modifyreg32(struct phyplus_tim_dev_s *dev,
+                             uint32_t offset,
+                             uint32_t clearbits,
+                             uint32_t setbits)
 {
   DEBUGASSERT(dev);
 
@@ -233,7 +207,7 @@ void phyplus_tim_modifyreg32(FAR struct phyplus_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-void phyplus_tim_start(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_start(struct phyplus_tim_dev_s *dev)
 {
   syslog(LOG_ERR, "timer_enable\n");
   DEBUGASSERT(dev);
@@ -248,7 +222,7 @@ void phyplus_tim_start(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-void phyplus_tim_stop(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_stop(struct phyplus_tim_dev_s *dev)
 {
   syslog(LOG_ERR, "timer_disable\n");
   DEBUGASSERT(dev);
@@ -263,7 +237,7 @@ void phyplus_tim_stop(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-void phyplus_tim_clear(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_clear(struct phyplus_tim_dev_s *dev)
 {
   uint32_t clear_value = 0;
   DEBUGASSERT(dev);
@@ -279,7 +253,8 @@ void phyplus_tim_clear(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-void phyplus_tim_setmode(FAR struct phyplus_tim_dev_s *dev, uint8_t mode)
+void phyplus_tim_setmode(struct phyplus_tim_dev_s *dev,
+    phyplus_tim_mode_t mode)
 {
   DEBUGASSERT(dev);
 
@@ -301,7 +276,7 @@ void phyplus_tim_setmode(FAR struct phyplus_tim_dev_s *dev, uint8_t mode)
  *
  ****************************************************************************/
 
-void phyplus_tim_getcounter(FAR struct phyplus_tim_dev_s *dev,
+void phyplus_tim_getcounter(struct phyplus_tim_dev_s *dev,
     uint32_t *value)
 {
   DEBUGASSERT(dev);
@@ -319,7 +294,7 @@ void phyplus_tim_getcounter(FAR struct phyplus_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-void phyplus_tim_setcounter(FAR struct phyplus_tim_dev_s *dev,
+void phyplus_tim_setcounter(struct phyplus_tim_dev_s *dev,
     uint32_t value)
 {
   DEBUGASSERT(dev);
@@ -327,7 +302,7 @@ void phyplus_tim_setcounter(FAR struct phyplus_tim_dev_s *dev,
   phyplus_tim_putreg32(dev, TIM_COUNT_OFFSET, (uint32_t)value);
 }
 
-void phyplus_tim_getcurrent(FAR struct phyplus_tim_dev_s *dev,
+void phyplus_tim_getcurrent(struct phyplus_tim_dev_s *dev,
     uint32_t *value)
 {
   DEBUGASSERT(dev);
@@ -335,7 +310,7 @@ void phyplus_tim_getcurrent(FAR struct phyplus_tim_dev_s *dev,
   *value = phyplus_tim_getreg32(dev, TIM_CURRENT_OFFSET);
 }
 
-void phyplus_tim_getcontrolreg(FAR struct phyplus_tim_dev_s *dev,
+void phyplus_tim_getcontrolreg(struct phyplus_tim_dev_s *dev,
     uint32_t *value)
 {
   DEBUGASSERT(dev);
@@ -353,38 +328,42 @@ void phyplus_tim_getcontrolreg(FAR struct phyplus_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-int phyplus_tim_setisr(FAR struct phyplus_tim_dev_s *dev, xcpt_t handler,
+int phyplus_tim_setisr(struct phyplus_tim_dev_s *dev, xcpt_t handler,
     void *arg)
 {
-  FAR struct phyplus_tim_priv_s *tim = NULL;
-  int ret = OK;
+  struct phyplus_tim_priv_s *tim = NULL;
   int vectorno;
 
   DEBUGASSERT(dev);
 
-  tim = (FAR struct phyplus_tim_priv_s *)dev;
+  tim = (struct phyplus_tim_priv_s *)dev;
 
-  if (AP_TIM1 == ((struct phyplus_tim_priv_s *)dev)->base)
+  if ((long unsigned int)AP_TIM1 == ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM1_IRQn;
     }
-  else if (AP_TIM2 == ((struct phyplus_tim_priv_s *)dev)->base)
+  else if ((long unsigned int)AP_TIM2 ==
+    ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM2_IRQn;
     }
-  else if (AP_TIM3 == ((struct phyplus_tim_priv_s *)dev)->base)
+  else if ((long unsigned int)AP_TIM3 ==
+    ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM3_IRQn;
     }
-  else if (AP_TIM4 == ((struct phyplus_tim_priv_s *)dev)->base)
+  else if ((long unsigned int)AP_TIM4 ==
+    ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM4_IRQn;
     }
-  else if (AP_TIM5 == ((struct phyplus_tim_priv_s *)dev)->base)
+  else if ((long unsigned int)AP_TIM5 ==
+    ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM5_IRQn;
     }
-  else if (AP_TIM6 == ((struct phyplus_tim_priv_s *)dev)->base)
+  else if ((long unsigned int)AP_TIM6 ==
+    ((struct phyplus_tim_priv_s *)dev)->base)
     {
       vectorno = PHY62XX_IRQ_TIM6_IRQn;
     }
@@ -418,7 +397,7 @@ int phyplus_tim_setisr(FAR struct phyplus_tim_dev_s *dev, xcpt_t handler,
  *
  ****************************************************************************/
 
-void phyplus_tim_enableint(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_enableint(struct phyplus_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -435,7 +414,7 @@ void phyplus_tim_enableint(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-void phyplus_tim_disableint(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_disableint(struct phyplus_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -451,7 +430,7 @@ void phyplus_tim_disableint(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-void phyplus_tim_ackint(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_ackint(struct phyplus_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -468,9 +447,9 @@ void phyplus_tim_ackint(FAR struct phyplus_tim_dev_s *dev)
  *
  ****************************************************************************/
 
-FAR struct phyplus_tim_dev_s *phyplus_tim_init(int timer)
+struct phyplus_tim_dev_s *phyplus_tim_init(int timer)
 {
-  FAR struct phyplus_tim_priv_s *tim = NULL;
+  struct phyplus_tim_priv_s *tim = NULL;
 
   /* First, take the data structure associated with the timer instance */
 
@@ -558,7 +537,7 @@ FAR struct phyplus_tim_dev_s *phyplus_tim_init(int timer)
 
   syslog(LOG_ERR, "phyplus_tim_init 2\n");
   errout:
-  return (FAR struct phyplus_tim_dev_s *)tim;
+  return (struct phyplus_tim_dev_s *)tim;
 }
 
 /****************************************************************************
@@ -569,13 +548,13 @@ FAR struct phyplus_tim_dev_s *phyplus_tim_init(int timer)
  *
  ****************************************************************************/
 
-void phyplus_tim_deinit(FAR struct phyplus_tim_dev_s *dev)
+void phyplus_tim_deinit(struct phyplus_tim_dev_s *dev)
 {
-  FAR struct phyplus_tim_priv_s *tim = NULL;
+  struct phyplus_tim_priv_s *tim = NULL;
 
   DEBUGASSERT(dev);
 
-  tim = (FAR struct phyplus_tim_priv_s *)dev;
+  tim = (struct phyplus_tim_priv_s *)dev;
 
   tim->inuse = false;
 }

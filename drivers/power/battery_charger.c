@@ -85,13 +85,16 @@ static int     bat_charger_poll(FAR struct file *filep,
 
 static const struct file_operations g_batteryops =
 {
-  bat_charger_open,
-  bat_charger_close,
-  bat_charger_read,
-  bat_charger_write,
-  NULL,
-  bat_charger_ioctl,
-  bat_charger_poll,
+  bat_charger_open,    /* open */
+  bat_charger_close,   /* close */
+  bat_charger_read,    /* read */
+  bat_charger_write,   /* write */
+  NULL,                /* seek */
+  bat_charger_ioctl,   /* ioctl */
+  bat_charger_poll     /* poll */
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+  , NULL               /* unlink */
+#endif
 };
 
 /****************************************************************************
@@ -168,6 +171,7 @@ static int bat_charger_open(FAR struct file *filep)
   nxsem_init(&priv->lock, 0, 1);
   nxsem_init(&priv->wait, 0, 0);
   nxsem_set_protocol(&priv->wait, SEM_PRIO_NONE);
+  priv->mask = dev->mask;
   list_add_tail(&dev->flist, &priv->node);
   nxsem_post(&dev->batsem);
   filep->f_priv = priv;
@@ -385,6 +389,16 @@ static int bat_charger_ioctl(FAR struct file *filep, int cmd,
         }
         break;
 
+      case BATIOC_GET_PROTOCOL:
+        {
+          FAR int *ptr = (FAR int *)(uintptr_t)arg;
+          if (ptr)
+            {
+              ret = dev->ops->get_protocol(dev, ptr);
+            }
+        }
+        break;
+
       default:
         _err("ERROR: Unrecognized cmd: %d\n", cmd);
         ret = -ENOTTY;
@@ -459,6 +473,7 @@ int battery_charger_changed(FAR struct battery_charger_dev_s *dev,
       return ret;
     }
 
+  dev->mask |= mask;
   list_for_every_entry(&dev->flist, priv,
                        struct battery_charger_priv_s, node)
     {
@@ -498,7 +513,7 @@ int battery_charger_register(FAR const char *devpath,
 
   /* Register the character driver */
 
-  ret = register_driver(devpath, &g_batteryops, 0555, dev);
+  ret = register_driver(devpath, &g_batteryops, 0666, dev);
   if (ret < 0)
     {
       _err("ERROR: Failed to register driver: %d\n", ret);
