@@ -217,12 +217,12 @@
 /* Encoder */
 
 #define GPIO_ENC_A    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN8)  /* PA_8 */
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOA | GPIO_PIN7)  /* PA_7 */
 #define GPIO_ENC_B    (GPIO_INPUT | GPIO_CFG_DEFAULT | \
-                       GPIO_INT_RISING | GPIO_PORT_PIOA | GPIO_PIN7)  /* PA_7 */
+                       GPIO_INT_BOTHEDGES | GPIO_PORT_PIOA | GPIO_PIN8)  /* PA_8 */
 
-#define GPIO_ENC_A_INT    SAM_IRQ_PA8
-#define GPIO_ENC_B_INT    SAM_IRQ_PA7
+#define GPIO_ENC_A_INT    SAM_IRQ_PA7
+#define GPIO_ENC_B_INT    SAM_IRQ_PA8
 
 /* LCD dispay */
 

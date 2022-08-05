@@ -181,7 +181,7 @@ static int sam_gpio_enc_interrupt(int irq, FAR void *context,
 
   new = (stateB << 1 | (stateA^stateB));
   incr = ((new - priv->position + 1) & 3) - 1;
-  incr_mask = (int32_t)((1 - incr) >> 2);
+  incr_mask = (int32_t)(1 - incr) >> 31;
 
   /* Increment position */
   priv->position += incr & ~incr_mask;
