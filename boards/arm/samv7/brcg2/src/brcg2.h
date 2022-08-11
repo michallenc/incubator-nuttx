@@ -64,6 +64,13 @@
 #define HAVE_W25QXXXJV_CHARDEV  1
 #define HAVE_USB                1
 #define HAVE_USBDEV             1
+#define HAVE_GPIO_ENC           1
+
+/* GPIO ENC */
+
+#if !defined(CONFIG_SENSORS_QENCODER)
+#  undef HAVE_GPIO_ENC
+#endif
 
 /* HSMCI */
 
@@ -397,18 +404,6 @@ int sam_can_setup(void);
 
 #ifdef CONFIG_SAMV7_AFEC
 int sam_afec_setup(void);
-#endif
-
-/****************************************************************************
- * Name: sam_gpio_enc_init
- *
- * Description:
- *   Initialize GPIO encoder
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SENSORS_QENCODER
-int sam_gpio_enc_init(void);
 #endif
 
 /****************************************************************************

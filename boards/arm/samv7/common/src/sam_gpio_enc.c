@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/samv7/brcg2/src/sam_enc.c
+ * boards/arm/samv7/common/src/sam_gpio_enc.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -35,11 +35,10 @@
 
 #include "chip.h"
 #include "arm_internal.h"
-#include "sam_gpio.h"
 
-#include "brcg2.h"
+#include "board_gpio_enc.h"
 
-#ifdef CONFIG_SENSORS_QENCODER
+#if defined(CONFIG_SENSORS_QENCODER) && defined(CONFIG_SAMV7_GPIO_ENC)
 
 /****************************************************************************
  * Private Types
@@ -47,10 +46,13 @@
 
 struct sam_qeconfig_s
 {
-  uint32_t  position;
-  uint32_t  position_base;
-  uint32_t  phase;
-  uint32_t  error;
+  gpio_pinset_t enca;         /* ENC_A pin */
+  gpio_pinset_t encb;         /* ENC_B pin */
+  int enca_irq;               /* ENC_A irq */
+  int encb_irq;               /* ENC_B irq */
+  uint32_t  position;         /* Current position */
+  uint32_t  position_base;    /* Base position */
+  uint32_t  error;            /* Error count */
 };
 
 struct sam_gpio_enc_lowerhalf_s
@@ -60,7 +62,7 @@ struct sam_gpio_enc_lowerhalf_s
    */
 
   FAR const struct qe_ops_s *ops;           /* Lower half callback structure */
-  FAR const struct sam_qeconfig_s *config;  /* static configuration */
+  FAR struct sam_qeconfig_s *config;        /* static configuration */
 };
 
 /****************************************************************************
@@ -68,10 +70,11 @@ struct sam_gpio_enc_lowerhalf_s
  ****************************************************************************/
 
 static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
-                             xcpt_t irqhandler, void *arg);
+                               xcpt_t irqhandler, void *arg);
 static int sam_gpio_enc_interrupt(int irq, FAR void *context,
                                      FAR void *arg);
-static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos);
+static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower,
+                                 FAR int32_t *pos);
 static int sam_gpio_enc_setup(FAR struct qe_lowerhalf_s *lower);
 static int sam_gpio_enc_shutdown(FAR struct qe_lowerhalf_s *lower);
 static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower);
@@ -79,18 +82,6 @@ static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-const uint32_t gpio_enc_pins[2] =
-                                      {
-                                        GPIO_ENC_A,
-                                        GPIO_ENC_B
-                                      };
-const uint32_t gpio_enc_pins_int[2] =
-                                      {
-                                        GPIO_ENC_A_INT,
-                                        GPIO_ENC_B_INT,
-                                      };
-
 
 static const struct qe_ops_s g_qecallbacks =
 {
@@ -132,7 +123,7 @@ static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
 {
   irqstate_t flags;
 
-  /* Disable interrupts until we are done.  This guarantees that the
+  /* Disable interrupts until we are done. This guarantees that the
    * following operations are atomic.
    */
 
@@ -142,7 +133,6 @@ static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
 
   if (irqhandler != NULL)
     {
-
       /* Configure the interrupt */
 
       sam_gpioirq(pinset);
@@ -151,7 +141,6 @@ static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
     }
   else
     {
-
       /* Detach and disable the interrupt */
 
       irq_detach(irq);
@@ -162,28 +151,38 @@ static int board_gpio_enc_irqx(gpio_pinset_t pinset, int irq,
   return OK;
 }
 
+/****************************************************************************
+ * Name: sam_gpio_enc_interrupt
+ *
+ * Description:
+ *   This function implements the core of the board_button_irq() logic.
+ *
+ ****************************************************************************/
+
 static int sam_gpio_enc_interrupt(int irq, FAR void *context,
                                      FAR void *arg)
 {
-  FAR struct sam_gpio_enc_lowerhalf_s *dev = (FAR struct sam_gpio_enc_lowerhalf_s *)arg;
+  FAR struct sam_gpio_enc_lowerhalf_s *dev =
+    (FAR struct sam_gpio_enc_lowerhalf_s *)arg;
   FAR struct sam_qeconfig_s *priv = (struct sam_qeconfig_s *)dev->config;
 
-  unsigned int stateA;
-  unsigned int stateB;
+  unsigned int state_a;
+  unsigned int state_b;
   int32_t incr;
   uint32_t new;
   uint32_t incr_mask;
 
   /* Read the status of encoder pins */
 
-  stateA = sam_gpioread(gpio_enc_pins[0]);
-  stateB = sam_gpioread(gpio_enc_pins[1]);
+  state_a = sam_gpioread(priv->enca);
+  state_b = sam_gpioread(priv->encb);
 
-  new = (stateB << 1 | (stateA^stateB));
+  new = (state_b << 1 | (state_a ^ state_b));
   incr = ((new - priv->position + 1) & 3) - 1;
   incr_mask = (int32_t)(1 - incr) >> 31;
 
   /* Increment position */
+
   priv->position += incr & ~incr_mask;
 
   /* Count error */
@@ -194,30 +193,114 @@ static int sam_gpio_enc_interrupt(int irq, FAR void *context,
 }
 
 /****************************************************************************
- * Name: sam_position
+ * Name: sam_gpio_enc_position
  *
  * Description:
  *   Return the current position measurement.
  *
  ****************************************************************************/
 
-static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower, FAR int32_t *pos)
+static int sam_gpio_enc_position(FAR struct qe_lowerhalf_s *lower,
+                                 FAR int32_t *pos)
 {
   FAR struct sam_gpio_enc_lowerhalf_s *priv =
     (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
-  FAR const struct sam_qeconfig_s *config = priv->config;
+  FAR struct sam_qeconfig_s *config = priv->config;
 
   *pos = config->position - config->position_base;
   return OK;
 }
 
+/****************************************************************************
+ * Name: sam_gpio_enc_setup
+ *
+ * Description:
+ *   This method is called when the driver is opened.  The lower half driver
+ *   should configure and initialize the device so that it is ready for use.
+ *   The initial position value should be zero.
+ *
+ ****************************************************************************/
+
 static int sam_gpio_enc_setup(FAR struct qe_lowerhalf_s *lower)
 {
+  FAR struct sam_gpio_enc_lowerhalf_s *priv =
+    (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
+  FAR struct sam_qeconfig_s *config = priv->config;
+  int ret;
+  unsigned int state_a;
+  unsigned int state_b;
+  uint32_t new;
+
+  /* Configure GPIOs */
+
+  sam_configgpio(config->encb);
+  sam_configgpio(config->enca);
+
+  /* Reset the encoder position */
+
+  state_a = sam_gpioread(config->enca);
+  state_b = sam_gpioread(config->encb);
+  new = (state_b << 1 | (state_a ^ state_b));
+  config->position_base = config->position = new;
+
+  /* Setup interrups for ENC_A and ENC_B pins. */
+
+  ret = board_gpio_enc_irqx(config->enca, config->enca_irq,
+                            sam_gpio_enc_interrupt, priv);
+  if (ret != OK)
+    {
+      snerr("ERROR: board_gpio_enc_irqx for ENC_A failed %d\n", ret);
+      return -ERROR;
+    }
+
+  ret = board_gpio_enc_irqx(config->encb, config->encb_irq,
+                            sam_gpio_enc_interrupt, priv);
+  if (ret != OK)
+    {
+      snerr("ERROR: board_gpio_enc_irqx for ENC_B failed %d\n", ret);
+      return -ERROR;
+    }
+
   return OK;
 }
 
+/****************************************************************************
+ * Name: sam_gpio_enc_shutdown
+ *
+ * Description:
+ *   This method is called when the driver is closed.  The lower half driver
+ *   should stop data collection, free any resources, disable timer hardware,
+ *   and put the system into the lowest possible power usage state
+ *
+ ****************************************************************************/
+
 static int sam_gpio_enc_shutdown(FAR struct qe_lowerhalf_s *lower)
 {
+  FAR struct sam_gpio_enc_lowerhalf_s *priv =
+    (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
+  FAR struct sam_qeconfig_s *config = priv->config;
+  int ret;
+
+  /* Disable GPIO interrupts. */
+
+  ret = board_gpio_enc_irqx(config->enca, config->enca_irq,
+                            NULL, priv);
+  if (ret != OK)
+    {
+      snerr("ERROR: board_gpio_enc_irqx disable for ENC_A failed %d\n",
+            ret);
+      return -ERROR;
+    }
+
+  ret = board_gpio_enc_irqx(config->encb, config->encb_irq,
+                            NULL, priv);
+  if (ret != OK)
+    {
+      snerr("ERROR: board_gpio_enc_irqx disable for ENC_B failed %d\n",
+            ret);
+      return -ERROR;
+    }
+
   return OK;
 }
 
@@ -225,9 +308,9 @@ static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower)
 {
   FAR struct sam_gpio_enc_lowerhalf_s *priv =
     (FAR struct sam_gpio_enc_lowerhalf_s *)lower;
-  FAR struct sam_qeconfig_s *config = 
+  FAR struct sam_qeconfig_s *config =
     (FAR struct sam_qeconfig_s *)priv->config;
-  
+
   config->position = config->position_base;
 
   return OK;
@@ -238,34 +321,43 @@ static int sam_gpio_enc_reset(FAR struct qe_lowerhalf_s *lower)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: sam_afecinitialize
+ * Name: sam_gpio_enc_init
  *
  * Description:
- *   Initialize and register the ADC driver.
+ *   Initialize and register the ENC driver.
+ *
+ * Input Parameters:
+ *   enca_cfg - ENC_A pin
+ *   encb_cfg - ENC_B pin
+ *   enca_irq - ENC_A interrupt
+ *   encb_irq - ENC_B interrupt
  *
  ****************************************************************************/
 
-int sam_gpio_enc_init(void)
+int sam_gpio_enc_init(gpio_pinset_t enca_cfg, gpio_pinset_t encb_cfg,
+                      int enca_irq, int encb_irq)
 {
-  int i;
   int ret;
 
-  struct sam_gpio_enc_lowerhalf_s * priv = (struct sam_gpio_enc_lowerhalf_s *)&sam_gpio_enc_priv;
+  FAR struct sam_gpio_enc_lowerhalf_s *dev =
+    (struct sam_gpio_enc_lowerhalf_s *)&sam_gpio_enc_priv;
+  FAR struct sam_qeconfig_s *priv = (struct sam_qeconfig_s *)dev->config;
 
-  ret = qe_register("dev/gpio_enc", (FAR struct qe_lowerhalf_s *)priv);
+  /* Register the device as "dev/gpio_enc". */
+
+  ret = qe_register("dev/gpio_enc", (FAR struct qe_lowerhalf_s *)dev);
   if (ret < 0)
     {
       snerr("ERROR: qe_register failed: %d\n", ret);
       return -ERROR;
     }
 
-  for (i = 0; i < 2; i++)
-    {
-      sam_configgpio(gpio_enc_pins[i]);
-      ret = board_gpio_enc_irqx(gpio_enc_pins[i], gpio_enc_pins_int[i], sam_gpio_enc_interrupt, priv);
-    }
+  priv->enca = enca_cfg;
+  priv->encb = encb_cfg;
+  priv->enca_irq = enca_irq;
+  priv->encb_irq = encb_irq;
 
   return OK;
 }
 
-#endif /* CONFIG_SENSORS_QENCODER */
+#endif /* CONFIG_SENSORS_QENCODER && CONFIG_SAMV7_GPIO_ENC */

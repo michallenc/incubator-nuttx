@@ -74,6 +74,10 @@
 #  include <arch/board/boot_romfsimg.h>
 #endif
 
+#ifdef HAVE_GPIO_ENC
+#  include "board_gpio_enc.h"
+#endif
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -261,9 +265,9 @@ int sam_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SENSORS_QENCODER
+#ifdef HAVE_GPIO_ENC
 
-  ret = sam_gpio_enc_init();
+  ret = sam_gpio_enc_init(GPIO_ENC_A, GPIO_ENC_B, GPIO_ENC_A_INT, GPIO_ENC_B_INT);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: sam_gpio_enc_init failed: %d\n", ret);
