@@ -555,7 +555,7 @@ static struct imxrt_flexpwm_module_s g_pwm4_modules[] =
   {
     .module = 3,
     .used = true,
-#ifdef IMXRT_FLEXPWM4_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_TRIG
     .ext_trig = true,
 #else
     .ext_trig = false,
@@ -857,7 +857,7 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
         {
           regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
                                         + MODULE_OFFSET * shift);
-          regval |= SMCTRL2_FORCE_SEL_EXT_SYNC | SMCTRL2_FRCEN;
+          regval |= SMCTRL2_INIT_SEL_EXT_SYNC | SMCTRL2_FORCE_SEL_EXT_SYNC | SMCTRL2_FRCEN;
           putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
                                       + MODULE_OFFSET * shift);
         }
@@ -905,23 +905,41 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
             {
               regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
-              regval |= SMT_OUT_TRIG_EN_VAL3;
+              regval |= SMT_OUT_TRIG_EN_VAL1;
               putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                           + MODULE_OFFSET * shift);
-              int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_FORCE_SEL_OFFSET,
-                          IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              int ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC0_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC1_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC2_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC3_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
               if (ret < 0)
                 {
                   printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
                 }
-              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_FORCE_SEL_OFFSET,
-              IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC0_SEL_OFFSET,
+                                       IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC1_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC2_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC3_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
               if (ret < 0)
                 {
                   printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
                 }
-              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_FORCE_SEL_OFFSET,
-              IMXRT_XBARA1_IN_FLEXPWM2_PWM4_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC0_SEL_OFFSET,
+                                       IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC1_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC2_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
+              ret = imxrt_xbar_connect(IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC3_SEL_OFFSET,
+                          IMXRT_XBARA1_IN_FLEXPWM4_PWM3_OUT_TRIG01);
               if (ret < 0)
                 {
                   printf("ERROR: imxrt_xbar_connect failed: %d\n", ret);
