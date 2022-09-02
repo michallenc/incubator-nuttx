@@ -251,6 +251,7 @@
 struct imxrt_qeconfig_s
 {
   uint32_t  base;           /* Register base address */
+  uint32_t  irq;            /* Encoder interrupt */
   uint32_t  init_val;       /* Value to initialize position counters to */
   uint32_t  modulus;        /* Modulus to use when modulo counting is enabled */
   uint16_t  in_filt_per;    /* Period for input filter sampling in # of periph
@@ -363,6 +364,7 @@ static const struct qe_ops_s g_qecallbacks =
 static const struct imxrt_qeconfig_s imxrt_enc1_config =
 {
   .base        = IMXRT_ENC1_BASE,
+  .irq         = IMXRT_IRQ_ENC1,
   .init_val    = CONFIG_ENC1_INITVAL,
   .modulus     = CONFIG_ENC1_MODULUS,
   .in_filt_per = CONFIG_ENC1_FILTPER,
@@ -390,9 +392,9 @@ static struct qe_index_s imxrt_enc1_data =
 
 static struct imxrt_enc_lowerhalf_s imxrt_enc1_priv =
 {
-  .ops = &g_qecallbacks,
+  .ops    = &g_qecallbacks,
   .config = &imxrt_enc1_config,
-  .data = &imxrt_enc1_data,
+  .data   = &imxrt_enc1_data,
 };
 #endif
 
@@ -400,6 +402,7 @@ static struct imxrt_enc_lowerhalf_s imxrt_enc1_priv =
 static const struct imxrt_qeconfig_s imxrt_enc2_config =
 {
   .base        = IMXRT_ENC2_BASE,
+  .irq         = IMXRT_IRQ_ENC2,
   .init_val    = CONFIG_ENC2_INITVAL,
   .modulus     = CONFIG_ENC2_MODULUS,
   .in_filt_per = CONFIG_ENC2_FILTPER,
@@ -417,10 +420,18 @@ static const struct imxrt_qeconfig_s imxrt_enc2_config =
 #endif
 };
 
+static struct qe_index_s imxrt_enc2_data =
+{
+  .qenc_pos = 0,
+  .indx_pos = 0,
+  .indx_cnt = 0,
+};
+
 static struct imxrt_enc_lowerhalf_s imxrt_enc2_priv =
 {
   .ops    = &g_qecallbacks,
   .config = &imxrt_enc2_config,
+  .data   = &imxrt_enc2_data,
 };
 #endif
 
@@ -428,6 +439,7 @@ static struct imxrt_enc_lowerhalf_s imxrt_enc2_priv =
 static const struct imxrt_qeconfig_s imxrt_enc3_config =
 {
   .base        = IMXRT_ENC3_BASE,
+  .irq         = IMXRT_IRQ_ENC3,
   .init_val    = CONFIG_ENC3_INITVAL,
   .modulus     = CONFIG_ENC3_MODULUS,
   .in_filt_per = CONFIG_ENC3_FILTPER,
@@ -445,10 +457,18 @@ static const struct imxrt_qeconfig_s imxrt_enc3_config =
 #endif
 };
 
+static struct qe_index_s imxrt_enc3_data =
+{
+  .qenc_pos = 0,
+  .indx_pos = 0,
+  .indx_cnt = 0,
+};
+
 static struct imxrt_enc_lowerhalf_s imxrt_enc3_priv =
 {
   .ops    = &g_qecallbacks,
   .config = &imxrt_enc3_config,
+  .data   = &imxrt_enc3_data,
 };
 #endif
 
@@ -456,6 +476,7 @@ static struct imxrt_enc_lowerhalf_s imxrt_enc3_priv =
 static const struct imxrt_qeconfig_s imxrt_enc4_config =
 {
   .base        = IMXRT_ENC4_BASE,
+  .irq         = IMXRT_IRQ_ENC4,
   .init_val    = CONFIG_ENC4_INITVAL,
   .modulus     = CONFIG_ENC4_MODULUS,
   .in_filt_per = CONFIG_ENC4_FILTPER,
@@ -473,10 +494,18 @@ static const struct imxrt_qeconfig_s imxrt_enc4_config =
 #endif
 };
 
+static struct qe_index_s imxrt_enc4_data =
+{
+  .qenc_pos = 0,
+  .indx_pos = 0,
+  .indx_cnt = 0,
+};
+
 static struct imxrt_enc_lowerhalf_s imxrt_enc4_priv =
 {
   .ops    = &g_qecallbacks,
   .config = &imxrt_enc4_config,
+  .data   = &imxrt_enc4_data,
 };
 #endif
 
@@ -787,10 +816,7 @@ static void imxrt_enc_modulo_disable(struct imxrt_enc_lowerhalf_s *priv)
  * Name: imxrt_enc_index
  *
  * Description:
- *   Disables modulo counting.
- *
- * Input Parameters:
- *   priv - A reference to the IMXRT enc lowerhalf structure
+ *   Get the index position and increments index count.
  *
  ****************************************************************************/
 
@@ -801,7 +827,6 @@ static int imxrt_enc_index(int irq, void *context, FAR void *arg)
   FAR const struct imxrt_qeconfig_s *config = priv->config;
   FAR struct qe_index_s *data = priv->data;
   uint16_t regval = getreg16(config->base + IMXRT_ENC_CTRL_OFFSET);
-  int ret;
 
   if ((regval & ENC_CTRL_XIRQ) != 0)
     {
@@ -810,7 +835,11 @@ static int imxrt_enc_index(int irq, void *context, FAR void *arg)
       regval |= ENC_CTRL_XIRQ;
       putreg16(regval, config->base + IMXRT_ENC_CTRL_OFFSET);
 
+      /* Get index position */
+
       imxrt_position(arg, &data->indx_pos);
+
+      /* Increment index count */
 
       priv->data->indx_cnt += 1;
     }
@@ -933,14 +962,17 @@ static int imxrt_setup(struct qe_lowerhalf_s *lower)
   imxrt_enc_putreg16(priv, IMXRT_ENC_TST_OFFSET, regval);
 #endif
 
-  ret = irq_attach(IMXRT_IRQ_ENC1, imxrt_enc_index, priv);
-  if (ret < 0)
+  if ((config->init_flags && XIE_SHIFT) == 1)
     {
-      printf("irq_attach failed: %d\n", ret);
-      return ret;
-    }
+      ret = irq_attach(config->irq, imxrt_enc_index, priv);
+      if (ret < 0)
+        {
+          snerr("ERROR: irq_attach failed: %d\n", ret);
+          return ret;
+        }
 
-  up_enable_irq(IMXRT_IRQ_ENC1);
+      up_enable_irq(config->irq);
+    }
 
   /* Control and Control 2 register */
 
@@ -988,6 +1020,15 @@ static int imxrt_shutdown(struct qe_lowerhalf_s *lower)
 #ifdef CONFIG_DEBUG_SENSORS
   imxrt_enc_putreg16(priv, IMXRT_ENC_TST_OFFSET, 0);
 #endif
+
+  /* Disable interrupts if used */
+
+  if ((priv->config->init_flags && XIE_SHIFT) == 1)
+    {
+      up_disable_irq(priv->config->irq);
+
+      irq_detach(priv->config->irq);
+    }
 
   imxrt_enc_putreg16(priv, IMXRT_ENC_FILT_OFFSET, 0);
   imxrt_enc_putreg16(priv, IMXRT_ENC_LINIT_OFFSET, 0);
