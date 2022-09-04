@@ -177,8 +177,12 @@ static struct mpfs_rptun_shmem_s    g_shmem;
 static struct rpmsg_device         *g_mpfs_rpmsg_device;
 static struct rpmsg_virtio_device  *g_mpfs_virtio_device;
 
-static sem_t  g_mpfs_ack_sig       = SEM_INITIALIZER(0);
-static sem_t  g_mpfs_rx_sig        = SEM_INITIALIZER(0);
+#ifndef CONFIG_MPFS_OPENSBI
+static sem_t  g_mpfs_ack_sig  = NXSEM_INITIALIZER(0,
+                                                  PRIOINHERIT_FLAGS_DISABLE);
+static sem_t  g_mpfs_rx_sig   = NXSEM_INITIALIZER(0,
+                                                  PRIOINHERIT_FLAGS_DISABLE);
+#endif
 static struct list_node g_dev_list = LIST_INITIAL_VALUE(g_dev_list);
 
 static uint32_t g_connected_hart_ints;
@@ -429,7 +433,9 @@ static void mpfs_ihc_rx_handler(uint32_t *message, bool is_ack)
     {
       /* Received the ack */
 
+#ifndef CONFIG_MPFS_OPENSBI
       nxsem_post(&g_mpfs_ack_sig);
+#endif
     }
   else
     {
@@ -437,7 +443,9 @@ static void mpfs_ihc_rx_handler(uint32_t *message, bool is_ack)
 
       DEBUGASSERT(g_vq_idx < VRINGS);
 
+#ifndef CONFIG_MPFS_OPENSBI
       nxsem_post(&g_mpfs_rx_sig);
+#endif
     }
 }
 
@@ -777,20 +785,18 @@ static int mpfs_ihc_tx_message(ihc_channel_t channel, uint32_t *message)
   uint32_t mhartid      = mpfs_ihc_context_to_local_hart_id(channel);
   uint32_t rhartid      = mpfs_ihc_context_to_remote_hart_id(channel);
   uint32_t message_size = getreg32(MPFS_IHC_MSG_SIZE(mhartid, rhartid));
-  uint32_t ctrl_reg     = getreg32(MPFS_IHC_CTRL(mhartid, rhartid));
+  uint32_t ctrl_reg;
+  uint32_t retries      = 10000;
 
   DEBUGASSERT(message_size <= IHC_MAX_MESSAGE_SIZE);
 
   /* Check if the system is busy.  All we can try is wait. */
 
-  if ((RMP_MESSAGE_PRESENT | ACK_INT) & ctrl_reg)
+  do
     {
-      nxsig_usleep(100);
-
-      /* Give it a one more try */
-
       ctrl_reg = getreg32(MPFS_IHC_CTRL(mhartid, rhartid));
     }
+  while ((ctrl_reg & (RMP_MESSAGE_PRESENT | ACK_INT)) && --retries);
 
   /* Return if RMP bit 1 indicating busy */
 
@@ -821,7 +827,9 @@ static int mpfs_ihc_tx_message(ihc_channel_t channel, uint32_t *message)
         {
           /* Only applicable for the CONTEXTB_HART */
 
+#ifndef CONFIG_MPFS_OPENSBI
           nxsem_wait_uninterruptible(&g_mpfs_ack_sig);
+#endif
         }
     }
 
@@ -957,9 +965,9 @@ mpfs_rptun_get_resource(struct rptun_dev_s *dev)
       rsc->rpmsg_vring1.align       = VRING_ALIGN;
       rsc->rpmsg_vring1.num         = VRING_NR;
       rsc->rpmsg_vring1.da          = VRING1_DESCRIPTORS;
-      rsc->rpmsg_vring0.notifyid    = 1;
-      rsc->config.rxbuf_size        = VRING_SIZE;
-      rsc->config.txbuf_size        = VRING_SIZE;
+      rsc->rpmsg_vring1.notifyid    = 1;
+      rsc->config.r2h_buf_size      = VRING_SIZE;
+      rsc->config.h2r_buf_size      = VRING_SIZE;
     }
 
   /* It might be tempting to set this at mpfs_rptun_start(), but it's only
@@ -1072,23 +1080,17 @@ static int mpfs_rptun_notify(struct rptun_dev_s *dev, uint32_t notifyid)
 {
   uint32_t tx_msg[IHC_MAX_MESSAGE_SIZE];
 
-  /* We're looking for the id, but currently it's just RPTUN_NOTIFY_ALL. It's
-   * OK, the remote end doesn't really care about the id, but that might
-   * change in the future.
-   */
+  /* We only care about the queue with id 0 */
 
-  if (notifyid == RPTUN_NOTIFY_ALL)
+  if (notifyid == 0)
     {
-      tx_msg[0] = 0;
+      tx_msg[0] = 0; /* (notifyid << 16) which is zero */
       tx_msg[1] = 0;
-    }
-  else
-    {
-      tx_msg[0] = (notifyid << 16);
-      tx_msg[1] = 0;
+
+      return mpfs_ihc_tx_message(IHC_CHANNEL_TO_CONTEXTA, tx_msg);
     }
 
-  return mpfs_ihc_tx_message(IHC_CHANNEL_TO_CONTEXTA, tx_msg);
+  return OK;
 }
 
 /****************************************************************************
@@ -1153,8 +1155,8 @@ static int mpfs_rptun_init(const char *shmemname, const char *cpuname)
 #endif
 
   dev->rptun.ops = &g_mpfs_rptun_ops;
-  strncpy(dev->cpuname, cpuname, RPMSG_NAME_SIZE);
-  strncpy(dev->shmemname, shmemname, RPMSG_NAME_SIZE);
+  strlcpy(dev->cpuname, cpuname, sizeof(dev->cpuname));
+  strlcpy(dev->shmemname, shmemname, sizeof(dev->shmemname));
   list_add_tail(&g_dev_list, &dev->node);
 
   ret = rptun_initialize(&dev->rptun);
@@ -1277,7 +1279,9 @@ static int mpfs_rptun_thread(int argc, char *argv[])
       info = &g_mpfs_virtqueue_table[g_vq_idx];
       virtqueue_notification((struct virtqueue *)info->data);
 
+#ifndef CONFIG_MPFS_OPENSBI
       nxsem_wait(&g_mpfs_rx_sig);
+#endif
     }
 
   return 0;

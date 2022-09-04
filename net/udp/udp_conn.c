@@ -620,9 +620,6 @@ FAR struct udp_conn_s *udp_alloc(uint8_t domain)
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
       conn->domain  = domain;
 #endif
-#ifdef CONFIG_NET_UDP_BINDTODEVICE
-      conn->boundto = 0;  /* Not bound to any interface */
-#endif
       conn->lport   = 0;
       conn->ttl     = IP_TTL_DEFAULT;
 #if CONFIG_NET_RECV_BUFSIZE > 0
@@ -677,7 +674,7 @@ void udp_free(FAR struct udp_conn_s *conn)
 
   /* Release any read-ahead buffers attached to the connection */
 
-  iob_free_queue(&conn->readahead, IOBUSER_NET_UDP_READAHEAD);
+  iob_free_queue(&conn->readahead);
 
 #ifdef CONFIG_NET_UDP_WRITE_BUFFERS
   /* Release any write buffers attached to the connection */

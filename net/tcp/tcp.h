@@ -69,15 +69,12 @@
 #  define TCP_WBIOB(wrb)             ((wrb)->wb_iob)
 #  define TCP_WBCOPYOUT(wrb,dest,n)  (iob_copyout(dest,(wrb)->wb_iob,(n),0))
 #  define TCP_WBCOPYIN(wrb,src,n,off) \
-     (iob_copyin((wrb)->wb_iob,src,(n),(off),true,\
-                 IOBUSER_NET_TCP_WRITEBUFFER))
+     (iob_copyin((wrb)->wb_iob,src,(n),(off),true))
 #  define TCP_WBTRYCOPYIN(wrb,src,n,off) \
-     (iob_trycopyin((wrb)->wb_iob,src,(n),(off),true,\
-                    IOBUSER_NET_TCP_WRITEBUFFER))
+     (iob_trycopyin((wrb)->wb_iob,src,(n),(off),true))
 
 #  define TCP_WBTRIM(wrb,n) \
-     do { (wrb)->wb_iob = iob_trimhead((wrb)->wb_iob,(n),\
-                            IOBUSER_NET_TCP_WRITEBUFFER); } while (0)
+     do { (wrb)->wb_iob = iob_trimhead((wrb)->wb_iob,(n)); } while (0)
 
 #ifdef CONFIG_DEBUG_FEATURES
 #  define TCP_WBDUMP(msg,wrb,len,offset) \
@@ -303,6 +300,10 @@ struct tcp_conn_s
 
   FAR struct devif_callback_s *connevents;
   FAR struct devif_callback_s *connevents_tail;
+
+  /* Reference to TCP close callback instance */
+
+  FAR struct devif_callback_s *clscb;
 
 #if defined(CONFIG_NET_TCP_WRITE_BUFFERS)
   /* Callback instance for TCP send() */
@@ -1721,7 +1722,6 @@ int tcp_wrbuffer_test(void);
 
 #ifdef CONFIG_DEBUG_FEATURES
 void tcp_event_handler_dump(FAR struct net_driver_s *dev,
-                            FAR void *pvconn,
                             FAR void *pvpriv,
                             uint16_t flags,
                             FAR struct tcp_conn_s *conn);

@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/usrsock.h>
@@ -45,11 +46,10 @@
  ****************************************************************************/
 
 static uint16_t ioctl_event(FAR struct net_driver_s *dev,
-                                  FAR void *pvconn,
-                                  FAR void *pvpriv, uint16_t flags)
+                            FAR void *pvpriv, uint16_t flags)
 {
   FAR struct usrsock_data_reqstate_s *pstate = pvpriv;
-  FAR struct usrsock_conn_s *conn = pvconn;
+  FAR struct usrsock_conn_s *conn = pstate->reqstate.conn;
 
   if (flags & USRSOCK_EVENT_ABORT)
     {
@@ -173,6 +173,15 @@ int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
   };
 
   int ret;
+
+  /* Bypass FIONBIO to socket level,
+   * since the usrsock server always put the socket in nonblocking mode.
+   */
+
+  if (cmd == FIONBIO)
+    {
+      return -ENOTTY;
+    }
 
   net_lock();
 

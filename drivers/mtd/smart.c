@@ -37,12 +37,11 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
-
-#include <crc8.h>
-#include <crc16.h>
-#include <crc32.h>
 #include <debug.h>
 
+#include <nuttx/crc8.h>
+#include <nuttx/crc16.h>
+#include <nuttx/crc32.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
@@ -5929,10 +5928,9 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
         }
 
 #ifdef CONFIG_DEBUG_FS_INFO
-      strncpy(entryname,
+      strlcpy(entryname,
               (const char *) (cur + sizeof(struct smart_entry_header_s)),
-              dev->namesize);
-      entryname[dev->namesize] = '\0';
+              sizeof(entryname));
       finfo("Check entry (name=%s flags=%02x logsector=%02x)\n",
             entryname, entry->flags, entry->firstsector);
 #endif
@@ -6211,7 +6209,7 @@ int smart_initialize(int minor, FAR struct mtd_dev_s *mtd,
       dev->namesize = CONFIG_SMARTFS_MAXNAMLEN;
       if (partname)
         {
-          strncpy(dev->partname, partname, SMART_PARTNAME_SIZE);
+          strlcpy(dev->partname, partname, SMART_PARTNAME_SIZE);
         }
       else
         {

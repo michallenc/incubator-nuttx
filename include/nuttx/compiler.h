@@ -191,6 +191,14 @@
 
 #  define noinstrument_function __attribute__ ((no_instrument_function))
 
+/* The nosanitize_address attribute informs GCC don't sanitize it */
+
+#  define nosanitize_address __attribute__ ((no_sanitize_address))
+
+/* The nosanitize_undefined attribute informs GCC don't sanitize it */
+
+#  define nosanitize_undefined __attribute__((no_sanitize("undefined")))
+
 /* The nostackprotect_function attribute disables stack protection in
  * sensitive functions, e.g., stack coloration routines.
  */
@@ -385,7 +393,7 @@
 
 /* Indicate that a local variable is not used */
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define UNUSED(a) ((void)(1 || &(a)))
 
 #  if defined(__clang__)
 #    define no_builtin(n) __attribute__((no_builtin(n)))
@@ -460,6 +468,8 @@
 #  define inline_function
 #  define noinline_function
 #  define noinstrument_function
+#  define nosanitize_address
+#  define nosanitize_undefined
 #  define nostackprotect_function
 
 #  define unused_code
@@ -485,7 +495,7 @@
 
 /* Indicate that a local variable is not used */
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define UNUSED(a) ((void)(1 || &(a)))
 
 /* It is assumed that the system is build using the small
  * data model with storage defaulting to internal RAM.
@@ -591,6 +601,8 @@
 #  define inline_function
 #  define noinline_function
 #  define noinstrument_function
+#  define nosanitize_address
+#  define nosanitize_undefined
 #  define nostackprotect_function
 #  define unused_code
 #  define unused_data
@@ -654,7 +666,7 @@
 
 /* Indicate that a local variable is not used */
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define UNUSED(a) ((void)(1 || &(a)))
 
 /* Older Zilog compilers support both types double and long long, but the
  * size is 32-bits (same as long and single precision) so it is safer to say
@@ -691,6 +703,8 @@
 #  define inline_function
 #  define noinline_function
 #  define noinstrument_function
+#  define nosanitize_address
+#  define nosanitize_undefined
 #  define nostackprotect_function
 #  define unused_code
 #  define unused_data
@@ -721,7 +735,7 @@
 
 /* Indicate that a local variable is not used */
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define UNUSED(a) ((void)(1 || &(a)))
 
 #  define CONFIG_CPP_HAVE_VARARGS 1 /* Supports variable argument macros */
 #  define CONFIG_HAVE_FILENAME 1    /* Has __FILE__ */
@@ -757,6 +771,8 @@
 #  define inline_function
 #  define noinline_function
 #  define noinstrument_function
+#  define nosanitize_address
+#  define nosanitize_undefined
 #  define nostackprotect_function
 #  define unused_code
 #  define unused_data
@@ -783,7 +799,7 @@
 #  undef  CONFIG_HAVE_DOUBLE
 #  undef  CONFIG_HAVE_LONG_DOUBLE
 
-#  define UNUSED(a) ((void)(1 || (a)))
+#  define UNUSED(a) ((void)(1 || &(a)))
 
 #  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
 

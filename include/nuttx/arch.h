@@ -1852,6 +1852,7 @@ int up_tls_size(void);
  ****************************************************************************/
 
 #ifdef CONFIG_SCHED_THREAD_LOCAL
+struct tls_info_s;
 void up_tls_initialize(FAR struct tls_info_s *info);
 #else
 #define up_tls_initialize(x)
@@ -2231,31 +2232,6 @@ void nxsched_alarm_expiration(FAR const struct timespec *ts);
 #endif
 
 /****************************************************************************
- * Name: nxsched_process_cpuload
- *
- * Description:
- *   Collect data that can be used for CPU load measurements.  When
- *   CONFIG_SCHED_CPULOAD_EXTCLK is defined, this is an exported interface,
- *   use the the external clock logic.  Otherwise, it is an OS internal
- *   interface.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- * Assumptions/Limitations:
- *   This function is called from a timer interrupt handler with all
- *   interrupts disabled.
- *
- ****************************************************************************/
-
-#if defined(CONFIG_SCHED_CPULOAD) && defined(CONFIG_SCHED_CPULOAD_EXTCLK)
-void weak_function nxsched_process_cpuload(void);
-#endif
-
-/****************************************************************************
  * Name: nxsched_process_cpuload_ticks
  *
  * Description:
@@ -2277,7 +2253,8 @@ void weak_function nxsched_process_cpuload(void);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_CPULOAD) && defined(CONFIG_SCHED_CPULOAD_EXTCLK)
-void weak_function nxsched_process_cpuload_ticks(uint32_t ticks);
+void nxsched_process_cpuload_ticks(uint32_t ticks);
+#  define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
 #endif
 
 /****************************************************************************
@@ -2617,7 +2594,14 @@ int up_saveusercontext(FAR void *saveregs);
  * Name: up_fpucmp
  *
  * Description:
- *   compare FPU areas from thread context
+ *   Compare FPU areas from thread context.
+ *
+ * Input Parameters:
+ *   saveregs1 - Pointer to the saved FPU registers.
+ *   saveregs2 - Pointer to the saved FPU registers.
+ *
+ * Returned Value:
+ *   True if FPU areas compare equal, False otherwise.
  *
  ****************************************************************************/
 

@@ -345,7 +345,7 @@ int sam_gpio_enc_init(gpio_pinset_t enca_cfg, gpio_pinset_t encb_cfg,
 
   /* Register the device as "dev/gpio_enc". */
 
-  ret = qe_register("dev/gpio_enc", (FAR struct qe_lowerhalf_s *)dev);
+  ret = qe_register("/dev/gpio_enc", (FAR struct qe_lowerhalf_s *)dev);
   if (ret < 0)
     {
       snerr("ERROR: qe_register failed: %d\n", ret);

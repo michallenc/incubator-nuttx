@@ -178,7 +178,6 @@ static void sendto_request(FAR struct net_driver_s *dev,
  * Input Parameters:
  *   dev        The structure of the network driver that generated the
  *              event.
- *   conn       The received packet, cast to (void *)
  *   pvpriv     An instance of struct icmp_sendto_s cast to (void *)
  *   flags      Set of events describing why the callback was invoked
  *
@@ -191,10 +190,9 @@ static void sendto_request(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
-                                  FAR void *conn,
-                                  FAR void *pvpriv, uint16_t flags)
+                                    FAR void *pvpriv, uint16_t flags)
 {
-  FAR struct icmp_sendto_s *pstate = (struct icmp_sendto_s *)pvpriv;
+  FAR struct icmp_sendto_s *pstate = pvpriv;
 
   ninfo("flags: %04x\n", flags);
 
@@ -358,7 +356,7 @@ ssize_t icmp_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       conn->nreqs = 0;
       conn->dev   = NULL;
 
-      iob_free_queue(&conn->readahead, IOBUSER_NET_SOCK_ICMP);
+      iob_free_queue(&conn->readahead);
     }
 
 #ifdef CONFIG_NET_ARP_SEND
@@ -471,7 +469,7 @@ errout:
   conn->nreqs = 0;
   conn->dev   = NULL;
 
-  iob_free_queue(&conn->readahead, IOBUSER_NET_SOCK_ICMP);
+  iob_free_queue(&conn->readahead);
   return ret;
 }
 
