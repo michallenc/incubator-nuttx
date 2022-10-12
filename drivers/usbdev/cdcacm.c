@@ -548,11 +548,11 @@ static int cdcacm_recvpacket(FAR struct cdcacm_dev_s *priv,
            * been crossed.  It will probably activate RX flow control.
            */
 
-          if (cdcuart_rxflowcontrol(&priv->serdev, nbuffered, true))
+          if (!priv->iactive)
             {
-              /* Low-level driver activated RX flow control, exit loop now. */
+              /* Activate RX flow control */
 
-              break;
+              cdcuart_rxflowcontrol(&priv->serdev, nbuffered, true);
             }
         }
 #endif
