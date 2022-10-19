@@ -27,10 +27,10 @@
 
 #include <sys/types.h>
 #include <time.h>
-#include <queue.h>
 #include <errno.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/queue.h>
 
 #include "timer/timer.h"
 
@@ -81,7 +81,7 @@ volatile sq_queue_t g_alloctimers;
  *
  ****************************************************************************/
 
-void weak_function timer_initialize(void)
+void timer_initialize(void)
 {
 #if CONFIG_PREALLOC_TIMERS > 0
   int i;
@@ -122,7 +122,7 @@ void weak_function timer_initialize(void)
  *
  ****************************************************************************/
 
-void weak_function timer_deleteall(pid_t pid)
+void timer_deleteall(pid_t pid)
 {
   FAR struct posix_timer_s *timer;
   FAR struct posix_timer_s *next;

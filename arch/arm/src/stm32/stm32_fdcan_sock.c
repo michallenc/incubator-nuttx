@@ -1981,7 +1981,7 @@ static void fdcan_txdone_work(void *arg)
    */
 
   net_lock();
-  devif_timer(&priv->dev, 0, fdcan_txpoll);
+  devif_poll(&priv->dev, fdcan_txpoll);
   net_unlock();
 }
 
@@ -3105,7 +3105,7 @@ static void fdcan_txavail_work(void *arg)
            * new XMIT data.
            */
 
-          devif_timer(&priv->dev, 0, fdcan_txpoll);
+          devif_poll(&priv->dev, fdcan_txpoll);
         }
     }
 
@@ -3309,11 +3309,15 @@ errout:
 void arm_netinitialize(void)
 {
 #ifdef CONFIG_STM32_CAN1
-  stm32_fdcansockinitialize(0);
+  stm32_fdcansockinitialize(FDCAN1);
 #endif
 
 #ifdef CONFIG_STM32_CAN2
-  stm32_fdcansockinitialize(1);
+  stm32_fdcansockinitialize(FDCAN2);
+#endif
+
+#ifdef CONFIG_STM32_CAN3
+  stm32_fdcansockinitialize(FDCAN3);
 #endif
 }
 #endif

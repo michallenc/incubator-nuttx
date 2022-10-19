@@ -122,12 +122,6 @@
 
 /* Power management definitions */
 
-#if defined(CONFIG_PM)
-#ifndef PM_IDLE_DOMAIN
-#  define PM_IDLE_DOMAIN      0 /* Revisit */
-#endif
-#endif
-
 #ifndef OK
 #define OK 0
 #endif
@@ -1881,7 +1875,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -1891,7 +1885,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
           /* calculate the new clock ticks */
@@ -2020,7 +2014,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -2030,7 +2024,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
 #endif /* CONFIG_RUN_STANDBY */
@@ -2218,7 +2212,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -2228,7 +2222,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
 #endif /* CONFIG_RUN_SLEEP */
@@ -2552,13 +2546,6 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
   DEBUGASSERT(clkcfg != NULL);
 
-#ifdef CONFIG_PM
-  /* Register to receive power management callbacks */
-
-  ret = pm_register(&g_clock_pmcb);
-  DEBUGASSERT(ret == OK);
-#endif
-
   /* Set SCG configuration */
 
   ret = s32k1xx_scg_config(&clkcfg->scg);
@@ -2583,6 +2570,29 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
   return ret;
 }
+
+/****************************************************************************
+ * Name: s32k1xx_clock_pm_register
+ *
+ * Description:
+ *   This function is called after OS and PM init in order to register to
+ *   receive power management event callbacks.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Values:
+ *   None
+ *
+ ****************************************************************************/
+#ifdef CONFIG_PM
+void s32k1xx_clock_pm_register(void)
+{
+  /* Register to receive power management callbacks */
+
+  pm_register(&g_clock_pmcb);
+}
+#endif
 
 /****************************************************************************
  * Name: s32k1xx_get_coreclk

@@ -40,8 +40,6 @@
  * Pre-processor Prototypes
  ****************************************************************************/
 
-#define up_getsp()              (uintptr_t)__builtin_frame_address(0)
-
 #ifdef CONFIG_PIC
 
 /* This identifies the register the is used by the processor as the PIC base
@@ -105,6 +103,13 @@ do { \
 #    define ARCH_STACK_NSECTS ARCH_PG2SECT(CONFIG_ARCH_STACK_NPAGES)
 #  endif
 #endif /* CONFIG_ARCH_ADDRENV */
+
+/* Redefine the linker symbols as armlink style */
+
+#ifdef CONFIG_ARM_TOOLCHAIN_ARMCLANG
+#  define _sinit   Image$$init_section$$Base
+#  define _einit   Image$$init_section$$Limit
+#endif
 
 /****************************************************************************
  * Inline functions

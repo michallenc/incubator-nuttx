@@ -37,7 +37,7 @@ EXTRA_PATH=
 
 case ${os} in
   Darwin)
-    install="python-tools u-boot-tools elf-toolchain gen-romfs kconfig-frontends rust arm-gcc-toolchain riscv-gcc-toolchain xtensa-esp32-gcc-toolchain avr-gcc-toolchain c-cache binutils"
+    install="python-tools u-boot-tools elf-toolchain gen-romfs kconfig-frontends rust arm-gcc-toolchain arm64-gcc-toolchain riscv-gcc-toolchain xtensa-esp32-gcc-toolchain avr-gcc-toolchain c-cache binutils"
     mkdir -p "${prebuilt}"/homebrew
     export HOMEBREW_CACHE=${prebuilt}/homebrew
     # https://github.com/actions/virtual-environments/issues/2322#issuecomment-749211076
@@ -46,7 +46,7 @@ case ${os} in
     brew update --quiet
     ;;
   Linux)
-    install="python-tools gen-romfs gperf kconfig-frontends rust arm-gcc-toolchain mips-gcc-toolchain riscv-gcc-toolchain xtensa-esp32-gcc-toolchain rx-gcc-toolchain sparc-gcc-toolchain c-cache"
+    install="python-tools codechecker clang_clang-tidy gen-romfs gperf kconfig-frontends rust arm-gcc-toolchain arm64-gcc-toolchain mips-gcc-toolchain riscv-gcc-toolchain xtensa-esp32-gcc-toolchain rx-gcc-toolchain sparc-gcc-toolchain c-cache"
     ;;
 esac
 
@@ -62,12 +62,31 @@ function python-tools {
   PYTHONUSERBASE=${prebuilt}/pylocal
   export PYTHONUSERBASE
   add_path "${PYTHONUSERBASE}"/bin
-  pip3 install pexpect
+  pip3 install pexpect==4.8.0
+  pip3 install pytest==6.2.5
+  pip3 install pytest-repeat==0.9.1
+  pip3 install pytest-json==0.4.0
+  pip3 install pytest-ordering==0.6
+  pip3 install pyserial==3.5
+  pip3 install pyelftools
+  pip3 install cxxfilt
 
   # MCUboot's tool for image signing and key management
   if ! command -v imgtool &> /dev/null; then
     pip3 install imgtool
   fi
+}
+
+function codechecker {
+  pip3 install CodeChecker
+}
+
+function clang_clang-tidy {
+  # Install Clang and Clang-Tidy for Ubuntu.
+  apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -qq \
+    -o APT::Immediate-Configure=0 \
+    clang \
+    clang-tidy
 }
 
 function u-boot-tools {
@@ -172,6 +191,29 @@ function arm-gcc-toolchain {
   arm-none-eabi-gcc --version
 }
 
+function arm64-gcc-toolchain {
+  add_path "${prebuilt}"/gcc-aarch64-none-elf/bin
+
+  if [ ! -f "${prebuilt}/gcc-aarch64-none-elf/bin/aarch64-none-elf-gcc" ]; then
+    local flavor
+    case ${os} in
+      Darwin)
+        flavor=darwin-x86_64
+        ;;
+      Linux)
+        flavor=x86_64
+        ;;
+    esac
+    cd "${prebuilt}"
+    wget --quiet https://developer.arm.com/-/media/Files/downloads/gnu/11.2-2022.02/binrel/gcc-arm-11.2-2022.02-${flavor}-aarch64-none-elf.tar.xz
+    xz -d gcc-arm-11.2-2022.02-${flavor}-aarch64-none-elf.tar.xz
+    tar xf gcc-arm-11.2-2022.02-${flavor}-aarch64-none-elf.tar
+    mv gcc-arm-11.2-2022.02-${flavor}-aarch64-none-elf gcc-aarch64-none-elf
+    rm gcc-arm-11.2-2022.02-${flavor}-aarch64-none-elf.tar
+  fi
+  aarch64-none-elf-gcc --version
+}
+
 function mips-gcc-toolchain {
   add_path "${prebuilt}"/pinguino-compilers/linux64/p32/bin
 
@@ -224,7 +266,7 @@ function xtensa-esp32-gcc-toolchain {
     esac
   fi
   xtensa-esp32-elf-gcc --version
-  pip3 install esptool
+  pip3 install esptool==3.3.1
 }
 
 function avr-gcc-toolchain {
@@ -336,6 +378,8 @@ function c-cache {
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/g++
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/arm-none-eabi-gcc
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/arm-none-eabi-g++
+  ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/aarch64-none-elf-gcc
+  ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/aarch64-none-elf-g++
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/p32-gcc
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/riscv64-unknown-elf-gcc
   ln -sf "$(which ccache)" "${prebuilt}"/ccache/bin/riscv64-unknown-elf-g++

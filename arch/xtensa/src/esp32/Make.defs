@@ -19,57 +19,17 @@
 ############################################################################
 
 include chip/Bootloader.mk
+include common/Make.defs
 
 # The start-up, "head", file.  May be either a .S or a .c file.
 
-HEAD_ASRC  = xtensa_vectors.S xtensa_window_vector.S xtensa_windowspill.S
-HEAD_ASRC += xtensa_int_handlers.S  xtensa_user_handler.S
 HEAD_CSRC  = esp32_start.c esp32_wdt.c
 
-# Common XTENSA files (arch/xtensa/src/common)
-
-CMN_ASRCS  = xtensa_context.S xtensa_coproc.S xtensa_cpuint.S xtensa_panic.S
-CMN_ASRCS += xtensa_sigtramp.S
-
-CMN_CSRCS  = xtensa_assert.c xtensa_blocktask.c
-CMN_CSRCS += xtensa_cpenable.c xtensa_createstack.c xtensa_exit.c
-CMN_CSRCS += xtensa_initialize.c xtensa_initialstate.c xtensa_interruptcontext.c
-CMN_CSRCS += xtensa_irqdispatch.c xtensa_lowputs.c xtensa_mdelay.c
-CMN_CSRCS += xtensa_modifyreg8.c xtensa_modifyreg16.c xtensa_modifyreg32.c
-CMN_CSRCS += xtensa_puts.c xtensa_releasepending.c xtensa_releasestack.c
-CMN_CSRCS += xtensa_reprioritizertr.c xtensa_schedsigaction.c
-CMN_CSRCS += xtensa_sigdeliver.c xtensa_stackframe.c xtensa_udelay.c
-CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c xtensa_swint.c
-CMN_CSRCS += xtensa_saveusercontext.c
-
-# Configuration-dependent common XTENSA files
-
-ifeq ($(CONFIG_DEBUG_TCBINFO),y)
-  CMN_CSRCS += xtensa_tcbinfo.c
+ifeq ($(CONFIG_XTENSA_HAVE_EXCEPTION_HOOKS),y)
+HEAD_ASRC += esp32_window_hooks.S
 endif
 
-ifeq ($(CONFIG_DEBUG_ALERT),y)
-  CMN_CSRCS += xtensa_dumpstate.c
-endif
-
-ifeq ($(CONFIG_SPINLOCK),y)
-  CMN_CSRCS += xtensa_testset.c
-endif
-
-ifeq ($(CONFIG_SMP),y)
-  CMN_CSRCS += xtensa_cpupause.c
-endif
-
-ifeq ($(CONFIG_STACK_COLORATION),y)
-  CMN_CSRCS += xtensa_checkstack.c
-endif
-
-ifeq ($(CONFIG_XTENSA_SEMIHOSTING_HOSTFS),y)
-  CMN_ASRCS += xtensa_simcall.S
-  CMN_CSRCS += xtensa_hostfs.c
-endif
-
-# Required ESP32 files (arch/xtensa/src/lx6)
+# Required ESP32 files (arch/xtensa/src/esp32)
 
 CHIP_CSRCS  = esp32_allocateheap.c esp32_clockconfig.c esp32_gpio.c
 CHIP_CSRCS += esp32_systemreset.c esp32_resetcause.c
@@ -79,6 +39,10 @@ CHIP_CSRCS += esp32_dma.c
 
 ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
 CHIP_CSRCS += esp32_idle.c
+endif
+
+ifeq ($(CONFIG_BUILD_PROTECTED),y)
+CHIP_CSRCS += esp32_userspace.c
 endif
 
 ifeq ($(CONFIG_SCHED_TICKLESS),y)
@@ -94,8 +58,6 @@ endif
 CHIP_CSRCS += esp32_pm.c
 endif
 
-CHIP_CSRCS += esp32_rtc.c
-
 ifeq ($(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP),y)
 CHIP_CSRCS += esp32_imm.c
 endif
@@ -108,8 +70,16 @@ ifeq ($(CONFIG_ESP32_I2C),y)
 CHIP_CSRCS += esp32_i2c.c
 endif
 
+ifeq ($(CONFIG_ESP32_I2S),y)
+CHIP_CSRCS += esp32_i2s.c
+endif
+
 ifeq ($(CONFIG_ESP32_TWAI),y)
 CHIP_CSRCS += esp32_twai.c
+endif
+
+ifeq ($(CONFIG_ESP32_PCNT_AS_QE),y)
+CHIP_CSRCS += esp32_qencoder.c
 endif
 
 ifeq ($(CONFIG_ESP32_SPI),y)
@@ -213,8 +183,11 @@ ifeq ($(CONFIG_ESP32_AES_ACCELERATOR),y)
 CHIP_CSRCS += esp32_aes.c
 endif
 
+ifeq ($(CONFIG_ESP32_RTC),y)
+CHIP_CSRCS += esp32_rtc.c
 ifeq ($(CONFIG_RTC_DRIVER),y)
 CHIP_CSRCS += esp32_rtc_lowerhalf.c
+endif
 endif
 
 ifeq ($(CONFIG_ESP32_WIRELESS),y)
@@ -241,10 +214,19 @@ distclean::
 
 INCLUDES += $(shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)esp-wireless-drivers-3rdparty$(DELIM)include)
 INCLUDES += $(shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)esp-wireless-drivers-3rdparty$(DELIM)include$(DELIM)esp32)
-CHIP_CSRCS += esp32_wlan.c esp32_wifi_utils.c esp32_wifi_adapter.c
 
 EXTRA_LIBPATHS += -L $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)esp-wireless-drivers-3rdparty$(DELIM)libs$(DELIM)esp32
-EXTRA_LIBS += -lcore -lrtc -lnet80211 -lpp -lsmartconfig -lespnow -lphy -lwpa_supplicant
+EXTRA_LIBS += -lphy -lrtc
+
+# Wireless interfaces.
+
+CHIP_CSRCS += esp32_wireless.c
+endif
+
+ifeq ($(CONFIG_ESP32_WIFI),y)
+CHIP_CSRCS += esp32_wlan.c esp32_wifi_utils.c esp32_wifi_adapter.c
+EXTRA_LIBS += -lcore -lnet80211 -lpp -lsmartconfig -lespnow -lwpa_supplicant
+endif
 
 ifeq ($(CONFIG_ESP32_BLE),y)
 CHIP_CSRCS += esp32_ble_adapter.c esp32_ble.c
@@ -252,9 +234,4 @@ EXTRA_LIBS += -lbtdm_app
   ifeq ($(CONFIG_ESP32_WIFI_BT_COEXIST),y)
     EXTRA_LIBS += -lcoexist
   endif
-endif
-
-# Wireless interfaces.
-
-CHIP_CSRCS += esp32_wireless.c
 endif

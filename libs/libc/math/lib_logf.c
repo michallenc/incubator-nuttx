@@ -7,7 +7,7 @@
  *   Ported by: Darcy Gong
  *
  * It derives from the Rhombus OS math library by Nick Johnson which has
- * a compatibile, MIT-style license:
+ * a compatible, MIT-style license:
  *
  * Copyright (C) 2009, 2010 Nick Johnson <nickbjohnson4224 at gmail.com>
  *
@@ -102,12 +102,12 @@ float logf(float x)
 
   if (y == FLT_MAX_EXP_X)
     {
-      return INFINITY;
+      return INFINITY_F;
     }
 
   if (y == -FLT_MAX_EXP_X)
     {
-      return INFINITY;
+      return INFINITY_F;
     }
 
   return y;

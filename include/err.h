@@ -29,29 +29,42 @@
 #include <nuttx/compiler.h>
 
 /****************************************************************************
- * Public Function Prototypes
+ * Pre-processor Definitions
  ****************************************************************************/
 
-#ifdef CONFIG_LIBC_ERR
+/* Append _func suffix to avoid the penitential symbol collision */
+
+#define warn   warn_func
+#define vwarn  vwarn_func
+#define warnx  warnx_func
+#define vwarnx vwarnx_func
+
+#define err    err_func
+#define verr   verr_func
+#define errx   errx_func
+#define verrx  verrx_func
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
 
 /* Print "pid: ", FORMAT, ": ", the standard error string for errno,
  * and a newline, on stderr.
  */
 
-void warn(FAR const char *fmt, ...);
-void vwarn(FAR const char *fmt, va_list ap);
+void warn(FAR const char *fmt, ...) printflike(1, 2);
+void vwarn(FAR const char *fmt, va_list ap) printflike(1, 0);
 
 /* Likewise, but without ": " and the standard error string.  */
 
-void warnx(FAR const char *fmt, ...);
-void vwarnx(FAR const char *fmt, va_list ap);
+void warnx(FAR const char *fmt, ...) printflike(1, 2);
+void vwarnx(FAR const char *fmt, va_list ap) printflike(1, 0);
 
 /* Likewise, and then exit with STATUS.  */
 
-void err(int status, FAR const char *fmt, ...);
-void verr(int status, FAR const char *fmt, va_list ap);
-void errx(int status, FAR const char *fmt, ...);
-void verrx(int status, FAR const char *, va_list ap);
+void err(int status, FAR const char *fmt, ...) printflike(2, 3);
+void verr(int status, FAR const char *fmt, va_list ap) printflike(2, 0);
+void errx(int status, FAR const char *fmt, ...) printflike(2, 3);
+void verrx(int status, FAR const char *, va_list ap) printflike(2, 0);
 
-#endif /* CONFIG_LIBC_ERR */
 #endif /* __INCLUDE_ERR_H */

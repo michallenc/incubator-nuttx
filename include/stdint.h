@@ -123,6 +123,11 @@
 #define INTPTR_MAX          PTR_MAX
 #define UINTPTR_MAX         UPTR_MAX
 
+/* Limits of sig_atomic_t type */
+
+#define SIG_ATOMIC_MIN		INT32_MIN
+#define SIG_ATOMIC_MAX		INT32_MAX
+
 /* Limits of greatest-width integer types */
 
 #ifdef __INT64_DEFINED
@@ -143,21 +148,6 @@
 
 #  define INTMAX_C(x)       INT32_C(x)
 #  define UINTMAX_C(x)      UINT32_C(x)
-#endif
-
-/* Limits of Other Integer Types */
-
-#if 0
-#  define                   PTRDIFF_MIN
-#  define                   PTRDIFF_MAX
-#endif
-
-#if 0
-#  define                   WCHAR_MIN
-#  define                   WCHAR_MAX
-
-#  define                   WINT_MIN
-#  define                   WINT_MAX
 #endif
 
 /****************************************************************************

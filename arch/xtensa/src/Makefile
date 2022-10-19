@@ -53,6 +53,8 @@ HEAD_AOBJ = $(HEAD_ASRC:.S=$(OBJEXT))
 HEAD_COBJ = $(HEAD_CSRC:.c=$(OBJEXT))
 STARTUP_OBJS ?= $(HEAD_AOBJ) $(HEAD_COBJ)
 
+# Flat build or kernel-mode objects
+
 ASRCS = $(CHIP_ASRCS) $(CMN_ASRCS)
 AOBJS = $(ASRCS:.S=$(OBJEXT))
 
@@ -62,11 +64,34 @@ COBJS = $(CSRCS:.c=$(OBJEXT))
 SRCS = $(ASRCS) $(CSRCS)
 OBJS = $(AOBJS) $(COBJS)
 
+# User-mode objects
+
+UASRCS = $(CHIP_UASRCS) $(CMN_UASRCS)
+UAOBJS = $(UASRCS:.S=$(OBJEXT))
+
+UCSRCS = $(CHIP_UCSRCS) $(CMN_UCSRCS)
+UCOBJS = $(UCSRCS:.c=$(OBJEXT))
+
+USRCS = $(UASRCS) $(UCSRCS)
+UOBJS = $(UAOBJS) $(UCOBJS)
+
+KBIN = libkarch$(LIBEXT)
+BIN  = libarch$(LIBEXT)
+
 # Override in Make.defs if linker is not 'ld'
 
-LDSTARTGROUP ?= --start-group
-LDENDGROUP ?= --end-group
-LDFLAGS += $(addprefix -T,$(call CONVERT_PATH,$(ARCHSCRIPT))) $(EXTRALINKCMDS)
+ARCHSCRIPT := $(call CONVERT_PATH,$(ARCHSCRIPT))
+LDFLAGS += $(addprefix -T,$(ARCHSCRIPT).tmp) $(EXTRALINKCMDS)
+
+ifeq ($(LD),$(CC))
+  LDSTARTGROUP ?= -Wl,--start-group
+  LDENDGROUP   ?= -Wl,--end-group
+  LDFLAGS      := $(addprefix -Xlinker ,$(LDFLAGS))
+  LDFLAGS      += $(CFLAGS)
+else
+  LDSTARTGROUP ?= --start-group
+  LDENDGROUP   ?= --end-group
+endif
 
 BOARDMAKE = $(if $(wildcard board$(DELIM)Makefile),y,)
 
@@ -80,34 +105,48 @@ ifeq ($(BOARDMAKE),y)
   LDLIBS += -lboard
 endif
 
-VPATH = chip:common:$(ARCH_SUBDIR)
+VPATH += chip
+VPATH += common
+VPATH += $(ARCH_SUBDIR)
+VPATH += $(CHIP_DIR)
 
 all: $(STARTUP_OBJS) libarch$(LIBEXT)
 
 .PHONY: board/libboard$(LIBEXT)
 
-$(AOBJS) $(HEAD_AOBJ): %$(OBJEXT): %.S
+$(AOBJS) $(UAOBJS) $(HEAD_AOBJ): %$(OBJEXT): %.S
 	$(call ASSEMBLE, $<, $@)
 
-$(COBJS) $(HEAD_COBJ): %$(OBJEXT): %.c
+$(COBJS) $(UCOBJS) $(HEAD_COBJ): %$(OBJEXT): %.c
 	$(call COMPILE, $<, $@)
 
-libarch$(LIBEXT): $(OBJS)
+ifeq ($(CONFIG_BUILD_FLAT),y)
+$(BIN): $(OBJS)
+	$(call ARCHIVE, $@, $(OBJS))
+else
+$(BIN): $(UOBJS)
+	$(call ARCHIVE, $@, $(UOBJS))
+endif
+
+$(KBIN): $(OBJS)
 	$(call ARCHIVE, $@, $(OBJS))
 
 board/libboard$(LIBEXT):
 	$(Q) $(MAKE) -C board libboard$(LIBEXT) EXTRAFLAGS="$(EXTRAFLAGS)"
 
 define LINK_ALLSYMS
-	$(Q) $(TOPDIR)/tools/mkallsyms.sh $(NUTTX) $(CROSSDEV) > allsyms.tmp
+	$(Q) $(TOPDIR)/tools/mkallsyms.py $(NUTTX) allsyms.tmp
 	$(Q) $(call COMPILE, -x c allsyms.tmp, allsyms$(OBJEXT))
 	$(Q) $(LD) --entry=__start $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
-		-o $(NUTTX) $(filter-out board/libboard$(LIBEXT), $1) allsyms$(OBJEXT) $(EXTRA_OBJS) \
+		-o $(NUTTX) $(STARTUP_OBJS) allsyms$(OBJEXT) $(EXTRA_OBJS) \
 		$(LDSTARTGROUP) $(LDLIBS) $(EXTRA_LIBS) $(LDENDGROUP)
 	$(Q) $(call DELFILE, allsyms.tmp allsyms$(OBJEXT))
 endef
 
-nuttx$(EXEEXT): $(STARTUP_OBJS) board/libboard$(LIBEXT) $(ARCHSCRIPT)
+$(addsuffix .tmp,$(ARCHSCRIPT)): $(ARCHSCRIPT)
+	$(call PREPROCESS, $(patsubst %.tmp,%,$@), $@)
+
+nuttx$(EXEEXT): $(STARTUP_OBJS) board/libboard$(LIBEXT) $(addsuffix .tmp,$(ARCHSCRIPT))
 	$(Q) echo "LD: nuttx"
 ifneq ($(CONFIG_ALLSYMS),y)
 	$(Q) $(LD) --entry=__start $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
@@ -126,10 +165,11 @@ ifneq ($(CONFIG_WINDOWS_NATIVE),y)
 	grep -v '\(compiled\)\|\(\$(OBJEXT)$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | \
 	sort > $(TOPDIR)/System.map
 endif
+	$(Q) $(call DELFILE, $(addsuffix .tmp,$(ARCHSCRIPT)))
 
 # This is part of the top-level export target
 
-export_startup: board/libboard$(LIBEXT) $(STARTUP_OBJS)
+export_startup: $(STARTUP_OBJS)
 	$(Q) if [ -d "$(EXPORT_DIR)/startup" ]; then \
 		cp -f $(STARTUP_OBJS) "$(EXPORT_DIR)/startup"; \
 	 else \
@@ -147,7 +187,7 @@ makedepfile: $(CSRCS:.c=.ddc) $(ASRCS:.S=.dds) $(HEAD_CSRC:.c=.ddc) $(HEAD_ASRC:
 ifeq ($(BOARDMAKE),y)
 	$(Q) $(MAKE) -C board depend
 endif
-	$(Q) $(MAKE) makedepfile DEPPATH="--dep-path chip --dep-path common --dep-path $(ARCH_SUBDIR)"
+	$(Q) $(MAKE) makedepfile DEPPATH="$(patsubst %,--dep-path %,$(subst :, ,$(VPATH)))"
 	$(Q) touch $@
 
 depend: .depend
@@ -158,7 +198,9 @@ clean:
 ifeq ($(BOARDMAKE),y)
 	$(Q) $(MAKE) -C board clean
 endif
-	$(call DELFILE, libarch$(LIBEXT))
+	$(call DELFILE, $(addsuffix .tmp,$(ARCHSCRIPT)))
+	$(call DELFILE, $(KBIN))
+	$(call DELFILE, $(BIN))
 	$(call CLEAN)
 
 distclean:: clean

@@ -125,7 +125,6 @@ static int uartwriteconf(FAR const struct btuart_lowerhalf_s *lower,
   int ret;
   int gotlen = 0;
   FAR uint8_t *din;
-  struct timespec abstime;
 
   DEBUGASSERT(lower != NULL);
 
@@ -149,22 +148,7 @@ static int uartwriteconf(FAR const struct btuart_lowerhalf_s *lower,
   din = kmm_malloc(maxl);
   while (gotlen < maxl)
     {
-      ret = clock_gettime(CLOCK_REALTIME, &abstime);
-      if (ret < 0)
-        {
-          goto exit_uartwriteconf;
-        }
-
-      /* Add the offset to the time in the future */
-
-      abstime.tv_nsec += NSEC_PER_SEC / 10;
-      if (abstime.tv_nsec >= NSEC_PER_SEC)
-        {
-          abstime.tv_nsec -= NSEC_PER_SEC;
-          abstime.tv_sec++;
-        }
-
-      ret = nxsem_timedwait_uninterruptible(rxsem, &abstime);
+      ret = nxsem_tickwait_uninterruptible(rxsem, MSEC2TICK(100));
       if (ret < 0)
         {
           /* We didn't receive enough message, so fall out */
@@ -384,7 +368,7 @@ static int load_bcm4343x_firmware(FAR const struct btuart_lowerhalf_s *lower)
       ret = -ECOMM;
     }
 
-  load_bcm4343x_firmware_finished:
+load_bcm4343x_firmware_finished:
   lower->rxenable(lower, false);
   lower->rxattach(lower, NULL, NULL);
 
@@ -439,6 +423,8 @@ int btuart_register(FAR const struct btuart_lowerhalf_s *lower)
   upper->dev.head_reserve = H4_HEADER_SIZE;
   upper->dev.open = btuart_open;
   upper->dev.send = btuart_send;
+  upper->dev.close = btuart_close;
+  upper->dev.ioctl = btuart_ioctl;
   upper->lower = lower;
 
   /* Load firmware */

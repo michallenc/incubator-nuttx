@@ -7,7 +7,7 @@
  *   Ported by: Darcy Gong
  *
  * It derives from the Rhombus OS math library by Nick Johnson which has
- * a compatibile, MIT-style license:
+ * a compatible, MIT-style license:
  *
  * Copyright (C) 2009-2011 Nick Johnson <nickbjohnson4224 at gmail.com>
  *
@@ -54,12 +54,12 @@ float sqrtf(float x)
       return NAN_F;
     }
 
-  if (isnan(x))
+  if (isnanf(x))
     {
       return NAN_F;
     }
 
-  if (isinf_f(x))
+  if (isinff(x))
     {
       return INFINITY_F;
     }

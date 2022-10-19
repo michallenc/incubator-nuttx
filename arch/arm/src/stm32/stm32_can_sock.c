@@ -1083,7 +1083,7 @@ static void stm32can_txavail_work(void *arg)
            * new XMIT data.
            */
 
-          devif_timer(&priv->dev, 0, stm32can_txpoll);
+          devif_poll(&priv->dev, stm32can_txpoll);
         }
     }
 
@@ -1294,7 +1294,7 @@ errout:
     }
   else
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
   return ret;
@@ -1361,7 +1361,7 @@ static int stm32can_rxinterrupt(struct stm32_can_s *priv, int rxmb)
     }
   else
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
   return OK;
@@ -1511,7 +1511,7 @@ static void stm32can_txdone_work(void *arg)
    */
 
   net_lock();
-  devif_timer(&priv->dev, 0, stm32can_txpoll);
+  devif_poll(&priv->dev, stm32can_txpoll);
   net_unlock();
 }
 
@@ -2477,11 +2477,11 @@ errout:
 void arm_netinitialize(void)
 {
 #ifdef CONFIG_STM32_CAN1
-  stm32_cansockinitialize(0);
+  stm32_cansockinitialize(1);
 #endif
 
 #ifdef CONFIG_STM32_CAN2
-  stm32_cansockinitialize(1);
+  stm32_cansockinitialize(2);
 #endif
 }
 #endif

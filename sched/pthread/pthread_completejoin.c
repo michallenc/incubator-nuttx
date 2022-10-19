@@ -54,7 +54,7 @@ static bool pthread_notifywaiters(FAR struct join_s *pjoin)
   int ntasks_waiting;
   int status;
 
-  sinfo("pjoin=0x%p\n", pjoin);
+  sinfo("pjoin=%p\n", pjoin);
 
   /* Are any tasks waiting for our exit value? */
 
@@ -85,7 +85,7 @@ static bool pthread_notifywaiters(FAR struct join_s *pjoin)
        * value.
        */
 
-      pthread_sem_take(&pjoin->data_sem, NULL, false);
+      nxsem_wait_uninterruptible(&pjoin->data_sem);
       return true;
     }
 
@@ -196,12 +196,12 @@ int pthread_completejoin(pid_t pid, FAR void *exit_value)
 
   /* First, find thread's structure in the private data set. */
 
-  pthread_sem_take(&group->tg_joinsem, NULL, false);
+  nxmutex_lock(&group->tg_joinlock);
   pjoin = pthread_findjoininfo(group, pid);
   if (!pjoin)
     {
       serr("ERROR: Could not find join info, pid=%d\n", pid);
-      pthread_sem_give(&group->tg_joinsem);
+      nxmutex_unlock(&group->tg_joinlock);
       return ERROR;
     }
   else
@@ -232,7 +232,7 @@ int pthread_completejoin(pid_t pid, FAR void *exit_value)
        * to call pthread_destroyjoin.
        */
 
-      pthread_sem_give(&group->tg_joinsem);
+      nxmutex_unlock(&group->tg_joinlock);
     }
 
   return OK;
@@ -250,14 +250,14 @@ int pthread_completejoin(pid_t pid, FAR void *exit_value)
  *   no thread ever calls pthread_join.  In case, there is a memory leak!
  *
  * Assumptions:
- *   The caller holds tg_joinsem
+ *   The caller holds tg_joinlock
  *
  ****************************************************************************/
 
 void pthread_destroyjoin(FAR struct task_group_s *group,
                          FAR struct join_s *pjoin)
 {
-  sinfo("pjoin=0x%p\n", pjoin);
+  sinfo("pjoin=%p\n", pjoin);
 
   /* Remove the join info from the set of joins */
 

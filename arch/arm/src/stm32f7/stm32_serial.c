@@ -331,9 +331,6 @@
 #if defined(CONFIG_PM) && !defined(CONFIG_STM32F7_PM_SERIAL_ACTIVITY)
 #  define CONFIG_STM32F7_PM_SERIAL_ACTIVITY 10
 #endif
-#if defined(CONFIG_PM)
-#  define PM_IDLE_DOMAIN             0 /* Revisit */
-#endif
 
 /* Since RX DMA or TX DMA or both may be enabled for a given U[S]ART.
  * We need runtime detection in up_dma_setup and up_dma_shutdown
@@ -3642,10 +3639,10 @@ void arm_serialinit(void)
 
 #if !defined(SERIAL_HAVE_ONLY_DMA)
 #  if defined(SERIAL_HAVE_RXDMA)
-  UNUSED(&g_uart_rxdma_ops);
+  UNUSED(g_uart_rxdma_ops);
 #  endif
 #  if defined(SERIAL_HAVE_TXDMA)
-  UNUSED(&g_uart_txdma_ops);
+  UNUSED(g_uart_txdma_ops);
 #  endif
 #endif
 

@@ -28,7 +28,7 @@
 
 #include <nuttx/config.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/list.h>
 
 #include <stdbool.h>
@@ -125,7 +125,11 @@ struct battery_charger_operations_s
 
   /* Get the actual output voltage for charging */
 
-  int (*get_voltage)(struct battery_charger_dev_s *dev, int *value);
+  int (*get_voltage)(struct battery_charger_dev_s *dev, FAR int *value);
+
+  /* Get charge protocol */
+
+  int (*get_protocol)(struct battery_charger_dev_s *dev, FAR int *value);
 };
 
 /* This structure defines the battery driver state structure */
@@ -136,9 +140,11 @@ struct battery_charger_dev_s
 
   FAR const struct battery_charger_operations_s *ops; /* Battery operations */
 
-  sem_t batsem;  /* Enforce mutually exclusive access */
+  mutex_t batlock;  /* Enforce mutually exclusive access */
 
   struct list_node flist;
+
+  uint32_t mask;  /* record drive support features */
 
   /* Data fields specific to the lower-half driver may follow */
 };

@@ -111,10 +111,6 @@
 
 /* Timing values ************************************************************/
 
-/* TX poll deley = 1 seconds. CLK_TCK=number of clock ticks per second */
-
-#define C5471_WDDELAY         (1*CLK_TCK)
-
 /* TX timeout = 1 minute */
 
 #define C5471_TXTIMEOUT       (60*CLK_TCK)
@@ -288,7 +284,8 @@
 
 /* A single packet buffer is used */
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint8_t g_pktbuf[CONFIG_C5471_NET_NINTERFACES]
+                       [MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 
 /* The c5471_driver_s encapsulates all state information for a single c5471
  * hardware interface
@@ -297,7 +294,6 @@ static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 struct c5471_driver_s
 {
   bool    c_bifup;           /* true:ifup false:ifdown */
-  struct wdog_s c_txpoll;    /* TX poll timer */
   struct wdog_s c_txtimeout; /* TX timeout timer */
   struct work_s c_irqwork;   /* For deferring interrupt work to the work queue */
   struct work_s c_pollwork;  /* For deferring poll work to the work queue */
@@ -396,9 +392,6 @@ static int  c5471_interrupt(int irq, void *context, void *arg);
 
 static void c5471_txtimeout_work(void *arg);
 static void c5471_txtimeout_expiry(wdparm_t arg);
-
-static void c5471_poll_work(void *arg);
-static void c5471_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -1772,74 +1765,6 @@ static void c5471_txtimeout_expiry(wdparm_t arg)
 }
 
 /****************************************************************************
- * Function: c5471_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void c5471_poll_work(void *arg)
-{
-  struct c5471_driver_s *priv = (struct c5471_driver_s *)arg;
-
-  /* Check if the ESM has let go of the RX descriptor giving us access rights
-   * to submit another Ethernet frame.
-   */
-
-  net_lock();
-  if ((EIM_TXDESC_OWN_HOST & getreg32(priv->c_rxcpudesc)) == 0)
-    {
-      /* If so, update TCP timing states and
-       * poll the network for new XMIT data
-       */
-
-      devif_timer(&priv->c_dev, C5471_WDDELAY, c5471_txpoll);
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->c_txpoll, C5471_WDDELAY,
-           c5471_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: c5471_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void c5471_poll_expiry(wdparm_t arg)
-{
-  struct c5471_driver_s *priv = (struct c5471_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(ETHWORK, &priv->c_pollwork, c5471_poll_work, priv, 0);
-}
-
-/****************************************************************************
  * Function: c5471_ifup
  *
  * Description:
@@ -1894,11 +1819,6 @@ static int c5471_ifup(struct net_driver_s *dev)
   putreg32((getreg32(ENET0_MODE) | ENET_MODE_ENABLE), ENET0_MODE); /* enable ENET */
   up_mdelay(100);
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->c_txpoll, C5471_WDDELAY,
-           c5471_poll_expiry, (wdparm_t)priv);
-
   /* Enable the Ethernet interrupt */
 
   priv->c_bifup = true;
@@ -1947,9 +1867,8 @@ static int c5471_ifdown(struct net_driver_s *dev)
 
   putreg32((getreg32(EIM_CTRL) & ~EIM_CTRL_ESM_EN), EIM_CTRL);  /* disable ESM */
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->c_txpoll);
   wd_cancel(&priv->c_txtimeout);
 
   /* Reset the device */
@@ -1995,7 +1914,7 @@ static void c5471_txavail_work(void *arg)
         {
           /* If so, then poll the network for new XMIT data */
 
-          devif_timer(&priv->c_dev, 0, c5471_txpoll);
+          devif_poll(&priv->c_dev, c5471_txpoll);
         }
     }
 
@@ -2471,7 +2390,7 @@ void arm_netinitialize(void)
 
   memset(g_c5471, 0,
     CONFIG_C5471_NET_NINTERFACES * sizeof(struct c5471_driver_s));
-  g_c5471[0].c_dev.d_buf     = g_pktbuf;        /* Single packet buffer */
+  g_c5471[0].c_dev.d_buf     = g_pktbuf[0];     /* Single packet buffer */
   g_c5471[0].c_dev.d_ifup    = c5471_ifup;      /* I/F down callback */
   g_c5471[0].c_dev.d_ifdown  = c5471_ifdown;    /* I/F up (new IP address) callback */
   g_c5471[0].c_dev.d_txavail = c5471_txavail;   /* New TX data callback */

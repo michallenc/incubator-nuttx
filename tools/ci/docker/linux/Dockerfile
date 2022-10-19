@@ -88,6 +88,15 @@ RUN mkdir gcc-arm-none-eabi && \
   | tar -C gcc-arm-none-eabi --strip-components 1 -xj
 
 ###############################################################################
+# Build image for tool required by ARM64 builds
+###############################################################################
+FROM nuttx-toolchain-base AS nuttx-toolchain-arm64
+# Download the latest ARM64 GCC toolchain prebuilt by ARM
+RUN mkdir gcc-aarch64-none-elf && \
+  curl -s -L  "https://developer.arm.com/-/media/Files/downloads/gnu/11.2-2022.02/binrel/gcc-arm-11.2-2022.02-x86_64-aarch64-none-elf.tar.xz" \
+  | tar -C gcc-aarch64-none-elf --strip-components 1 -xJ
+
+###############################################################################
 # Build image for tool required by Pinguino builds
 ###############################################################################
 FROM nuttx-toolchain-base AS nuttx-toolchain-pinguino
@@ -220,6 +229,8 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   gcc \
   gcc-avr \
   gcc-multilib \
+  clang \
+  clang-tidy \
   gettext \
   git \
   lib32z1-dev \
@@ -240,6 +251,7 @@ RUN apt-get update -qq && DEBIAN_FRONTEND="noninteractive" apt-get install -y -q
   unzip \
   wget \
   xxd \
+  qemu-system-arm \
   && rm -rf /var/lib/apt/lists/*
 
 # Configure out base setup for adding python packages
@@ -251,6 +263,17 @@ ENV PIP_NO_CACHE_DIR=0
 # setuptools and also wheel so we can use the binary releases of packages
 # instead of requiring them to be compiled.
 RUN pip3 install setuptools wheel
+# Install CodeChecker and use it to statically analyze the code.
+RUN pip3 install CodeChecker
+# Install pytest
+RUN pip3 install pexpect==4.8.0
+RUN pip3 install pytest==6.2.5
+RUN pip3 install pytest-repeat==0.9.1
+RUN pip3 install pytest-json==0.4.0
+RUN pip3 install pytest-ordering==0.6
+RUN pip3 install pyserial==3.5
+# Used to generate symbol table files
+RUN pip3 install pyelftools cxxfilt
 
 RUN mkdir /tools
 WORKDIR /tools
@@ -272,6 +295,10 @@ ENV PATH="/tools/rust/cargo/bin:$PATH"
 # ARM toolchain
 COPY --from=nuttx-toolchain-arm /tools/gcc-arm-none-eabi/ gcc-arm-none-eabi/
 ENV PATH="/tools/gcc-arm-none-eabi/bin:$PATH"
+
+# ARM64 toolchain
+COPY --from=nuttx-toolchain-arm64 /tools/gcc-aarch64-none-elf/ gcc-aarch64-none-elf/
+ENV PATH="/tools/gcc-aarch64-none-elf/bin:$PATH"
 
 # MIPS toolchain
 COPY --from=nuttx-toolchain-pinguino /tools/pinguino-compilers/p32/ pinguino-compilers/p32/
@@ -318,6 +345,8 @@ RUN mkdir -p /tools/ccache/bin && \
   ln -sf `which ccache` /tools/ccache/bin/g++ && \
   ln -sf `which ccache` /tools/ccache/bin/arm-none-eabi-gcc && \
   ln -sf `which ccache` /tools/ccache/bin/arm-none-eabi-g++ && \
+  ln -sf `which ccache` /tools/ccache/bin/aarch64-none-elf-gcc && \
+  ln -sf `which ccache` /tools/ccache/bin/aarch64-none-elf-g++ && \
   ln -sf `which ccache` /tools/ccache/bin/p32-gcc && \
   ln -sf `which ccache` /tools/ccache/bin/riscv64-unknown-elf-gcc && \
   ln -sf `which ccache` /tools/ccache/bin/riscv64-unknown-elf-g++ && \

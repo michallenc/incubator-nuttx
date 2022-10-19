@@ -65,6 +65,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/clock.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/i2c/i2c_master.h>
 
@@ -262,7 +263,7 @@ struct stm32_i2c_priv_s
   const struct stm32_i2c_config_s *config;
 
   int refs;                    /* Reference count */
-  sem_t sem_excl;              /* Mutual exclusion semaphore */
+  mutex_t lock;                /* Mutual exclusion mutex */
 #ifndef CONFIG_I2C_POLLED
   sem_t sem_isr;               /* Interrupt wait semaphore */
 #endif
@@ -312,14 +313,11 @@ static inline void stm32_i2c_modifyreg(struct stm32_i2c_priv_s *priv,
                                        uint16_t setbits);
 
 #ifdef CONFIG_STM32_I2C_DYNTIMEO
-static useconds_t stm32_i2c_tousecs(int msgc, struct i2c_msg_s *msgs);
+static uint32_t stm32_i2c_toticks(int msgc, struct i2c_msg_s *msgs);
 #endif /* CONFIG_STM32_I2C_DYNTIMEO */
 
 static inline int  stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv);
 static inline void stm32_i2c_sem_waitstop(struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sem_post(struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sem_init(struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sem_destroy(struct stm32_i2c_priv_s *priv);
 
 #ifdef CONFIG_I2C_TRACE
 static void stm32_i2c_tracereset(struct stm32_i2c_priv_s *priv);
@@ -402,6 +400,10 @@ static struct stm32_i2c_priv_s stm32_i2c1_priv =
   .ops        = &stm32_i2c_ops,
   .config     = &stm32_i2c1_config,
   .refs       = 0,
+  .lock       = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr    = NXSEM_INITIALIZER(0, PRIOINHERIT_FLAGS_DISABLE),
+#endif
   .intstate   = INTSTATE_IDLE,
   .msgc       = 0,
   .msgv       = NULL,
@@ -440,6 +442,10 @@ static struct stm32_i2c_priv_s stm32_i2c2_priv =
   .ops        = &stm32_i2c_ops,
   .config     = &stm32_i2c2_config,
   .refs       = 0,
+  .lock       = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr    = NXSEM_INITIALIZER(0, PRIOINHERIT_FLAGS_DISABLE),
+#endif
   .intstate   = INTSTATE_IDLE,
   .msgc       = 0,
   .msgv       = NULL,
@@ -476,6 +482,10 @@ static struct stm32_i2c_priv_s stm32_i2c3_priv =
   .ops        = &stm32_i2c_ops,
   .config     = &stm32_i2c3_config,
   .refs       = 0,
+  .lock       = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr    = NXSEM_INITIALIZER(0, PRIOINHERIT_FLAGS_DISABLE),
+#endif
   .intstate   = INTSTATE_IDLE,
   .msgc       = 0,
   .msgv       = NULL,
@@ -541,7 +551,7 @@ static inline void stm32_i2c_modifyreg(struct stm32_i2c_priv_s *priv,
 }
 
 /****************************************************************************
- * Name: stm32_i2c_tousecs
+ * Name: stm32_i2c_toticks
  *
  * Description:
  *   Return a micro-second delay based on the number of bytes left to be
@@ -550,7 +560,7 @@ static inline void stm32_i2c_modifyreg(struct stm32_i2c_priv_s *priv,
  ****************************************************************************/
 
 #ifdef CONFIG_STM32_I2C_DYNTIMEO
-static useconds_t stm32_i2c_tousecs(int msgc, struct i2c_msg_s *msgs)
+static uint32_t stm32_i2c_toticks(int msgc, struct i2c_msg_s *msgs)
 {
   size_t bytecount = 0;
   int i;
@@ -566,7 +576,7 @@ static useconds_t stm32_i2c_tousecs(int msgc, struct i2c_msg_s *msgs)
    * factor.
    */
 
-  return (useconds_t)(CONFIG_STM32_I2C_DYNTIMEO_USECPERBYTE * bytecount);
+  return USEC2TICK(CONFIG_STM32_I2C_DYNTIMEO_USECPERBYTE * bytecount);
 }
 #endif
 
@@ -581,7 +591,6 @@ static useconds_t stm32_i2c_tousecs(int msgc, struct i2c_msg_s *msgs)
 #ifndef CONFIG_I2C_POLLED
 static inline int stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv)
 {
-  struct timespec abstime;
   irqstate_t flags;
   uint32_t regval;
   int ret;
@@ -596,48 +605,26 @@ static inline int stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv)
 
   /* Signal the interrupt handler that we are waiting.  NOTE:  Interrupts
    * are currently disabled but will be temporarily re-enabled below when
-   * nxsem_timedwait() sleeps.
+   * nxsem_tickwait_uninterruptible() sleeps.
    */
 
   priv->intstate = INTSTATE_WAITING;
   do
     {
-      /* Get the current time */
-
-      clock_gettime(CLOCK_REALTIME, &abstime);
-
-      /* Calculate a time in the future */
-
-#if CONFIG_STM32_I2CTIMEOSEC > 0
-      abstime.tv_sec += CONFIG_STM32_I2CTIMEOSEC;
-#endif
-
-      /* Add a value proportional to the number of bytes in the transfer */
-
-#ifdef CONFIG_STM32_I2C_DYNTIMEO
-      abstime.tv_nsec += 1000 * stm32_i2c_tousecs(priv->msgc, priv->msgv);
-      if (abstime.tv_nsec >= 1000 * 1000 * 1000)
-        {
-          abstime.tv_sec++;
-          abstime.tv_nsec -= 1000 * 1000 * 1000;
-        }
-
-#elif CONFIG_STM32_I2CTIMEOMS > 0
-      abstime.tv_nsec += CONFIG_STM32_I2CTIMEOMS * 1000 * 1000;
-      if (abstime.tv_nsec >= 1000 * 1000 * 1000)
-        {
-          abstime.tv_sec++;
-          abstime.tv_nsec -= 1000 * 1000 * 1000;
-        }
-#endif
-
       /* Wait until either the transfer is complete or the timeout expires */
 
-      ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
+#ifdef CONFIG_STM32_I2C_DYNTIMEO
+      ret = nxsem_tickwait_uninterruptible(&priv->sem_isr,
+                         stm32_i2c_toticks(priv->msgc, priv->msgv));
+#else
+      ret = nxsem_tickwait_uninterruptible(&priv->sem_isr,
+                                           CONFIG_STM32_I2CTIMEOTICKS);
+#endif
       if (ret < 0)
         {
           /* Break out of the loop on irrecoverable errors.  This would
-           * include timeouts and mystery errors reported by nxsem_timedwait.
+           * include timeouts and mystery errors reported by
+           * nxsem_tickwait_uninterruptible.
            */
 
           break;
@@ -672,14 +659,14 @@ static inline int stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv)
   /* Get the timeout value */
 
 #ifdef CONFIG_STM32_I2C_DYNTIMEO
-  timeout = USEC2TICK(stm32_i2c_tousecs(priv->msgc, priv->msgv));
+  timeout = stm32_i2c_toticks(priv->msgc, priv->msgv);
 #else
   timeout = CONFIG_STM32_I2CTIMEOTICKS;
 #endif
 
   /* Signal the interrupt handler that we are waiting.  NOTE:  Interrupts
    * are currently disabled but will be temporarily re-enabled below when
-   * nxsem_timedwait() sleeps.
+   * nxsem_tickwait_uninterruptible() sleeps.
    */
 
   priv->intstate = INTSTATE_WAITING;
@@ -776,57 +763,6 @@ static inline void stm32_i2c_sem_waitstop(struct stm32_i2c_priv_s *priv)
    */
 
   i2cinfo("Timeout with CR1: %04" PRIx32 " SR1: %04" PRIx32 "\n", cr1, sr1);
-}
-
-/****************************************************************************
- * Name: stm32_i2c_sem_post
- *
- * Description:
- *   Release the mutual exclusion semaphore
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_post(struct stm32_i2c_priv_s *priv)
-{
-  nxsem_post(&priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: stm32_i2c_sem_init
- *
- * Description:
- *   Initialize semaphores
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_init(struct stm32_i2c_priv_s *priv)
-{
-  nxsem_init(&priv->sem_excl, 0, 1);
-
-#ifndef CONFIG_I2C_POLLED
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_init(&priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&priv->sem_isr, SEM_PRIO_NONE);
-#endif
-}
-
-/****************************************************************************
- * Name: stm32_i2c_sem_destroy
- *
- * Description:
- *   Destroy semaphores.
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_destroy(struct stm32_i2c_priv_s *priv)
-{
-  nxsem_destroy(&priv->sem_excl);
-#ifndef CONFIG_I2C_POLLED
-  nxsem_destroy(&priv->sem_isr);
-#endif
 }
 
 /****************************************************************************
@@ -2292,7 +2228,7 @@ static int stm32_i2c_transfer(struct i2c_master_s *dev,
 
   /* Ensure that address or flags don't change meanwhile */
 
-  ret = nxsem_wait(&priv->sem_excl);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2491,7 +2427,7 @@ static int stm32_i2c_transfer(struct i2c_master_s *dev,
   priv->dcnt = 0;
   priv->ptr = NULL;
 
-  stm32_i2c_sem_post(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2528,7 +2464,7 @@ static int stm32_i2c_reset(struct i2c_master_s *dev)
 
   /* Lock out other clients */
 
-  ret = nxsem_wait_uninterruptible(&priv->sem_excl);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2628,7 +2564,7 @@ out:
 
   /* Release the port for re-use by other clients */
 
-  stm32_i2c_sem_post(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif /* CONFIG_I2C_RESET */
@@ -2647,8 +2583,7 @@ out:
 
 struct i2c_master_s *stm32_i2cbus_initialize(int port)
 {
-  struct stm32_i2c_priv_s * priv = NULL;
-  irqstate_t flags;
+  struct stm32_i2c_priv_s *priv = NULL;
 
 #if STM32_PCLK1_FREQUENCY < 4000000
 #   warning STM32_I2C_INIT: Peripheral clock must be at least 4 MHz to support 400 kHz operation.
@@ -2686,11 +2621,9 @@ struct i2c_master_s *stm32_i2cbus_initialize(int port)
    * power-up hardware and configure GPIOs.
    */
 
-  flags = enter_critical_section();
-
-  if ((volatile int)priv->refs++ == 0)
+  nxmutex_lock(&priv->lock);
+  if (priv->refs++ == 0)
     {
-      stm32_i2c_sem_init(priv);
       stm32_i2c_init(priv);
 
 #ifdef CONFIG_STM32_I2C_DMA
@@ -2710,7 +2643,7 @@ struct i2c_master_s *stm32_i2cbus_initialize(int port)
 #endif /* CONFIG_STM32_I2C_DMA */
     }
 
-  leave_critical_section(flags);
+  nxmutex_unlock(&priv->lock);
   return (struct i2c_master_s *)priv;
 }
 
@@ -2725,7 +2658,6 @@ struct i2c_master_s *stm32_i2cbus_initialize(int port)
 int stm32_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
   struct stm32_i2c_priv_s *priv = (struct stm32_i2c_priv_s *)dev;
-  irqstate_t flags;
 
   DEBUGASSERT(dev);
 
@@ -2736,15 +2668,12 @@ int stm32_i2cbus_uninitialize(struct i2c_master_s *dev)
       return ERROR;
     }
 
-  flags = enter_critical_section();
-
+  nxmutex_lock(&priv->lock);
   if (--priv->refs)
     {
-      leave_critical_section(flags);
+      nxmutex_unlock(&priv->lock);
       return OK;
     }
-
-  leave_critical_section(flags);
 
   /* Disable power and other HW resource (GPIO's) */
 
@@ -2755,9 +2684,7 @@ int stm32_i2cbus_uninitialize(struct i2c_master_s *dev)
   stm32_dmafree(priv->txdma);
 #endif
 
-  /* Release unused resources */
-
-  stm32_i2c_sem_destroy(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 }
 

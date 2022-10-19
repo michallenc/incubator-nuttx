@@ -190,7 +190,7 @@
 
 /* Helper to place a value in a field */
 
-#define VALUE_TO_FIELD(_value, _field) ((_value << (_field##_S)) & (_field##_M))
+#define VALUE_TO_FIELD(_value, _field) (((_value) << (_field##_S)) & (_field##_M))
 
 /* Periheral Clock */
 
@@ -273,6 +273,8 @@
 #define REG_TIMG_BASE(i)         (DR_REG_TIMERGROUP0_BASE + (i) * 0x1000)
 #define REG_SPI_MEM_BASE(i)      (DR_REG_SPI0_BASE - (i) * 0x1000)
 #define REG_I2C_BASE(i)          (DR_REG_I2C_EXT_BASE + (i) * 0x14000 )
+
+#define REG_SPI_BASE(i)          (DR_REG_SPI2_BASE + (((i) > 3) ? ((((i) - 2) * 0x1000) + 0x10000) : (((i) - 2) * 0x1000)))
 
 /* Registers Operation */
 

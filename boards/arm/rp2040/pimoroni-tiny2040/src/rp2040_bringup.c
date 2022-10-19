@@ -31,7 +31,11 @@
 
 #include <arch/board/board.h>
 
-#include "rp2040_tiny2040.h"
+#include "rp2040_pico.h"
+
+#ifdef CONFIG_ARCH_BOARD_COMMON
+#include "rp2040_common_bringup.h"
+#endif /* CONFIG_ARCH_BOARD_COMMON */
 
 /****************************************************************************
  * Public Functions
@@ -43,81 +47,17 @@
 
 int rp2040_bringup(void)
 {
-  int ret = 0;
+#ifdef CONFIG_ARCH_BOARD_COMMON
 
-#ifdef CONFIG_RP2040_I2C_DRIVER
-  #ifdef CONFIG_RP2040_I2C0
-  ret = board_i2cdev_initialize(0);
+  int ret = rp2040_common_bringup();
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize I2C0.\n");
-    }
-  #endif
-
-  #ifdef CONFIG_RP2040_I2C1
-  ret = board_i2cdev_initialize(1);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize I2C1.\n");
-    }
-  #endif
-#endif
-
-#ifdef CONFIG_RP2040_SPI_DRIVER
-  #ifdef CONFIG_RP2040_SPI0
-  ret = board_spidev_initialize(0);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI0.\n");
-    }
-  #endif
-
-  #ifdef CONFIG_RP2040_SPI1
-  ret = board_spidev_initialize(1);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI1.\n");
-    }
-  #endif
-#endif
-
-#ifdef CONFIG_RP2040_SPISD
-  /* Mount the SPI-based MMC/SD block driver */
-
-  ret = board_spisd_initialize(0, CONFIG_RP2040_SPISD_SPI_CH);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI device to MMC/SD: %d\n",
-           ret);
-    }
-#endif
-
-#ifdef CONFIG_FS_PROCFS
-  /* Mount the procfs file system */
-
-  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
-  if (ret < 0)
-    {
-      serr("ERROR: Failed to mount procfs at %s: %d\n", "/proc", ret);
-    }
-#endif
-
-#ifdef CONFIG_RP2040_I2S
-  ret = board_i2sdev_initialize(0);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize I2S.\n");
-    }
-#endif
-
-#ifdef CONFIG_DEV_GPIO
-  ret = rp2040_dev_gpio_init();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
       return ret;
     }
-#endif
 
-  return ret;
+#endif /* CONFIG_ARCH_BOARD_COMMON */
+
+  /* --- Place any board specific bringup code here --- */
+
+  return OK;
 }

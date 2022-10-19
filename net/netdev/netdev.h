@@ -91,17 +91,6 @@ typedef int (*netdev_callback_t)(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 /****************************************************************************
- * Name: netdev_ifup / netdev_ifdown
- *
- * Description:
- *   Bring the interface up/down
- *
- ****************************************************************************/
-
-void netdev_ifup(FAR struct net_driver_s *dev);
-void netdev_ifdown(FAR struct net_driver_s *dev);
-
-/****************************************************************************
  * Name: netdev_verify
  *
  * Description:
@@ -478,13 +467,12 @@ int netdown_notifier_setup(worker_t worker, FAR struct net_driver_s *dev,
  *         netdown_notifier_setup().
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   None.
  *
  ****************************************************************************/
 
 #ifdef CONFIG_NETDOWN_NOTIFIER
-int netdown_notifier_teardown(int key);
+void netdown_notifier_teardown(int key);
 #endif
 
 /****************************************************************************

@@ -56,7 +56,7 @@
 #define _AUDIOIOCBASE   (0x1000) /* Audio ioctl commands */
 #define _LCDIOCBASE     (0x1100) /* LCD character driver ioctl commands */
 #define _SLCDIOCBASE    (0x1200) /* Segment LCD ioctl commands */
-                                 /* 0x1300: Not used */
+#define _CAPIOCBASE     (0x1300) /* Capture ioctl commands */
 #define _WLCIOCBASE     (0x1400) /* Wireless modules ioctl character driver commands */
 #define _CFGDIOCBASE    (0x1500) /* Config Data device (app config) ioctl commands */
 #define _TCIOCBASE      (0x1600) /* Timer ioctl commands */
@@ -89,6 +89,8 @@
 #define _MTRIOBASE      (0x3100) /* Motor device ioctl commands */
 #define _MATHIOBASE     (0x3200) /* MATH device ioctl commands */
 #define _MMCSDIOBASE    (0x3300) /* MMCSD device ioctl commands */
+#define _BLUETOOTHBASE  (0x3400) /* Bluetooth ioctl commands */
+#define _PKTRADIOBASE   (0x3500) /* Packet radio ioctl commands */
 #define _WLIOCBASE      (0x8b00) /* Wireless modules ioctl network commands */
 
 /* boardctl() commands share the same number space */
@@ -287,6 +289,12 @@
                                            * OUT: Partition information structure
                                            *      populated with data from the block
                                            *      device partition */
+#define BIOC_BLKSSZGET  _BIOC(0x000f)     /* Get block device sector size.
+                                           * IN:  Pointer to writable instance
+                                           *      of sector size in which
+                                           *      to return sector size.
+                                           * OUT: Data return in user-provided
+                                           *      buffer. */
 
 /* NuttX MTD driver ioctl definitions ***************************************/
 
@@ -324,6 +332,11 @@
 
 #define _PWMIOCVALID(c)   (_IOC_TYPE(c)==_PWMIOCBASE)
 #define _PWMIOC(nr)       _IOC(_PWMIOCBASE,nr)
+
+/* NuttX Capture ioctl definitions (see nuttx/timers/capture.h) *************/
+
+#define _CAPIOCVALID(c)   (_IOC_TYPE(c)==_CAPIOCBASE)
+#define _CAPIOC(nr)       _IOC(_CAPIOCBASE,nr)
 
 /* NuttX USB CDC/ACM serial driver ioctl definitions ************************/
 
@@ -569,6 +582,16 @@
 
 #define _MMCSDIOCVALID(c)   (_IOC_TYPE(c) == _MMCSDIOBASE)
 #define _MMCSDIOC(nr)       _IOC(_MMCSDIOBASE, nr)
+
+/* Bluetooth ioctl definitions **********************************************/
+
+#define _BLUETOOTHIOCVALID(c) (_IOC_TYPE(c)==_BLUETOOTHBASE)
+#define _BLUETOOTHIOC(nr)     _IOC(_BLUETOOTHBASE,nr)
+
+/* Packet radio ioctl definitions *******************************************/
+
+#define _PKRADIOIOCVALID(c) (_IOC_TYPE(c)==_PKTRADIOBASE)
+#define _PKRADIOIOC(nr)     _IOC(_PKTRADIOBASE,nr)
 
 /* Wireless driver network ioctl definitions ********************************/
 

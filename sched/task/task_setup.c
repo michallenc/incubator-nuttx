@@ -35,6 +35,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>
 #include <nuttx/signal.h>
+#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "pthread/pthread.h"
@@ -453,7 +454,7 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
       /* Add the task to the inactive task list */
 
       sched_lock();
-      dq_addfirst((FAR dq_entry_t *)tcb, (FAR dq_queue_t *)&g_inactivetasks);
+      dq_addfirst((FAR dq_entry_t *)tcb, &g_inactivetasks);
       tcb->task_state = TSTATE_TASK_INACTIVE;
       sched_unlock();
     }
@@ -482,8 +483,7 @@ static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
 {
   /* Copy the name into the TCB */
 
-  strncpy(tcb->cmn.name, name, CONFIG_TASK_NAME_SIZE);
-  tcb->cmn.name[CONFIG_TASK_NAME_SIZE] = '\0';
+  strlcpy(tcb->cmn.name, name, sizeof(tcb->cmn.name));
 }
 #else
 #  define nxtask_setup_name(t,n)
@@ -544,6 +544,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            */
 
           strtablen += (strlen(argv[argc]) + 1);
+          DEBUGASSERT(strtablen < tcb->cmn.adj_stack_size);
           if (strtablen >= tcb->cmn.adj_stack_size)
             {
               return -ENAMETOOLONG;
@@ -555,6 +556,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            * happens in normal usage.
            */
 
+          DEBUGASSERT(argc <= MAX_STACK_ARGS);
           if (++argc > MAX_STACK_ARGS)
             {
               return -E2BIG;

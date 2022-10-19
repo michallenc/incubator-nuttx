@@ -156,6 +156,7 @@ FAR struct mm_heap_s *mm_initialize(FAR const char *name,
                                     FAR void *heap_start, size_t heap_size);
 void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
                   size_t heapsize);
+void mm_uninitialize(FAR struct mm_heap_s *heap);
 
 /* Functions contained in umm_initialize.c **********************************/
 
@@ -296,7 +297,7 @@ void kmm_extend(FAR void *mem, size_t size, int region);
 
 struct mallinfo; /* Forward reference */
 int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info);
-#ifdef CONFIG_DEBUG_MM
+#if CONFIG_MM_BACKTRACE >= 0
 struct mallinfo_task; /* Forward reference */
 int mm_mallinfo_task(FAR struct mm_heap_s *heap,
                      FAR struct mallinfo_task *info);
@@ -306,7 +307,7 @@ int mm_mallinfo_task(FAR struct mm_heap_s *heap,
 
 #ifdef CONFIG_MM_KERNEL_HEAP
 struct mallinfo kmm_mallinfo(void);
-#  ifdef CONFIG_DEBUG_MM
+#  if CONFIG_MM_BACKTRACE >= 0
 struct mallinfo_task kmm_mallinfo_task(pid_t pid);
 #  endif
 #endif

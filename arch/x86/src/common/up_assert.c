@@ -95,7 +95,7 @@ static void x86_stackdump(uint32_t sp, uint32_t stack_top)
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_USBDUMP
-static int usbtrace_syslog(FAR const char *fmt, ...)
+static int usbtrace_syslog(const char *fmt, ...)
 {
   va_list ap;
 
@@ -107,7 +107,7 @@ static int usbtrace_syslog(FAR const char *fmt, ...)
   return OK;
 }
 
-static int assert_tracecallback(FAR struct usbtrace_s *trace, FAR void *arg)
+static int assert_tracecallback(struct usbtrace_s *trace, void *arg)
 {
   usbtrace_trprintf(usbtrace_syslog, trace->event, trace->value);
   return 0;
@@ -121,7 +121,7 @@ static int assert_tracecallback(FAR struct usbtrace_s *trace, FAR void *arg)
 #ifdef CONFIG_ARCH_STACKDUMP
 static void up_dumpstate(void)
 {
-  FAR struct tcb_s *rtcb = running_task();
+  struct tcb_s *rtcb = running_task();
   uint32_t sp = up_getsp();
   uint32_t ustackbase;
   uint32_t ustacksize;
@@ -152,7 +152,7 @@ static void up_dumpstate(void)
   /* Get the limits on the interrupt stack memory */
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
-  istackbase = (uint32_t)&g_intstackalloc;
+  istackbase = (uint32_t)g_intstackalloc;
   istacksize = (CONFIG_ARCH_INTERRUPTSTACK & ~3);
 
   /* Show interrupt stack info */
@@ -234,12 +234,13 @@ static void _up_assert(void)
 
   if (g_current_regs || (running_task())->flink == NULL)
     {
+#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
+      board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
+#endif
+
       up_irq_save();
       for (; ; )
         {
-#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
-          board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
-#endif
 #ifdef CONFIG_ARCH_LEDS
           board_autoled_on(LED_PANIC);
           up_mdelay(250);

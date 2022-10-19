@@ -5,11 +5,13 @@
 
 # clang doesn't -fsanitize=kernel-address
 -Darwin,sim:kasan
+-Darwin,sim:citest
+
+# macOS doesn't support ELF loading
+-Darwin,sim:elf
+-Darwin,sim:loadable
 
 # macOS doesn't support 32bit(CONFIG_SIM_M32=y) anymore
--Darwin,sim:elf
--Darwin,sim:foc
--Darwin,sim:loadable
 -Darwin,sim:module32
 
 # Do not build Linux configs
@@ -17,7 +19,8 @@
 -Darwin,sim:linuxspi
 
 # macOS doesn't have X11
--Darwin,sim:lvgl
+-Darwin,sim:lvgl_fb
+-Darwin,sim:lvgl_lcd
 -Darwin,sim:nsh2
 -Darwin,sim:nx11
 -Darwin,sim:nxlines

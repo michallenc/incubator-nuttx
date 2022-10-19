@@ -1,5 +1,5 @@
 ############################################################################
-# arch/sparc/src/sparc/Toolchain.defs
+# arch/sparc/src/sparc_v8/Toolchain.defs
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -71,12 +71,14 @@ else
 endif
 
 ifeq ($(CONFIG_DEBUG_SYMBOLS),y)
-  LDFLAGS         += -g
   ARCHOPTIMIZATION += -g
 endif
 
 ARCHCFLAGS += -fno-common
 ARCHCXXFLAGS += -fno-common -nostdinc++
+
+ARCHCFLAGS += -Wall -Wstrict-prototypes -Wshadow -Wundef
+ARCHCXXFLAGS += -Wall -Wshadow -Wundef
 
 ifneq ($(CONFIG_CXX_EXCEPTION),y)
   ARCHCXXFLAGS += -fno-exceptions -fcheck-new
@@ -86,11 +88,12 @@ ifneq ($(CONFIG_CXX_RTTI),y)
   ARCHCXXFLAGS += -fno-rtti
 endif
 
+LDFLAGS += -nostdlib
+
 # NuttX buildroot GCC toolchain under Linux or Cygwin
 
 ifeq ($(CONFIG_SPARC_TOOLCHAIN),BUILDROOT)
   CROSSDEV ?= sparc-gaisler-elf-
-  LDFLAGS += -nostartfiles -nodefaultlibs
   LDSCRIPT = sparc-gaisler-elf-debug.ld
 endif
 
@@ -98,6 +101,15 @@ endif
 
 ifeq ($(CONFIG_SPARC_TOOLCHAIN),CODEREDW)
   CROSSDEV ?= sparc-elf-
-  LDFLAGS += -nostartfiles -nodefaultlibs
   LDSCRIPT = sparc-elf-debug.ld
 endif
+
+CC = $(CROSSDEV)gcc
+CXX = $(CROSSDEV)g++
+CPP = $(CROSSDEV)gcc -E
+LD = $(CROSSDEV)ld
+STRIP = $(CROSSDEV)strip --strip-unneeded
+AR = $(CROSSDEV)ar rcs
+NM = $(CROSSDEV)nm
+OBJCOPY = $(CROSSDEV)objcopy
+OBJDUMP = $(CROSSDEV)objdump

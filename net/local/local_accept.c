@@ -28,10 +28,10 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <queue.h>
 #include <debug.h>
 
 #include <nuttx/nuttx.h>
+#include <nuttx/queue.h>
 #include <nuttx/net/net.h>
 
 #include "socket/socket.h"
@@ -173,8 +173,7 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
               client->lc_peer = conn;
 #endif /* CONFIG_NET_LOCAL_SCM */
 
-              strncpy(conn->lc_path, client->lc_path, UNIX_PATH_MAX - 1);
-              conn->lc_path[UNIX_PATH_MAX - 1] = '\0';
+              strlcpy(conn->lc_path, client->lc_path, sizeof(conn->lc_path));
               conn->lc_instance_id = client->lc_instance_id;
 
               /* Open the server-side write-only FIFO.  This should not
@@ -243,6 +242,12 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
             }
 
           nxsem_post(&client->lc_waitsem);
+
+          if (ret == OK)
+            {
+              ret = net_lockedwait(&client->lc_donesem);
+            }
+
           return ret;
         }
 

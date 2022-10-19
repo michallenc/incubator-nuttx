@@ -24,6 +24,14 @@ ifeq ($(CONFIG_SENSORS),y)
 
 CSRCS += sensor.c
 
+ifeq ($(CONFIG_USENSOR),y)
+CSRCS += usensor.c
+endif
+
+ifeq ($(CONFIG_SENSORS_RPMSG),y)
+CSRCS += sensor_rpmsg.c
+endif
+
 ifeq ($(CONFIG_SENSORS_WTGAHRS2),y)
   CSRCS += wtgahrs2.c
 endif
@@ -268,6 +276,10 @@ endif
 
 ifeq ($(CONFIG_SENSORS_ADT7320),y)
   CSRCS += adt7320.c
+endif
+
+ifeq ($(CONFIG_SENSORS_AS5048A),y)
+  CSRCS += as5048a.c
 endif
 
 endif # CONFIG_SPI

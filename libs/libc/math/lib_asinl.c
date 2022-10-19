@@ -7,7 +7,7 @@
  *   Ported by: Darcy Gong
  *
  * It derives from the Rhombus OS math library by Nick Johnson which has
- * a compatibile, MIT-style license:
+ * a compatible, MIT-style license:
  *
  * Copyright (C) 2009-2011 Nick Johnson <nickbjohnson4224 at gmail.com>
  *
@@ -70,9 +70,9 @@ long double asinl(long double x)
 
   /* Verify that the input value is in the domain of the function */
 
-  if (x < -1.0 || x > 1.0 || isnan(x))
+  if (x < -1.0 || x > 1.0 || isnanl(x))
     {
-      return NAN;
+      return NAN_L;
     }
 
   /* if x is > sqrt(2), use identity for faster convergence */

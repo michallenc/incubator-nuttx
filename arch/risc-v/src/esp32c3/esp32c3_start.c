@@ -30,18 +30,23 @@
 #include <arch/board/board.h>
 
 #include "esp32c3.h"
-#include "esp32c3_clockconfig.h"
-#include "esp32c3_irq.h"
-#include "esp32c3_lowputc.h"
-#include "esp32c3_start.h"
-#include "esp32c3_wdt.h"
-#include "esp32c3_rtc.h"
-#include "hardware/esp32c3_cache_memory.h"
-#include "hardware/extmem_reg.h"
-
 #ifdef CONFIG_ESP32C3_BROWNOUT_DET
 #  include "esp32c3_brownout.h"
 #endif
+#include "esp32c3_clockconfig.h"
+#include "esp32c3_irq.h"
+#include "esp32c3_lowputc.h"
+#ifdef CONFIG_ESP32C3_REGION_PROTECTION
+#include "esp32c3_region.h"
+#endif
+#include "esp32c3_rtc.h"
+#include "esp32c3_start.h"
+#include "esp32c3_wdt.h"
+#ifdef CONFIG_BUILD_PROTECTED
+#  include "esp32c3_userspace.h"
+#endif
+#include "hardware/esp32c3_cache_memory.h"
+#include "hardware/extmem_reg.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -75,13 +80,13 @@
  ****************************************************************************/
 
 #ifdef CONFIG_ESP32C3_APP_FORMAT_MCUBOOT
-extern uint32_t _image_irom_vma;
-extern uint32_t _image_irom_lma;
-extern uint32_t _image_irom_size;
+extern uint8_t _image_irom_vma[];
+extern uint8_t _image_irom_lma[];
+extern uint8_t _image_irom_size[];
 
-extern uint32_t _image_drom_vma;
-extern uint32_t _image_drom_lma;
-extern uint32_t _image_drom_size;
+extern uint8_t _image_drom_vma[];
+extern uint8_t _image_drom_lma[];
+extern uint8_t _image_drom_size[];
 #endif
 
 /****************************************************************************
@@ -89,7 +94,7 @@ extern uint32_t _image_drom_size;
  ****************************************************************************/
 
 #ifdef CONFIG_ESP32C3_APP_FORMAT_MCUBOOT
-extern int ets_printf(const char *fmt, ...);
+extern int ets_printf(const char *fmt, ...) printflike(1, 2);
 extern uint32_t cache_suspend_icache(void);
 extern void cache_resume_icache(uint32_t val);
 extern void cache_invalidate_icache_all(void);
@@ -114,7 +119,7 @@ IRAM_ATTR noreturn_function void __start(void);
  ****************************************************************************/
 
 #ifdef CONFIG_ESP32C3_APP_FORMAT_MCUBOOT
-HDR_ATTR static void (*_entry_point)(void) = &__start;
+HDR_ATTR static void (*_entry_point)(void) = __start;
 #endif
 
 /****************************************************************************
@@ -181,12 +186,12 @@ static int map_rom_segments(void)
   uint32_t irom_page_count;
 
   size_t partition_offset = PRIMARY_SLOT_OFFSET;
-  uint32_t app_irom_lma = partition_offset + (uint32_t)&_image_irom_lma;
-  uint32_t app_irom_size = (uint32_t)&_image_irom_size;
-  uint32_t app_irom_vma = (uint32_t)&_image_irom_vma;
-  uint32_t app_drom_lma = partition_offset + (uint32_t)&_image_drom_lma;
-  uint32_t app_drom_size = (uint32_t)&_image_drom_size;
-  uint32_t app_drom_vma = (uint32_t)&_image_drom_vma;
+  uint32_t app_irom_lma = partition_offset + (uint32_t)_image_irom_lma;
+  uint32_t app_irom_size = (uint32_t)_image_irom_size;
+  uint32_t app_irom_vma = (uint32_t)_image_irom_vma;
+  uint32_t app_drom_lma = partition_offset + (uint32_t)_image_drom_lma;
+  uint32_t app_drom_size = (uint32_t)_image_drom_size;
+  uint32_t app_drom_vma = (uint32_t)_image_drom_vma;
 
   uint32_t autoload = cache_suspend_icache();
   cache_invalidate_icache_all();
@@ -241,6 +246,12 @@ void __esp32c3_start(void)
 
 #endif
 
+#ifdef CONFIG_ESP32C3_REGION_PROTECTION
+  /* Configure region protection */
+
+  esp32c3_region_protection();
+#endif
+
   /* Initialize RTC parameters */
 
   esp32c3_rtc_init();
@@ -277,9 +288,9 @@ void __esp32c3_start(void)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (uint32_t *dest = &_sbss; dest < &_ebss; dest++)
+  for (uint32_t *dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
-      *dest = 0;
+      *dest++ = 0;
     }
 
   showprogress('B');
@@ -291,6 +302,19 @@ void __esp32c3_start(void)
   /* Initialize onboard resources */
 
   esp32c3_board_initialize();
+
+  showprogress('C');
+
+  /* For the case of the separate user-/kernel-space build, perform whatever
+   * platform specific initialization of the user memory is required.
+   * Normally this just means initializing the user space .data and .bss
+   * segments.
+   */
+
+#ifdef CONFIG_BUILD_PROTECTED
+  esp32c3_userspace();
+  showprogress('D');
+#endif
 
   /* Bring up NuttX */
 

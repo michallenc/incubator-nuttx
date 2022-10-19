@@ -16,7 +16,6 @@ config WL_CC1101
 	default n
 	select SPI
 	select SCHED_HPWORK
-	select SCHED_LPWORK
 
 if WL_CC1101
 
@@ -55,6 +54,17 @@ config WL_GS2200M_DISABLE_DHCPC
 config WL_GS2200M_CHECK_VERSION
 	bool "Check the version of GS2200M"
 	default n
+
+config WL_GS2200M_SYNC_INTERVAL
+	int "Sync loss interval in station mode (100ms)"
+	default 100
+	range 1 63325
+	---help---
+		Time interval to recognize dis-association situation.
+		The value indicate n times of Wi-Fi beacon. If the node
+		lost receiving beacon n times, behave as dis-associtaion.
+		Time difference between 2 beacons are approximetely 100 msec.
+		So the unit of the value is 100 ms.
 
 config WL_GS2200M_LOGLEVEL
 	int "Log level"

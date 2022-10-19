@@ -7,7 +7,7 @@
  *   Ported by: Darcy Gong
  *
  * It derives from the Rhombus OS math library by Nick Johnson which has
- * a compatibile, MIT-style license:
+ * a compatible, MIT-style license:
  *
  * Copyright (C) 2009-2011 Nick Johnson <nickbjohnson4224 at gmail.com>
  *
@@ -52,17 +52,17 @@ long double sqrtl(long double x)
   if (x < 0.0)
     {
       set_errno(EDOM);
-      return NAN;
+      return NAN_L;
     }
 
-  if (isnan(x))
+  if (isnanl(x))
     {
-      return NAN;
+      return NAN_L;
     }
 
-  if (isinf(x))
+  if (isinfl(x))
     {
-      return INFINITY;
+      return INFINITY_L;
     }
 
   if (x == 0.0)

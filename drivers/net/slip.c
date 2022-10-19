@@ -153,9 +153,6 @@ static struct slip_driver_s g_slip[CONFIG_NET_SLIP_NINTERFACES];
  * Private Function Prototypes
  ****************************************************************************/
 
-static int slip_semtake(FAR struct slip_driver_s *priv);
-static void slip_forcetake(FAR struct slip_driver_s *priv);
-
 /* Common TX logic */
 
 static void slip_write(FAR struct slip_driver_s *priv,
@@ -184,45 +181,6 @@ static int slip_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac);
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: slip_semtake
- ****************************************************************************/
-
-static int slip_semtake(FAR struct slip_driver_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
-
-#define slip_semgive(p) nxsem_post(&(p)->waitsem);
-
-/****************************************************************************
- * Name: slip_forcetake
- *
- * Description:
- *   This is just another wrapper but this one continues even if the thread
- *   is canceled.  This must be done in certain conditions where were must
- *   continue in order to clean-up resources.
- *
- ****************************************************************************/
-
-static void slip_forcetake(FAR struct slip_driver_s *priv)
-{
-  int ret;
-
-  do
-    {
-      ret = nxsem_wait_uninterruptible(&priv->waitsem);
-
-      /* The only expected error would -ECANCELED meaning that the
-       * parent thread has been canceled.  We have to continue and
-       * terminate the poll in this case.
-       */
-
-      DEBUGASSERT(ret == OK || ret == -ECANCELED);
-    }
-  while (ret < 0);
-}
 
 /****************************************************************************
  * Name: slip_write
@@ -439,9 +397,6 @@ static int slip_txtask(int argc, FAR char *argv[])
 {
   FAR struct slip_driver_s *priv;
   unsigned int index = *(argv[1]) - '0';
-  clock_t start_ticks;
-  clock_t now_ticks;
-  unsigned int hsec;
   int ret;
 
   nerr("index: %d\n", index);
@@ -452,16 +407,15 @@ static int slip_txtask(int argc, FAR char *argv[])
    */
 
   priv = &g_slip[index];
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Loop forever */
 
-  start_ticks = clock_systime_ticks();
   for (; ; )
     {
       /* Wait for the timeout to expire (or until we are signaled by  */
 
-      ret = slip_semtake(priv);
+      ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
           DEBUGASSERT(ret == -ECANCELED);
@@ -470,13 +424,13 @@ static int slip_txtask(int argc, FAR char *argv[])
 
       if (!priv->txnodelay)
         {
-          slip_semgive(priv);
+          nxsem_post(&priv->waitsem);
           nxsig_usleep(SLIP_WDDELAY);
         }
       else
         {
           priv->txnodelay = false;
-          slip_semgive(priv);
+          nxsem_post(&priv->waitsem);
         }
 
       /* Is the interface up? */
@@ -488,23 +442,9 @@ static int slip_txtask(int argc, FAR char *argv[])
           net_lock();
           priv->dev.d_buf = priv->txbuf;
 
-          /* Has a half second elapsed since the last timer poll? */
+          /* perform the normal TX poll */
 
-          now_ticks = clock_systime_ticks();
-          hsec = (unsigned int)((now_ticks - start_ticks) / TICK_PER_HSEC);
-          if (hsec > 0)
-            {
-              /* Yes, perform the timer poll */
-
-              devif_timer(&priv->dev, hsec * TICK_PER_HSEC, slip_txpoll);
-              start_ticks += hsec * TICK_PER_HSEC;
-            }
-          else
-            {
-              /* No, perform the normal TX poll */
-
-              devif_timer(&priv->dev, 0, slip_txpoll);
-            }
+          devif_poll(&priv->dev, slip_txpoll);
 
           net_unlock();
         }
@@ -674,7 +614,7 @@ static int slip_rxtask(int argc, FAR char *argv[])
    */
 
   priv = &g_slip[index];
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Loop forever */
 
@@ -1014,8 +954,7 @@ int slip_initialize(int intf, FAR const char *devname)
   argv[1] = NULL;
 
   ret = kthread_create("rxslip", CONFIG_NET_SLIP_DEFPRIO,
-                       CONFIG_NET_SLIP_STACKSIZE, slip_rxtask,
-                       (FAR char * const *)argv);
+                       CONFIG_NET_SLIP_STACKSIZE, slip_rxtask, argv);
   if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
@@ -1026,13 +965,12 @@ int slip_initialize(int intf, FAR const char *devname)
 
   /* Wait and make sure that the receive task is started. */
 
-  slip_forcetake(priv);
+  nxsem_wait_uninterruptible(&priv->waitsem);
 
   /* Start the SLIP transmitter kernel thread */
 
   ret = kthread_create("txslip", CONFIG_NET_SLIP_DEFPRIO,
-                       CONFIG_NET_SLIP_STACKSIZE, slip_txtask,
-                       (FAR char * const *)argv);
+                       CONFIG_NET_SLIP_STACKSIZE, slip_txtask, argv);
   if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
@@ -1043,11 +981,11 @@ int slip_initialize(int intf, FAR const char *devname)
 
   /* Wait and make sure that the transmit task is started. */
 
-  slip_forcetake(priv);
+  nxsem_wait_uninterruptible(&priv->waitsem);
 
   /* Bump the semaphore count so that it can now be used as a mutex */
 
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Register the device with the OS so that socket IOCTLs can be performed */
 

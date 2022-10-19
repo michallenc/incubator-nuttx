@@ -96,6 +96,14 @@
 #define FLASH_WRITE_TRACE_START()
 #define FLASH_WRITE_TRACE_END()
 
+/* Flash protect/unprotect trace marco definition */
+
+#define FLASH_PROT_TRACE_START()
+#define FLASH_PROT_TRACE_END()
+
+#define FLASH_UNPROT_TRACE_START()
+#define FLASH_UNPROT_TRACE_END()
+
 #define FLASH_BUF_LIST16(n) \
   n    , n + 1, n +  2, n +  3, n +  4, n +  5, n +  6, n +  7, \
   n + 8, n + 9, n + 10, n + 11, n + 12, n + 13, n + 14, n + 15,
@@ -312,12 +320,11 @@ static void tlsr82_flash_print(const char *msg, const uint8_t *buf,
 #ifdef CONFIG_TLSR82_FLASH_TEST
 static int tlsr82_flash_test(struct tlsr82_flash_dev_s *priv)
 {
+  struct mtd_geometry_s geo;
   int ret      = OK;
   int npages   = 0;
   int i        = 0;
   int j        = 0;
-
-  npages = priv->nsectors * (TLSR82_SECTOR_SIZE / TLSR82_PAGE_SIZE);
 
   ferr("======== Flash test start ========\n");
 
@@ -334,10 +341,21 @@ static int tlsr82_flash_test(struct tlsr82_flash_dev_s *priv)
 
   ferr("%s\n", print_buf);
 
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_GEOMETRY, (unsigned long)&geo);
+  if (ret != OK)
+    {
+      ferr("    Flash geometry get failed, ret=%d\n", ret);
+      goto errout;
+    }
+
+  npages = priv->nsectors * (TLSR82_SECTOR_SIZE / TLSR82_PAGE_SIZE);
+
   ferr("    Flash Start Address: 0x%08lx\n", priv->baseaddr);
-  ferr("    Flash Size  : 0x%08lx\n", priv->size);
-  ferr("    Flash Sector: %d\n", priv->nsectors);
-  ferr("    Flash Page  : %d\n", npages);
+  ferr("    Flash Size         : 0x%08lx\n", priv->size);
+  ferr("    Flash Sector Size  : %ld\n", geo.erasesize);
+  ferr("    Flash Page Size    : %ld\n", geo.blocksize);
+  ferr("    Flash Sector       : %ld\n", geo.neraseblocks);
+  ferr("    Flash Page         : %d\n", npages);
 
   /* 2. erase chip and check all the erased sector, all the bit in erased
    *    sector should be 1.
@@ -346,7 +364,13 @@ static int tlsr82_flash_test(struct tlsr82_flash_dev_s *priv)
   ferr("Flash chip erase test start:\n");
 
   FLASH_ERASE_TRACE_START();
-  tlsr82_flash_chip_erase(priv);
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_BULKERASE, 0);
+  if (ret != OK)
+    {
+      ferr("    Flash erase failed, ret=%d\n", ret);
+      goto errout;
+    }
+
   FLASH_ERASE_TRACE_END();
 
   for (i = 0; i < npages; i++)
@@ -421,7 +445,13 @@ static int tlsr82_flash_test(struct tlsr82_flash_dev_s *priv)
   int k;
 
   ferr("Erase chip for byte write test\n");
-  tlsr82_flash_chip_erase(priv);
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_BULKERASE, 0);
+  if (ret != OK)
+    {
+      ferr("    Flash erase failed, ret=%d\n", ret);
+      goto errout;
+    }
+
   ferr("Erase chip finished\n");
 
   ferr("Flash byte read/write test start\n");
@@ -479,6 +509,101 @@ static int tlsr82_flash_test(struct tlsr82_flash_dev_s *priv)
 
   ferr("Flash byte read/write test Success\n");
 
+#endif
+
+#ifdef CONFIG_TLSR82_FLASH_PROTECT
+  /* 5. Flash protect/unprotect test:
+   *    1) erase the chip;
+   *    2) write data into chip;
+   *    3) protect flash;
+   *    4) erase the chip with flash protected;
+   *    5) read the chip, the data should be same as the data written in 2);
+   */
+
+  uint8_t status;
+  uint32_t addr;
+
+  /* 1) erase the chip */
+
+  ferr("Erase chip for protect/unprotect test\n");
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_BULKERASE, 0);
+  if (ret != OK)
+    {
+      ferr("    Flash erase failed, ret=%d\n", ret);
+      goto errout;
+    }
+
+  ferr("Erase chip finished\n");
+
+  /* 2) write data into chip */
+
+  tlsr82_flash_print("Write buffer data:", flash_buffer, TLSR82_PAGE_SIZE);
+  for (i = 0; i < npages; i++)
+    {
+      ret = tlsr82_flash_bwrite(&priv->mtd, i, 1, flash_buffer);
+      if (ret != 1)
+        {
+          ferr("    Flash block write failed, ret=%d\n", ret);
+          goto errout;
+        }
+    }
+
+  /* 3) protect the flash, read the flash status register */
+
+  FLASH_PROT_TRACE_START();
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_PROTECT, 0);
+  if (ret != OK)
+    {
+      ferr("    Flash protect failed, ret=%d\n", ret);
+      goto errout;
+    }
+
+  FLASH_PROT_TRACE_END();
+
+  status = tlsr82_flash_read_status(5);
+  ferr("Current flash status: 0x%x\n", status);
+
+  /* 4) erase the chip with flash protected */
+
+  addr = priv->baseaddr;
+  for (i = 0; i < priv->nsectors; i++)
+    {
+      tlsr82_flash_erase_sector(addr);
+      addr += priv->sectorsize;
+    }
+
+  FLASH_UNPROT_TRACE_START();
+  ret = tlsr82_flash_ioctl(&priv->mtd, MTDIOC_UNPROTECT, 0);
+  if (ret != OK)
+    {
+      ferr("    Flash unprotect failed, ret=%d\n", ret);
+      goto errout;
+    }
+
+  FLASH_UNPROT_TRACE_END();
+
+  /* 5) read the chip, the data should be same as the data written in 2) */
+
+  for (i = 0; i < npages; i++)
+    {
+      memset(flash_read_buffer, 0, TLSR82_PAGE_SIZE);
+      ret = tlsr82_flash_bread(&priv->mtd, i, 1, flash_read_buffer);
+      if (ret != 1)
+        {
+          ferr("    Flash block read failed, ret=%d\n", ret);
+          goto errout;
+        }
+
+      if (memcmp(flash_read_buffer, flash_buffer, TLSR82_PAGE_SIZE) != 0)
+        {
+          ferr("    Flash write compre is not equal, page_i=%d\n", i);
+          tlsr82_flash_print("Write buffer data:", flash_buffer,
+                             TLSR82_PAGE_SIZE);
+          tlsr82_flash_print("Read buffer data:", flash_read_buffer,
+                             TLSR82_PAGE_SIZE);
+          goto errout;
+        }
+    }
 #endif
 
   ferr("======== Flash test Success ========\n");
@@ -644,7 +769,7 @@ static int tlsr82_flash_ioctl(struct mtd_dev_s *dev, int cmd,
                               unsigned long arg)
 {
   struct tlsr82_flash_dev_s *priv = (struct tlsr82_flash_dev_s *)dev;
-  int ret = -EINVAL; /* Assume good command with bad parameters */
+  int ret = OK; /* Assume good command with good parameters */
 
   finfo("cmd: %d\n", cmd);
 
@@ -676,12 +801,32 @@ static int tlsr82_flash_ioctl(struct mtd_dev_s *dev, int cmd,
                     " neraseblocks: %" PRId32 "\n",
               geo->blocksize, geo->erasesize, geo->neraseblocks);
             }
+          else
+            {
+              ret = -EINVAL;
+            }
         }
         break;
 
       case MTDIOC_BULKERASE:
         {
           tlsr82_flash_chip_erase(priv);
+        }
+        break;
+
+      case MTDIOC_PROTECT:
+        {
+          /* Ignore arg, direct protect full chip */
+
+          tlsr82_flash_protect();
+        }
+        break;
+
+      case MTDIOC_UNPROTECT:
+        {
+          /* Ignore arg, direct unprotect full chip */
+
+          tlsr82_flash_unprotect();
         }
         break;
 
@@ -775,6 +920,10 @@ struct mtd_dev_s *tlsr82_flash_initialize(uint32_t offset, uint32_t size)
            sizeof(struct tlsr82_flash_dev_s));
       goto errout;
     }
+
+  /* Calibrate the flash */
+
+  tlsr82_flash_calibrate(g_flash_mid);
 
 #ifdef CONFIG_TLSR82_FLASH_TEST
   ret = tlsr82_flash_test(priv);

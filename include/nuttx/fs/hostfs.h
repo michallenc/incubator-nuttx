@@ -84,6 +84,8 @@
 #define NUTTX_O_SYNC            (1 << 7)  /* Synchronize output on write */
 #define NUTTX_O_BINARY          (1 << 8)  /* Open the file in binary mode. */
 #define NUTTX_O_DIRECT          (1 << 9)  /* Avoid caching, write directly to hardware */
+#define NUTTX_O_CLOEXEC         (1 << 10) /* Close on execute */
+#define NUTTX_O_DIRECTORY       (1 << 11) /* Must be a directory */
 
 #define NUTTX_O_RDWR            (NUTTX_O_RDONLY | NUTTX_O_WRONLY)
 
@@ -108,7 +110,7 @@
 typedef int16_t      nuttx_blksize_t;
 typedef int16_t      nuttx_gid_t;
 typedef int16_t      nuttx_uid_t;
-typedef uint16_t     nuttx_dev_t;
+typedef uint32_t     nuttx_dev_t;
 typedef uint16_t     nuttx_ino_t;
 typedef uint16_t     nuttx_nlink_t;
 #ifdef CONFIG_FS_LARGEFILE

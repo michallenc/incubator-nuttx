@@ -15,6 +15,7 @@ config ARCH_CHIP_ESP32S2WROVER
 	bool "ESP32-S2-WROVER"
 	select ESP32S2_FLASH_4M
 	select ESP32S2_PSRAM_2M
+	select ARCH_HAVE_I2CRESET
 	---help---
 		Generic module with an embedded ESP32-S2
 
@@ -232,6 +233,14 @@ config ESP32S2_UART
 	bool
 	default n
 
+config ESP32S2_I2C
+	bool
+	default n
+
+config ESP32S2_SPI
+	bool
+	default n
+
 config ESP32S2_TIMER
 	bool
 	default n
@@ -247,8 +256,24 @@ config ESP32S2_RNG
 	---help---
 		ESP32-S2 supports a RNG that passed on Dieharder test suite.
 
+config ESP32S2_SPI2
+	bool "SPI 2"
+	default n
+	select ESP32S2_SPI
+	select SPI
+
+config ESP32S2_SPI3
+	bool "SPI 3"
+	default n
+	select ESP32S2_SPI
+	select SPI
+
 config ESP32S2_SPIFLASH
 	bool "SPI Flash"
+	default n
+
+config ESP32S2_SPIRAM
+	bool "SPI RAM Support"
 	default n
 
 config ESP32S2_TIMER0
@@ -320,6 +345,18 @@ config ESP32S2_UART1
 	select UART1_SERIALDRIVER
 	select ARCH_HAVE_SERIAL_TERMIOS
 
+config ESP32S2_I2C0
+	bool "I2C 0"
+	default n
+	select ESP32S2_I2C
+	select I2C
+
+config ESP32S2_I2C1
+	bool "I2C 1"
+	default n
+	select ESP32S2_I2C
+	select I2C
+
 config ESP32S2_RT_TIMER
 	bool "Real-time Timer"
 	select ESP32S2_TIMER
@@ -343,6 +380,69 @@ config ESP32S2_GPIO_IRQ
 	bool "GPIO pin interrupts"
 	---help---
 		Enable support for interrupting GPIO pins.
+
+menu "SPI configuration"
+	depends on ESP32S2_SPI
+
+config ESP32S2_SPI_SWCS
+	bool "SPI software CS"
+	default n
+	---help---
+		Use SPI software CS.
+
+config ESP32S2_SPI_UDCS
+	bool "User defined CS"
+	default n
+	depends on ESP32S2_SPI_SWCS
+	---help---
+		Use user-defined CS.
+
+if ESP32S2_SPI2
+config ESP32S2_SPI2_CSPIN
+	int "SPI2 CS Pin"
+	default 10
+	range 0 48
+
+config ESP32S2_SPI2_CLKPIN
+	int "SPI2 CLK Pin"
+	default 12
+	range 0 48
+
+config ESP32S2_SPI2_MOSIPIN
+	int "SPI2 MOSI Pin"
+	default 11
+	range 0 48
+
+config ESP32S2_SPI2_MISOPIN
+	int "SPI2 MISO Pin"
+	default 13
+	range 0 48
+
+endif # ESP32S2_SPI2
+
+if ESP32S2_SPI3
+config ESP32S2_SPI3_CSPIN
+	int "SPI3 CS Pin"
+	default 10
+	range 0 48
+
+config ESP32S2_SPI3_CLKPIN
+	int "SPI3 CLK Pin"
+	default 12
+	range 0 48
+
+config ESP32S2_SPI3_MOSIPIN
+	int "SPI3 MOSI Pin"
+	default 11
+	range 0 48
+
+config ESP32S2_SPI3_MISOPIN
+	int "SPI3 MISO Pin"
+	default 13
+	range 0 48
+
+endif # ESP32S2_SPI3
+endmenu
 
 menu "UART Configuration"
 	depends on ESP32S2_UART
@@ -400,6 +500,47 @@ config ESP32S2_UART1_CTSPIN
 endif # ESP32S2_UART1
 
 endmenu # UART Configuration
+
+menu "I2C Configuration"
+	depends on ESP32S2_I2C
+
+if ESP32S2_I2C0
+
+config ESP32S2_I2C0_SCLPIN
+	int "I2C0 SCL Pin"
+	default 19
+	range 0 46
+
+config ESP32S2_I2C0_SDAPIN
+	int "I2C0 SDA Pin"
+	default 18
+	range 0 46
+
+endif # ESP32S2_I2C0
+
+if ESP32S2_I2C1
+
+config ESP32S2_I2C1_SCLPIN
+	int "I2C1 SCL Pin"
+	default 6
+	range 0 46
+
+config ESP32S2_I2C1_SDAPIN
+	int "I2C1 SDA Pin"
+	default 7
+	range 0 46
+
+endif # ESP32S2_I2C1
+
+config ESP32S2_I2CTIMEOSEC
+	int "Timeout seconds"
+	default 0
+
+config ESP32S2_I2CTIMEOMS
+	int "Timeout milliseconds"
+	default 500
+
+endmenu # I2C Configuration
 
 menu "SPI Flash Configuration"
 	depends on ESP32S2_SPIFLASH

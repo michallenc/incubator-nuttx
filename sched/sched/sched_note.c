@@ -41,18 +41,6 @@
 #include "sched/sched.h"
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/* CONFIG_LIBC_LONG_LONG is not a valid selection of the compiler does not
- * support long long types.
- */
-
-#ifndef CONFIG_HAVE_LONG_LONG
-#  undef CONFIG_LIBC_LONG_LONG
-#endif
-
-/****************************************************************************
  * Private Types
  ****************************************************************************/
 
@@ -964,7 +952,7 @@ void sched_note_vbprintf(uintptr_t ip, uint8_t event,
       short s;
       int i;
       long l;
-#ifdef CONFIG_LIBC_LONG_LONG
+#ifdef CONFIG_HAVE_LONG_LONG
       long long ll;
 #endif
       intmax_t im;
@@ -1040,7 +1028,7 @@ void sched_note_vbprintf(uintptr_t ip, uint8_t event,
               var->im = va_arg(va, intmax_t);
               next += sizeof(var->im);
             }
-#ifdef CONFIG_LIBC_LONG_LONG
+#ifdef CONFIG_HAVE_LONG_LONG
           else if (*(fmt - 2) == 'l' && *(fmt - 3) == 'l')
             {
               if (next + sizeof(var->ll) > length)
@@ -1173,14 +1161,14 @@ void sched_note_bprintf(uintptr_t ip, uint8_t event,
   va_end(va);
 }
 
-void sched_note_begin(uintptr_t ip, FAR const char *buf)
+void sched_note_begin(uintptr_t ip)
 {
-  sched_note_printf(ip, "B|%d|%s", getpid(), buf);
+  sched_note_string(ip, "B");
 }
 
-void sched_note_end(uintptr_t ip, FAR const char *buf)
+void sched_note_end(uintptr_t ip)
 {
-  sched_note_printf(ip, "E|%d|%s", getpid(), buf);
+  sched_note_string(ip, "E");
 }
 #endif /* CONFIG_SCHED_INSTRUMENTATION_DUMP */
 

@@ -37,7 +37,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
-#include <nuttx/wdog.h>
+#include <nuttx/mutex.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
 #include <nuttx/mm/iob.h>
@@ -92,12 +92,6 @@
 #  define XBEENET_FRAMELEN IEEE802154_MAX_PHY_PACKET_SIZE
 #endif
 
-/* TX poll delay = 1 seconds. CLK_TCK is the number of clock ticks per
- * second.
- */
-
-#define TXPOLL_WDDELAY   (1*CLK_TCK)
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -126,11 +120,10 @@ struct xbeenet_driver_s
 
   /* For internal use by this driver */
 
-  sem_t xd_exclsem;                 /* Exclusive access to struct */
+  mutex_t xd_lock;                  /* Exclusive access to struct */
   struct xbeenet_callback_s xd_cb;  /* Callback information */
   XBEEHANDLE xd_mac;                /* Contained XBee MAC interface */
   bool xd_bifup;                    /* true:ifup false:ifdown */
-  struct wdog_s xd_txpoll;          /* TX poll timer */
   struct work_s xd_pollwork;        /* Defer poll work to the work queue */
 
   /* Hold a list of events */
@@ -169,8 +162,6 @@ static int  xbeenet_rxframe(FAR struct xbeenet_driver_s *maccb,
 /* Common TX logic */
 
 static int  xbeenet_txpoll_callback(FAR struct net_driver_s *dev);
-static void xbeenet_txpoll_work(FAR void *arg);
-static void xbeenet_txpoll_expiry(wdparm_t arg);
 
 /* IOCTL support */
 
@@ -404,7 +395,7 @@ static int xbeenet_notify(FAR struct xbee_maccb_s *maccb,
        * again.
        */
 
-      while (nxsem_wait(&priv->xd_exclsem) < 0);
+      while (nxmutex_lock(&priv->xd_lock) < 0);
 
       sq_addlast((FAR sq_entry_t *)primitive, &priv->primitive_queue);
 
@@ -425,7 +416,7 @@ static int xbeenet_notify(FAR struct xbee_maccb_s *maccb,
                              SI_QUEUE, &priv->xd_notify_work);
         }
 
-      nxsem_post(&priv->xd_exclsem);
+      nxmutex_unlock(&priv->xd_lock);
       return OK;
     }
 
@@ -567,78 +558,6 @@ static int xbeenet_txpoll_callback(FAR struct net_driver_s *dev)
 }
 
 /****************************************************************************
- * Name: xbeenet_txpoll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void xbeenet_txpoll_work(FAR void *arg)
-{
-  FAR struct xbeenet_driver_s *priv = (FAR struct xbeenet_driver_s *)arg;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-#ifdef CONFIG_NET_6LOWPAN
-  /* Make sure the our single packet buffer is attached */
-
-  priv->xd_dev.r_dev.d_buf = g_iobuffer.rb_buf;
-#endif
-
-  /* Then perform the poll */
-
-  devif_timer(&priv->xd_dev.r_dev, TXPOLL_WDDELAY, xbeenet_txpoll_callback);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->xd_txpoll, TXPOLL_WDDELAY,
-           xbeenet_txpoll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: xbeenet_txpoll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void xbeenet_txpoll_expiry(wdparm_t arg)
-{
-  FAR struct xbeenet_driver_s *priv = (FAR struct xbeenet_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(XBEENET_WORK, &priv->xd_pollwork, xbeenet_txpoll_work, priv, 0);
-}
-
-/****************************************************************************
  * Name: xbeenet_coord_eaddr
  *
  * Description:
@@ -755,10 +674,6 @@ static int xbeenet_ifup(FAR struct net_driver_s *dev)
       wlinfo("             Node: %02x:%02x\n",
              dev->d_mac.radio.nv_addr[0], dev->d_mac.radio.nv_addr[1]);
 #endif
-      /* Set and activate a timer process */
-
-      wd_start(&priv->xd_txpoll, TXPOLL_WDDELAY,
-               xbeenet_txpoll_expiry, (wdparm_t)priv);
 
       /* The interface is now up */
 
@@ -794,10 +709,6 @@ static int xbeenet_ifdown(FAR struct net_driver_s *dev)
   /* Disable interruption */
 
   flags = enter_critical_section();
-
-  /* Cancel the TX poll timer and TX timeout timers */
-
-  wd_cancel(&priv->xd_txpoll);
 
   /* TODO: Put the xbee driver in its reset, non-operational state.  This
    * should be a known configuration that will guarantee the xbeenet_ifup()
@@ -854,7 +765,7 @@ static void xbeenet_txavail_work(FAR void *arg)
 
       /* Then poll the network for new XMIT data */
 
-      devif_timer(&priv->xd_dev.r_dev, 0, xbeenet_txpoll_callback);
+      devif_poll(&priv->xd_dev.r_dev, xbeenet_txpoll_callback);
     }
 
   net_unlock();
@@ -994,7 +905,7 @@ static int xbeenet_ioctl(FAR struct net_driver_s *dev, int cmd,
     (FAR struct xbeenet_driver_s *)dev->d_private;
   int ret = -EINVAL;
 
-  ret = nxsem_wait(&priv->xd_exclsem);
+  ret = nxmutex_lock(&priv->xd_lock);
   if (ret < 0)
     {
       wlerr("ERROR: nxsem_wait failed: %d\n", ret);
@@ -1071,7 +982,7 @@ static int xbeenet_ioctl(FAR struct net_driver_s *dev, int cmd,
                         }
 
                       priv->xd_eventpending = true;
-                      nxsem_post(&priv->xd_exclsem);
+                      nxmutex_unlock(&priv->xd_lock);
 
                       /* Wait to be signaled when an event is queued */
 
@@ -1086,7 +997,7 @@ static int xbeenet_ioctl(FAR struct net_driver_s *dev, int cmd,
                        * and try and pop an event off the queue
                        */
 
-                      ret = nxsem_wait(&priv->xd_exclsem);
+                      ret = nxmutex_lock(&priv->xd_lock);
                       if (ret < 0)
                         {
                           wlerr("ERROR: nxsem_wait failed: %d\n", ret);
@@ -1119,7 +1030,7 @@ static int xbeenet_ioctl(FAR struct net_driver_s *dev, int cmd,
      ret = xbee_ioctl(priv->xd_mac, cmd, arg);
    }
 
-  nxsem_post(&priv->xd_exclsem);
+  nxmutex_unlock(&priv->xd_lock);
   return ret;
 }
 #endif
@@ -1206,13 +1117,13 @@ static int xbeenet_req_data(FAR struct radio_driver_s *netdev,
         {
           wlerr("ERROR: xbeemac_req_data failed: %d\n", ret);
 
-          iob_free(iob, IOBUSER_WIRELESS_RAD802154);
+          iob_free(iob);
           for (iob = framelist; iob != NULL; iob = framelist)
             {
               /* Remove the IOB from the queue and free */
 
               framelist = iob->io_flink;
-              iob_free(iob, IOBUSER_WIRELESS_RAD802154);
+              iob_free(iob);
             }
 
           NETDEV_TXERRORS(&priv->xd_dev.r_dev);
@@ -1355,9 +1266,9 @@ int xbee_netdev_register(XBEEHANDLE xbee)
   dev->d_private      = priv;               /* Used to recover private state from dev */
   priv->xd_mac        = xbee;               /* Save the MAC interface instance */
 
-  /* Setup a locking semaphore for exclusive device driver access */
+  /* Setup a locking mutex for exclusive device driver access */
 
-  nxsem_init(&priv->xd_exclsem, 0, 1);
+  nxmutex_init(&priv->xd_lock);
 
   /* Set the network mask. */
 

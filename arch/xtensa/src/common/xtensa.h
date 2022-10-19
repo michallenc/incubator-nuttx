@@ -162,55 +162,32 @@
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-/* For the case of architectures with multiple CPUs, then there must be one
- * such value for each processor that can receive an interrupt.
- */
-
-extern volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#define CURRENT_REGS (g_current_regs[up_cpu_index()])
-
 #if !defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
 /* The (optional) interrupt stack */
 
-extern uint32_t g_intstackalloc; /* Allocated interrupt stack */
-extern uint32_t g_intstacktop;   /* Initial top of interrupt stack */
+extern uint8_t g_intstackalloc[]; /* Allocated interrupt stack */
+extern uint8_t g_intstacktop[];   /* Initial top of interrupt stack */
 #endif
 
 /* Address of the CPU0 IDLE thread */
 
 extern uint32_t g_idlestack[IDLETHREAD_STACKWORDS];
 
-/* These 'addresses' of these values are setup by the linker script.  They
- * are not actual uint32_t storage locations! They are only used meaningfully
- * in the following way:
- *
- *  - The linker script defines, for example, the symbol_sdata.
- *  - The declaration extern uint32_t _sdata; makes C happy.  C will believe
- *    that the value _sdata is the address of a uint32_t variable _data (it
- *    is not!).
- *  - We can recover the linker value then by simply taking the address of
- *    of _data.  like:  uint32_t *pdata = &_sdata;
- */
+/* These symbols are setup by the linker script. */
 
-extern uint32_t _init_start;        /* Start of initialization logic */
-extern uint32_t _stext;             /* Start of .text */
-extern uint32_t _etext;             /* End+1 of .text + .rodata */
-extern uint32_t _sdata;             /* Start of .data */
-extern uint32_t _edata;             /* End+1 of .data */
-extern uint32_t _srodata;           /* Start of .rodata */
-extern uint32_t _erodata;           /* End+1 of .rodata */
-extern uint32_t _sbss;              /* Start of .bss */
-extern uint32_t _ebss;              /* End+1 of .bss */
-extern uint32_t _sheap;             /* Start of heap */
-extern uint32_t _eheap;             /* End+1 of heap */
-extern uint32_t _sbss_extmem;       /* start of external memory bss */
-extern uint32_t _ebss_extmem;       /* End+1 of external memory bss */
+extern uint8_t _init_start[];        /* Start of initialization logic */
+extern uint8_t _stext[];             /* Start of .text */
+extern uint8_t _etext[];             /* End+1 of .text + .rodata */
+extern uint8_t _sdata[];             /* Start of .data */
+extern uint8_t _edata[];             /* End+1 of .data */
+extern uint8_t _srodata[];           /* Start of .rodata */
+extern uint8_t _erodata[];           /* End+1 of .rodata */
+extern uint8_t _sbss[];              /* Start of .bss */
+extern uint8_t _ebss[];              /* End+1 of .bss */
+extern uint8_t _sheap[];             /* Start of heap */
+extern uint8_t _eheap[];             /* End+1 of heap */
+extern uint8_t _sbss_extmem[];       /* start of external memory bss */
+extern uint8_t _ebss_extmem[];       /* End+1 of external memory bss */
 
 /****************************************************************************
  * Inline Functions
@@ -233,10 +210,6 @@ void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
 void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
 void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
-/* Context switching */
-
-void xtensa_copystate(uint32_t *dest, uint32_t *src);
-
 /* Serial output */
 
 void up_lowputs(const char *str);
@@ -254,9 +227,8 @@ void xtensa_dumpstate(void);
 /* Initialization */
 
 #if XCHAL_CP_NUM > 0
-struct xtensa_cpstate_s;
-void xtensa_coproc_enable(struct xtensa_cpstate_s *cpstate, int cpset);
-void xtensa_coproc_disable(struct xtensa_cpstate_s *cpstate, int cpset);
+void xtensa_coproc_enable(int cpset);
+void xtensa_coproc_disable(int cpset);
 #endif
 
 /* Window Spill */
@@ -285,15 +257,15 @@ int xtensa_intercpu_interrupt(int tocpu, int intcode);
 void xtensa_pause_handler(void);
 #endif
 
-#if XCHAL_CP_NUM > 0
-void xtensa_coproc_savestate(struct xtensa_cpstate_s *cpstate);
-void xtensa_coproc_restorestate(struct xtensa_cpstate_s *cpstate);
-#endif
-
 /* Signals */
 
-void _xtensa_sig_trampoline(void);
 void xtensa_sig_deliver(void);
+
+#ifdef CONFIG_LIB_SYSCALL
+void xtensa_dispatch_syscall(unsigned int nbr, uintptr_t parm1,
+                             uintptr_t parm2, uintptr_t parm3,
+                             uintptr_t parm4, uintptr_t parm5);
+#endif
 
 /* Chip-specific functions **************************************************/
 
@@ -364,6 +336,7 @@ int xtensa_swint(int irq, void *context, void *arg);
 /* Debug ********************************************************************/
 
 #ifdef CONFIG_STACK_COLORATION
+size_t xtensa_stack_check(uintptr_t alloc, size_t size);
 void xtensa_stack_color(void *stackbase, size_t nbytes);
 #endif
 

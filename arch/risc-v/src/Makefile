@@ -35,9 +35,6 @@ ARCH_SRCDIR = $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src
 INCLUDES += ${shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)chip}
 INCLUDES += ${shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)common}
 INCLUDES += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)sched}
-ifeq ($(CONFIG_OPENSBI),y)
-INCLUDES += $(shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)opensbi$(DELIM)opensbi-3rdparty$(DELIM)include)
-endif
 
 CPPFLAGS += $(INCLUDES)
 CFLAGS += $(INCLUDES)
@@ -59,16 +56,10 @@ STARTUP_OBJS ?= $(HEAD_OBJ)
 
 # Flat build or kernel-mode objects
 
-ASRCS = $(CHIP_ASRCS) $(CMN_ASRCS)
-ifeq ($(CONFIG_OPENSBI),y)
-ASRCS += $(OPENSBI_ASRCS)
-endif
+ASRCS = $(CHIP_ASRCS) $(CMN_ASRCS) $(SBI_ASRCS)
 AOBJS = $(ASRCS:.S=$(OBJEXT))
 
-CSRCS = $(CHIP_CSRCS) $(CMN_CSRCS)
-ifeq ($(CONFIG_OPENSBI),y)
-CSRCS += $(OPENSBI_CSRCS)
-endif
+CSRCS = $(CHIP_CSRCS) $(CMN_CSRCS) $(SBI_CSRCS)
 COBJS = $(CSRCS:.c=$(OBJEXT))
 
 SRCS = $(ASRCS) $(CSRCS)
@@ -88,7 +79,8 @@ UOBJS = $(UAOBJS) $(UCOBJS)
 KBIN = libkarch$(LIBEXT)
 BIN  = libarch$(LIBEXT)
 
-LDFLAGS += $(addprefix -T,$(call CONVERT_PATH,$(ARCHSCRIPT))) $(EXTRALINKCMDS)
+ARCHSCRIPT := $(call CONVERT_PATH,$(ARCHSCRIPT))
+LDFLAGS += $(addprefix -T,$(ARCHSCRIPT).tmp) $(EXTRALINKCMDS)
 
 ifeq ($(LD),$(CC))
   LDSTARTGROUP ?= -Wl,--start-group
@@ -114,9 +106,7 @@ endif
 
 VPATH += chip
 VPATH += common
-ifeq ($(CONFIG_OPENSBI),y)
-VPATH += opensbi
-endif
+VPATH += $(SBI_DIR)
 VPATH += $(ARCH_SUBDIR)
 VPATH += $(CHIP_DIR)
 
@@ -148,15 +138,18 @@ board/libboard$(LIBEXT):
 	$(Q) $(MAKE) -C board libboard$(LIBEXT) EXTRAFLAGS="$(EXTRAFLAGS)"
 
 define LINK_ALLSYMS
-	$(Q) $(TOPDIR)/tools/mkallsyms.sh $(NUTTX) $(CROSSDEV) > allsyms.tmp
+	$(Q) $(TOPDIR)/tools/mkallsyms.py $(NUTTX) allsyms.tmp
 	$(Q) $(call COMPILE, -x c allsyms.tmp, allsyms$(OBJEXT))
 	$(Q) $(LD) --entry=__start $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
-		-o $(NUTTX) $(filter-out board/libboard$(LIBEXT), $1) allsyms$(OBJEXT) $(EXTRA_OBJS) \
+		-o $(NUTTX) $(HEAD_OBJ) allsyms$(OBJEXT) $(EXTRA_OBJS) \
 		$(LDSTARTGROUP) $(LDLIBS) $(EXTRA_LIBS) $(LDENDGROUP)
 	$(Q) $(call DELFILE, allsyms.tmp allsyms$(OBJEXT))
 endef
 
-nuttx$(EXEEXT): $(HEAD_OBJ) board/libboard$(LIBEXT) $(ARCHSCRIPT)
+$(addsuffix .tmp,$(ARCHSCRIPT)): $(ARCHSCRIPT)
+	$(call PREPROCESS, $(patsubst %.tmp,%,$@), $@)
+
+nuttx$(EXEEXT): $(HEAD_OBJ) board/libboard$(LIBEXT) $(addsuffix .tmp,$(ARCHSCRIPT))
 	$(Q) echo "LD: nuttx"
 ifneq ($(CONFIG_ALLSYMS),y)
 	$(Q) $(LD) --entry=__start $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
@@ -175,12 +168,13 @@ ifneq ($(CONFIG_WINDOWS_NATIVE),y)
 	grep -v '\(compiled\)\|\(\$(OBJEXT)$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | \
 	sort > $(TOPDIR)/System.map
 endif
+	$(Q) $(call DELFILE, $(addsuffix .tmp,$(ARCHSCRIPT)))
 
 # This is part of the top-level export target
 # Note that there may not be a head object if layout is handled
 # by the linker configuration.
 
-export_startup: board/libboard$(LIBEXT) $(STARTUP_OBJS)
+export_startup: $(STARTUP_OBJS)
 ifneq ($(STARTUP_OBJS),)
 	$(Q) if [ -d "$(EXPORT_DIR)/startup" ]; then \
 		cp -f $(STARTUP_OBJS) "$(EXPORT_DIR)/startup/."; \
@@ -211,6 +205,7 @@ clean:
 ifeq ($(BOARDMAKE),y)
 	$(Q) $(MAKE) -C board clean
 endif
+	$(call DELFILE, $(addsuffix .tmp,$(ARCHSCRIPT)))
 	$(call DELFILE, $(KBIN))
 	$(call DELFILE, $(BIN))
 	$(call DELFILE, $(HEAD_OBJ))

@@ -27,18 +27,18 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <sched.h>
-#include <queue.h>
 #include <assert.h>
 #include <errno.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/queue.h>
 #include <nuttx/sched.h>
-#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "environ/environ.h"
 #include "group/group.h"
 #include "task/task.h"
+#include "tls/tls.h"
 
 /****************************************************************************
  * Public Functions
@@ -88,7 +88,6 @@ int nxtask_init(FAR struct task_tcb_s *tcb, const char *name, int priority,
                 FAR char * const envp[])
 {
   uint8_t ttype = tcb->cmn.flags & TCB_FLAG_TTYPE_MASK;
-  FAR struct tls_info_s *info;
   int ret;
 
 #ifndef CONFIG_DISABLE_PTHREAD
@@ -131,9 +130,7 @@ int nxtask_init(FAR struct task_tcb_s *tcb, const char *name, int priority,
     {
       /* Allocate the stack for the TCB */
 
-      ret = up_create_stack(&tcb->cmn,
-                            up_tls_size() + stack_size,
-                            ttype);
+      ret = up_create_stack(&tcb->cmn, stack_size, ttype);
     }
 
   if (ret < OK)
@@ -143,18 +140,11 @@ int nxtask_init(FAR struct task_tcb_s *tcb, const char *name, int priority,
 
   /* Initialize thread local storage */
 
-  info = up_stack_frame(&tcb->cmn, up_tls_size());
-  if (info == NULL)
+  ret = tls_init_info(&tcb->cmn);
+  if (ret < OK)
     {
-      ret = -ENOMEM;
       goto errout_with_group;
     }
-
-  DEBUGASSERT(info == tcb->cmn.stack_alloc_ptr);
-
-  info->tl_task = tcb->cmn.group->tg_info;
-
-  up_tls_initialize(info);
 
   /* Initialize the task control block */
 
@@ -167,7 +157,11 @@ int nxtask_init(FAR struct task_tcb_s *tcb, const char *name, int priority,
 
   /* Setup to pass parameters to the new task */
 
-  nxtask_setup_arguments(tcb, name, argv);
+  ret = nxtask_setup_arguments(tcb, name, argv);
+  if (ret < OK)
+    {
+      goto errout_with_group;
+    }
 
   /* Now we have enough in place that we can join the group */
 
@@ -224,7 +218,7 @@ void nxtask_uninit(FAR struct task_tcb_s *tcb)
    * nxtask_setup_scheduler().
    */
 
-  dq_rem((FAR dq_entry_t *)tcb, (FAR dq_queue_t *)&g_inactivetasks);
+  dq_rem((FAR dq_entry_t *)tcb, &g_inactivetasks);
 
   /* Release all resources associated with the TCB... Including the TCB
    * itself.

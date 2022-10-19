@@ -61,6 +61,7 @@ void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
   FAR struct mm_freenode_s *node;
   uintptr_t heapbase;
   uintptr_t heapend;
+  bool ret;
 #if CONFIG_MM_REGIONS > 1
   int IDX;
 
@@ -91,7 +92,8 @@ void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
 
   kasan_register(heapstart, &heapsize);
 
-  DEBUGVERIFY(mm_takesemaphore(heap));
+  ret = mm_lock(heap);
+  DEBUGASSERT(ret);
 
   /* Adjust the provided heap start and size.
    *
@@ -105,7 +107,14 @@ void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
   heapend  = MM_ALIGN_DOWN((uintptr_t)heapstart + (uintptr_t)heapsize);
   heapsize = heapend - heapbase;
 
+#if defined(CONFIG_FS_PROCFS) && \
+    !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO) && \
+    (defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__))
+  minfo("[%s] Region %d: base=%p size=%zu\n",
+        heap->mm_procfs.name, IDX + 1, heapstart, heapsize);
+#else
   minfo("Region %d: base=%p size=%zu\n", IDX + 1, heapstart, heapsize);
+#endif
 
   /* Add the size of this region to the total size of the heap */
 
@@ -143,8 +152,7 @@ void mm_addregion(FAR struct mm_heap_s *heap, FAR void *heapstart,
   /* Add the single, large free node to the nodelist */
 
   mm_addfreechunk(heap, node);
-
-  mm_givesemaphore(heap);
+  mm_unlock(heap);
 }
 
 /****************************************************************************
@@ -203,26 +211,55 @@ FAR struct mm_heap_s *mm_initialize(FAR const char *name,
       heap->mm_nodelist[i].blink     = &heap->mm_nodelist[i - 1];
     }
 
-  /* Initialize the malloc semaphore to one (to support one-at-
+  /* Initialize the malloc mutex to one (to support one-at-
    * a-time access to private data sets).
    */
 
-  mm_seminitialize(heap);
+  nxmutex_init(&heap->mm_lock);
+
+#if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
+#  if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
+  heap->mm_procfs.name = name;
+  heap->mm_procfs.heap = heap;
+#    ifdef CONFIG_MM_BACKTRACE_DEFAULT
+  heap->mm_procfs.backtrace = true;
+#    endif
+#  endif
+#endif
 
   /* Add the initial region of memory to the heap */
 
   mm_addregion(heap, heapstart, heapsize);
 
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
-#if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
-  heap->mm_procfs.name = name;
-  heap->mm_procfs.heap = heap;
-#if defined (CONFIG_DEBUG_MM) && defined(CONFIG_MM_BACKTRACE_DEFAULT)
-  heap->mm_procfs.backtrace = true;
-#endif
+#  if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
   procfs_register_meminfo(&heap->mm_procfs);
-#endif
+#  endif
 #endif
 
   return heap;
+}
+
+/****************************************************************************
+ * Name: mm_uninitialize
+ *
+ * Description:
+ *   Uninitialize the selected heap data structures.
+ *
+ * Input Parameters:
+ *   heap - The heap to uninitialize
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void mm_uninitialize(FAR struct mm_heap_s *heap)
+{
+#if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMINFO)
+#  if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
+  procfs_unregister_meminfo(&heap->mm_procfs);
+#  endif
+#endif
+  nxmutex_destroy(&heap->mm_lock);
 }

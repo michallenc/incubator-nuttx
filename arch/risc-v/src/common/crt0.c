@@ -22,14 +22,13 @@
  * Included Files
  ****************************************************************************/
 
-#include <arch/arch.h>
-#include <arch/syscall.h>
-
+#include <nuttx/arch.h>
 #include <nuttx/addrenv.h>
 #include <nuttx/compiler.h>
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <syscall.h>
 #include <stdlib.h>
 
 #include "riscv_internal.h"
@@ -89,6 +88,57 @@ static void sig_trampoline(void)
 }
 
 /****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* Linker defined symbols to .ctors and .dtors */
+
+extern initializer_t _sctors[];
+extern initializer_t _ectors[];
+extern initializer_t _sdtors[];
+extern initializer_t _edtors[];
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+#ifdef CONFIG_HAVE_CXX
+
+/****************************************************************************
+ * Name: exec_ctors
+ *
+ * Description:
+ *   Call static constructors
+ *
+ ****************************************************************************/
+
+static void exec_ctors(void)
+{
+  for (initializer_t *ctor = _sctors; ctor != _ectors; ctor++)
+    {
+      (*ctor)();
+    }
+}
+
+/****************************************************************************
+ * Name: exec_dtors
+ *
+ * Description:
+ *   Call static destructors
+ *
+ ****************************************************************************/
+
+static void exec_dtors(void)
+{
+  for (initializer_t *dtor = _sdtors; dtor != _edtors; dtor++)
+    {
+      (*dtor)();
+    }
+}
+
+#endif
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -122,11 +172,15 @@ void _start(int argc, char *argv[])
 
   ARCH_DATA_RESERVE->ar_sigtramp = (addrenv_sigtramp_t)sig_trampoline;
 
+#ifdef CONFIG_HAVE_CXX
   /* Call C++ constructors */
+
+  exec_ctors();
 
   /* Setup so that C++ destructors called on task exit */
 
-  /* REVISIT: Missing logic */
+  atexit(exec_dtors);
+#endif
 
   /* Call the main() entry point passing argc and argv. */
 

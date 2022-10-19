@@ -31,7 +31,6 @@
 #include <string.h>
 #include <assert.h>
 #include <debug.h>
-#include <queue.h>
 #include <errno.h>
 
 #include <arpa/inet.h>
@@ -156,12 +155,6 @@
 
 /* Timing *******************************************************************/
 
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define MPFS_WDDELAY     (1 * CLK_TCK)
-
 /* TX timeout = 1 minute */
 
 #define MPFS_TXTIMEOUT   (60 * CLK_TCK)
@@ -216,7 +209,8 @@ struct gmac_txdesc_s
 #endif
 };
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint8_t g_pktbuf[MPFS_NETHERNET]
+                       [MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 
 #if defined(CONFIG_MPFS_GMAC_PREALLOCATE)
 static uint8_t g_txbuffer[CONFIG_MPFS_ETHMAC_NTXBUFFERS * GMAC_TX_UNITSIZE]
@@ -259,7 +253,6 @@ struct mpfs_ethmac_s
   uint8_t       ifup : 1;                        /* true:ifup false:ifdown */
   uint8_t       intf;                            /* Ethernet interface number */
   uint8_t       phyaddr;                         /* PHY address */
-  struct wdog_s txpoll;                          /* TX poll timer */
   struct wdog_s txtimeout;                       /* TX timeout timer */
   struct work_s irqwork;                         /* For deferring interrupt work to the work queue */
   struct work_s pollwork;                        /* For deferring poll work to the work queue */
@@ -311,9 +304,6 @@ static uint16_t mpfs_txfree(struct mpfs_ethmac_s *priv, unsigned int queue);
 static int mpfs_buffer_initialize(struct mpfs_ethmac_s *priv,
                                   unsigned int queue);
 static void mpfs_buffer_free(struct mpfs_ethmac_s *priv, unsigned int queue);
-
-static void mpfs_poll_expiry(wdparm_t arg);
-static void mpfs_poll_work(void *arg);
 
 static int  mpfs_transmit(struct mpfs_ethmac_s *priv, unsigned int queue);
 static int  mpfs_txpoll(struct net_driver_s *dev);
@@ -1514,82 +1504,8 @@ static void mpfs_dopoll(struct mpfs_ethmac_s *priv)
        * then poll the network for new XMIT data.
        */
 
-      devif_timer(dev, 0, mpfs_txpoll);
+      devif_poll(dev, mpfs_txpoll);
     }
-}
-
-/****************************************************************************
- * Function: mpfs_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void mpfs_poll_expiry(wdparm_t arg)
-{
-  struct mpfs_ethmac_s *priv = (struct mpfs_ethmac_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  if (work_available(&priv->pollwork))
-    {
-      work_queue(ETHWORK, &priv->pollwork, mpfs_poll_work, priv, 0);
-    }
-  else
-    {
-      wd_start(&priv->txpoll, MPFS_WDDELAY,
-               mpfs_poll_expiry, (wdparm_t)priv);
-    }
-}
-
-/****************************************************************************
- * Function: mpfs_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Ethernet interrupts are disabled
- *
- ****************************************************************************/
-
-static void mpfs_poll_work(void *arg)
-{
-  struct mpfs_ethmac_s *priv = (struct mpfs_ethmac_s *)arg;
-  struct net_driver_s *dev = &priv->dev;
-
-  /* Check if there are any free TX descriptors.  We cannot perform the
-   * TX poll if we do not have buffering for another packet.
-   */
-
-  net_lock();
-  if (mpfs_txfree(priv, 0) > 0)
-    {
-      /* Update TCP timing states and poll the network for new XMIT data. */
-
-      devif_timer(dev, MPFS_WDDELAY, mpfs_txpoll);
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->txpoll, MPFS_WDDELAY, mpfs_poll_expiry, (wdparm_t)priv);
-  net_unlock();
 }
 
 /****************************************************************************
@@ -1671,11 +1587,6 @@ static int mpfs_ifup(struct net_driver_s *dev)
 
   ninfo("Enable normal operation\n");
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, MPFS_WDDELAY,
-           mpfs_poll_expiry, (wdparm_t)priv);
-
   /* Enable the Ethernet interrupts */
 
   priv->ifup = true;
@@ -1723,9 +1634,8 @@ static int mpfs_ifdown(struct net_driver_s *dev)
   *priv->queue[2].int_disable = 0xffffffff;
   *priv->queue[3].int_disable = 0xffffffff;
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->txpoll);
   wd_cancel(&priv->txtimeout);
 
   /* Put the MAC in its reset, non-operational state.  This should be
@@ -2445,29 +2355,6 @@ static int mpfs_autonegotiate(struct mpfs_ethmac_s *priv)
       goto errout;
     }
 
-#ifndef CONFIG_MPFS_MAC_AUTONEG_DISABLE_1000MBPS
-  /* Modify the 1000Base-T control register to advertise 1000Base-T full
-   * and half duplex support.
-   */
-
-  ret = mpfs_phyread(priv, priv->phyaddr, GMII_1000BTCR, &btcr);
-  if (ret < 0)
-    {
-      nerr("ERROR: Failed to read 1000BTCR register: %d\n", ret);
-      goto errout;
-    }
-
-  btcr |= GMII_1000BTCR_1000BASETFULL | GMII_1000BTCR_1000BASETHALF;
-
-  ret = mpfs_phywrite(priv, priv->phyaddr, GMII_1000BTCR, btcr);
-  if (ret < 0)
-    {
-      nerr("ERROR: Failed to write 1000BTCR register: %d\n", ret);
-      goto errout;
-    }
-
-#endif
-
   /* Restart Auto_negotiation */
 
   ret = mpfs_phyread(priv, priv->phyaddr, GMII_MCR, &phyval);
@@ -2540,6 +2427,13 @@ static int mpfs_autonegotiate(struct mpfs_ethmac_s *priv)
       if (ret < 0)
         {
           nerr("ERROR: Failed to read 1000BTSR register: %d\n", ret);
+          goto errout;
+        }
+
+      ret = mpfs_phyread(priv, priv->phyaddr, GMII_1000BTCR, &btcr);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to read 1000BTCR register: %d\n", ret);
           goto errout;
         }
 
@@ -3500,6 +3394,7 @@ static int mpfs_phyreset(struct mpfs_ethmac_s *priv)
   uint16_t mcr;
   int timeout;
   int ret;
+  uint16_t btcr;
 
   ninfo(" mpfs_phyreset\n");
 
@@ -3533,6 +3428,27 @@ static int mpfs_phyreset(struct mpfs_ethmac_s *priv)
         {
           ret = OK;
           break;
+        }
+    }
+
+  /* For gigabit PHYs, set or disable the autonegotiation advertisement for
+   * 1G speed
+   */
+
+  if (mpfs_phyread(priv, priv->phyaddr, GMII_1000BTCR, &btcr) == OK)
+    {
+#if defined(CONFIG_MPFS_MAC_AUTONEG_DISABLE_1000MBPS) || \
+            (!defined(CONFIG_MPFS_MAC_AUTONEG) && \
+             !defined(CONFIG_MPFS_MAC_ETH1000MBPS))
+      btcr &= ~(GMII_1000BTCR_1000BASETFULL | GMII_1000BTCR_1000BASETHALF);
+#else
+      btcr |= GMII_1000BTCR_1000BASETFULL | GMII_1000BTCR_1000BASETHALF;
+#endif
+
+      ret = mpfs_phywrite(priv, priv->phyaddr, GMII_1000BTCR, btcr);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to write 1000BTCR register: %d\n", ret);
         }
     }
 
@@ -3644,7 +3560,7 @@ int mpfs_ethinitialize(int intf)
   /* Initialize the driver structure */
 
   memset(priv, 0, sizeof(struct mpfs_ethmac_s));
-  priv->dev.d_buf     = g_pktbuf;       /* Single packet buffer */
+  priv->dev.d_buf     = g_pktbuf[intf]; /* Single packet buffer */
   priv->dev.d_ifup    = mpfs_ifup;      /* I/F up (new IP address) callback */
   priv->dev.d_ifdown  = mpfs_ifdown;    /* I/F down callback */
   priv->dev.d_txavail = mpfs_txavail;   /* New TX data callback */

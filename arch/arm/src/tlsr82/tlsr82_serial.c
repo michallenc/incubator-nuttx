@@ -61,11 +61,11 @@
 #define CONSOLE_PRIV               g_uart0priv
 #define CONSOLE_DEV                g_uart0_dev
 
-#define UART0_PIN_TX_MUX           GPIO_AF_MUX1
-#define UART0_PIN_RX_MUX           GPIO_AF_MUX1
+#define UART0_PIN_TX_MUX           BOARD_UART0_TX_MUX
+#define UART0_PIN_RX_MUX           BOARD_UART0_RX_MUX
 
-#define UART0_PIN_TX               GPIO_PIN_PB1
-#define UART0_PIN_RX               GPIO_PIN_PB0
+#define UART0_PIN_TX               BOARD_UART0_TX_PIN
+#define UART0_PIN_RX               BOARD_UART0_RX_PIN
 
 #define UART0_TX_BUF_SIZE          CONFIG_TLSR82_UART0_TX_BUF_SIZE
 #define UART0_RX_BUF_SIZE          CONFIG_TLSR82_UART0_RX_BUF_SIZE
@@ -262,7 +262,8 @@ static char g_uart0txbuffer[UART0_TX_BUF_SIZE];
 #ifdef CONFIG_TLSR82_UART0_TXDMA
 static char g_uart0txdmabuf[UART0_TXDMA_BUF_SIZE + DMA_HEAD_LEN] \
 aligned_data(4);
-static sem_t g_uart0txdmasem = SEM_INITIALIZER(1);
+static sem_t g_uart0txdmasem = NXSEM_INITIALIZER(1,
+                                 PRIOINHERIT_FLAGS_DISABLE);
 #endif
 
 #ifdef CONFIG_TLSR82_UART0_RXDMA
@@ -331,28 +332,7 @@ static uart_dev_t g_uart0_dev =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: uart_reset
- *
- * Description:
- *   Reset the uart hardware, the software pointer must be set to zero
- *   (function uart_clr_rx_index() must be called).
- *
- * Parameters:
- *   void
- *
- * Returned Values:
- *   void
- *
- ****************************************************************************/
-
-static inline void uart_reset(void)
-{
-  RESET_RST0_REG |= RESET_RST0_UART;
-  RESET_RST0_REG &= ~RESET_RST0_UART;
-}
-
-/****************************************************************************
- * Name: uart_reset
+ * Name: uart_clr_rx_index
  *
  * Description:
  *   Clear the uart receive software pointer, this function must be called
@@ -369,6 +349,49 @@ static inline void uart_reset(void)
 static inline void uart_clr_rx_index(int uart_num)
 {
   uart_rxindex = 0;
+}
+
+/****************************************************************************
+ * Name: uart_clr_tx_index
+ *
+ * Description:
+ *   Clear the uart transimit software pointer, this function must be called
+ *   after wakeup from power-saving mode or reset uart.
+ *
+ * Parameters:
+ *   uart_num  - the uart hardware index
+ *
+ * Returned Values:
+ *   void
+ *
+ ****************************************************************************/
+
+static inline void uart_clr_tx_index(int uart_num)
+{
+  uart_txindex = 0;
+}
+
+/****************************************************************************
+ * Name: uart_reset
+ *
+ * Description:
+ *   Reset the uart hardware, the software pointer must be set to zero
+ *   (function uart_clr_rx_index() must be called).
+ *
+ * Parameters:
+ *   uart_num  - the uart hardware index
+ *
+ * Returned Values:
+ *   void
+ *
+ ****************************************************************************/
+
+static inline void uart_reset(int uart_num)
+{
+  RESET_RST0_REG |= RESET_RST0_UART;
+  RESET_RST0_REG &= ~RESET_RST0_UART;
+  uart_clr_rx_index(uart_num);
+  uart_clr_tx_index(uart_num);
 }
 
 /****************************************************************************
@@ -612,14 +635,29 @@ static inline uint8_t uart_read_byte(int uart_num)
 
 static inline void uart_send_byte(uint8_t byte)
 {
-  while (UART_GET_TX_BUF_CNT() > 7);
+  irqstate_t flags;
 
-  UART_BUF(uart_txindex) = byte;
+  for (; ; )
+    {
+      while (UART_GET_TX_BUF_CNT() > 7);
 
-  /* Cycle the four register 0x90 0x91 0x92 0x93 */
+      flags = enter_critical_section();
 
-  uart_txindex++;
-  uart_txindex &= 0x03;
+      if (UART_GET_TX_BUF_CNT() <= 7)
+        {
+          UART_BUF(uart_txindex) = byte;
+
+          /* Cycle the four register 0x90 0x91 0x92 0x93 */
+
+          uart_txindex++;
+          uart_txindex &= 0x03;
+
+          leave_critical_section(flags);
+          return;
+        }
+
+      leave_critical_section(flags);
+    }
 }
 
 /****************************************************************************
@@ -650,12 +688,12 @@ static void uart_dma_send(uart_priv_t *priv, char *buf, size_t len)
 
   if (len + DMA_HEAD_LEN > priv->txdmasize)
     {
-      DEBUGASSERT(false);
+      DEBUGPANIC();
       return;
     }
 
   /* Copy the driver buffer to dma buffer, this is necessary because
-   * the first 4 bytes of the buffer must be the transfered size, which
+   * the first 4 bytes of the buffer must be the transferred size, which
    * is telin dma peripheral required.
    * NOTE: the memcpy better be ramcode.
    */
@@ -984,7 +1022,7 @@ static int tlsr82_uart_setup(struct uart_dev_s *dev)
 
   /* Reset the uart */
 
-  uart_reset();
+  uart_reset(priv->port);
 
   /* Uart communication parameters config
    * TODO: unity below functions to uart_format_config()
@@ -1056,10 +1094,9 @@ static int UART_RAMCODE tlsr82_interrupt(int irq, void *context, void *arg)
 
       uart_irq_clr(priv->port, UART_IRQ_CLR_RX);
 
-      /* uart_reset() clear hardware pointer, and clear software pointer */
+      /* uart_reset() clear hardware and software fifo index */
 
-      uart_reset();
-      uart_clr_rx_index(priv->port);
+      uart_reset(priv->port);
     }
 
 #ifdef CONFIG_SERIAL_TXDMA
@@ -1512,7 +1549,6 @@ static void tlsr82_uart_dma_txavail(struct uart_dev_s *dev)
   /* Wait for the previous dma transfer finish */
 
   nxsem_wait(priv->txdmasem);
-
   uart_xmitchars_dma(dev);
 }
 #endif

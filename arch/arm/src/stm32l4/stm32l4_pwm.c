@@ -437,8 +437,8 @@ static struct stm32l4_pwmchan_s g_pwm1channels[] =
     .out1 =
     {
       .in_use  = 1,
-      .pol     = CONFIG_STM32L4L4_TIM1_CH4POL,
-      .idle    = CONFIG_STM32L4L4_TIM1_CH4IDLE,
+      .pol     = CONFIG_STM32L4_TIM1_CH4POL,
+      .idle    = CONFIG_STM32L4_TIM1_CH4IDLE,
       .pincfg  = PWM_TIM1_CH4CFG,
     }
 #endif
@@ -2665,7 +2665,7 @@ static int pwm_soft_break(struct pwm_lowerhalf_s *dev, bool state)
  ****************************************************************************/
 
 static uint16_t
-  pwm_outputs_from_channels(struct stm32l4_pwmtimer_s *priv)
+pwm_outputs_from_channels(struct stm32l4_pwmtimer_s *priv)
 {
   uint16_t outputs = 0;
   uint8_t  channel = 0;

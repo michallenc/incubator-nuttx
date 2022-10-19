@@ -85,7 +85,6 @@
 #include <nuttx/compiler.h>
 #include <nuttx/cache.h>
 #include <nuttx/sched.h>
-#include <nuttx/tls.h>
 
 /****************************************************************************
  * Pre-processor definitions
@@ -97,6 +96,7 @@
 
 typedef CODE void (*sig_deliver_t)(FAR struct tcb_s *tcb);
 typedef CODE void (*phy_enable_t)(bool enable);
+typedef CODE void (*initializer_t)(void);
 
 /****************************************************************************
  * Public Data
@@ -148,6 +148,15 @@ EXTERN volatile bool g_rtc_enabled;
 
 /* EXTERN const irq_mapped_t g_irqmap[NR_IRQS]; */
 
+#endif
+
+#ifdef CONFIG_HAVE_CXXINITIALIZE
+/* _sinit and _einit are symbols exported by the linker script that mark the
+ * beginning and the end of the C++ initialization section.
+ */
+
+extern initializer_t _sinit[];
+extern initializer_t _einit[];
 #endif
 
 /****************************************************************************
@@ -802,6 +811,18 @@ void up_textheap_free(FAR void *p);
 #endif
 
 /****************************************************************************
+ * Name: up_textheap_heapmember
+ *
+ * Description:
+ *   Test if memory is from text heap.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+bool up_textheap_heapmember(FAR void *p);
+#endif
+
+/****************************************************************************
  * Name: up_setpicbase and up_getpicbase
  *
  * Description:
@@ -1186,14 +1207,16 @@ int up_addrenv_detach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
 #endif
 
 /****************************************************************************
- * Name: up_addrenv_text_enable_write
+ * Name: up_addrenv_mprot
  *
  * Description:
- *   Temporarily enable write access to the .text section. This must be
- *   called prior to loading the process code into memory.
+ *   Modify access rights to an address range.
  *
  * Input Parameters:
  *   addrenv - The address environment to be modified.
+ *   addr - Base address of the region.
+ *   len - Size of the region.
+ *   prot - Access right flags.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
@@ -1201,26 +1224,8 @@ int up_addrenv_detach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_text_enable_write(FAR group_addrenv_t *addrenv);
-#endif
-
-/****************************************************************************
- * Name: up_addrenv_text_disable_write
- *
- * Description:
- *   Disable write access to the .text section. This must be called after the
- *   process code is loaded into memory.
- *
- * Input Parameters:
- *   addrenv - The address environment to be modified.
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_text_disable_write(FAR group_addrenv_t *addrenv);
+int up_addrenv_mprot(FAR group_addrenv_t *addrenv, uintptr_t addr,
+                     size_t len, int prot);
 #endif
 
 /****************************************************************************
@@ -1454,17 +1459,6 @@ int up_shmdt(uintptr_t vaddr, unsigned int npages);
 void up_irqinitialize(void);
 
 /****************************************************************************
- * Name: up_interrupt_context
- *
- * Description:
- *   Return true is we are currently executing in
- *   the interrupt handler context.
- *
- ****************************************************************************/
-
-bool up_interrupt_context(void);
-
-/****************************************************************************
  * Name: up_enable_irq
  *
  * Description:
@@ -1506,6 +1500,18 @@ void up_disable_irq(int irq);
 #endif
 
 /****************************************************************************
+ * Name: up_affinity_irq
+ *
+ * Description:
+ *   Set an IRQ affinity by software.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SMP
+void up_affinity_irq(int irq, cpu_set_t cpuset);
+#endif
+
+/****************************************************************************
  * Name: up_trigger_irq
  *
  * Description:
@@ -1514,7 +1520,7 @@ void up_disable_irq(int irq);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_HAVE_IRQTRIGGER
-void up_trigger_irq(int irq);
+void up_trigger_irq(int irq, cpu_set_t cpuset);
 #endif
 
 /****************************************************************************
@@ -1640,13 +1646,16 @@ void up_timer_initialize(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SCHED_TICKLESS)
+#if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_TICK_ARGUMENT)
 int up_timer_gettime(FAR struct timespec *ts);
 #endif
 
+#if defined(CONFIG_SCHED_TICKLESS_TICK_ARGUMENT) || defined(CONFIG_CLOCK_TIMEKEEPING)
+int up_timer_gettick(FAR clock_t *ticks);
+#endif
+
 #ifdef CONFIG_CLOCK_TIMEKEEPING
-int up_timer_getcounter(FAR uint64_t *cycles);
-void up_timer_getmask(FAR uint64_t *mask);
+void up_timer_getmask(FAR clock_t *mask);
 #endif
 
 /****************************************************************************
@@ -1684,7 +1693,11 @@ void up_timer_getmask(FAR uint64_t *mask);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_alarm_cancel(FAR struct timespec *ts);
+#  else
+int up_alarm_tick_cancel(FAR clock_t *ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1713,7 +1726,11 @@ int up_alarm_cancel(FAR struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_alarm_start(FAR const struct timespec *ts);
+#  else
+int up_alarm_tick_start(clock_t ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1753,7 +1770,11 @@ int up_alarm_start(FAR const struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_timer_cancel(FAR struct timespec *ts);
+#  else
+int up_timer_tick_cancel(FAR clock_t *ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1782,7 +1803,11 @@ int up_timer_cancel(FAR struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_timer_start(FAR const struct timespec *ts);
+#  else
+int up_timer_tick_start(clock_t ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1841,14 +1866,6 @@ int up_timer_start(FAR const struct timespec *ts);
  * implementation provided here assume the arch has a "push down" stack.
  */
 
-#ifndef up_tls_info
-#  if defined(CONFIG_TLS_ALIGNED) && !defined(__KERNEL__)
-#    define up_tls_info() TLS_INFO((uintptr_t)up_getsp())
-#  else
-#    define up_tls_info() tls_get_info()
-#  endif
-#endif
-
 /****************************************************************************
  * Name: up_tls_size
  *
@@ -1862,8 +1879,6 @@ int up_timer_start(FAR const struct timespec *ts);
 
 #ifdef CONFIG_SCHED_THREAD_LOCAL
 int up_tls_size(void);
-#else
-#define up_tls_size() sizeof(struct tls_info_s)
 #endif
 
 /****************************************************************************
@@ -1878,6 +1893,7 @@ int up_tls_size(void);
  ****************************************************************************/
 
 #ifdef CONFIG_SCHED_THREAD_LOCAL
+struct tls_info_s;
 void up_tls_initialize(FAR struct tls_info_s *info);
 #else
 #define up_tls_initialize(x)
@@ -1953,28 +1969,6 @@ int8_t up_fetchadd8(FAR volatile int8_t *addr, int8_t value);
 int32_t up_fetchsub32(FAR volatile int32_t *addr, int32_t value);
 int16_t up_fetchsub16(FAR volatile int16_t *addr, int16_t value);
 int8_t up_fetchsub8(FAR volatile int8_t *addr, int8_t value);
-#endif
-
-/****************************************************************************
- * Name: up_cpu_index
- *
- * Description:
- *   Return an index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
- *   corresponds to the currently executing CPU.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   An integer index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
- *   corresponds to the currently executing CPU.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SMP
-int up_cpu_index(void);
-#else
-#  define up_cpu_index() (0)
 #endif
 
 /****************************************************************************
@@ -2276,31 +2270,7 @@ void nxsched_timer_expiration(void);
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
 void nxsched_alarm_expiration(FAR const struct timespec *ts);
-#endif
-
-/****************************************************************************
- * Name: nxsched_process_cpuload
- *
- * Description:
- *   Collect data that can be used for CPU load measurements.  When
- *   CONFIG_SCHED_CPULOAD_EXTCLK is defined, this is an exported interface,
- *   use the the external clock logic.  Otherwise, it is an OS internal
- *   interface.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- * Assumptions/Limitations:
- *   This function is called from a timer interrupt handler with all
- *   interrupts disabled.
- *
- ****************************************************************************/
-
-#if defined(CONFIG_SCHED_CPULOAD) && defined(CONFIG_SCHED_CPULOAD_EXTCLK)
-void weak_function nxsched_process_cpuload(void);
+void nxsched_alarm_tick_expiration(clock_t ticks);
 #endif
 
 /****************************************************************************
@@ -2325,7 +2295,8 @@ void weak_function nxsched_process_cpuload(void);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_CPULOAD) && defined(CONFIG_SCHED_CPULOAD_EXTCLK)
-void weak_function nxsched_process_cpuload_ticks(uint32_t ticks);
+void nxsched_process_cpuload_ticks(uint32_t ticks);
+#  define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
 #endif
 
 /****************************************************************************
@@ -2600,7 +2571,8 @@ int up_putc(int ch);
  *
  ****************************************************************************/
 
-void up_puts(FAR const char *str);
+#define up_puts(str) up_nputs(str, ~((size_t)0))
+void up_nputs(FAR const char *str, size_t len);
 
 /****************************************************************************
  * Name: arch_sporadic_*
@@ -2664,7 +2636,14 @@ int up_saveusercontext(FAR void *saveregs);
  * Name: up_fpucmp
  *
  * Description:
- *   compare FPU areas from thread context
+ *   Compare FPU areas from thread context.
+ *
+ * Input Parameters:
+ *   saveregs1 - Pointer to the saved FPU registers.
+ *   saveregs2 - Pointer to the saved FPU registers.
+ *
+ * Returned Value:
+ *   True if FPU areas compare equal, False otherwise.
  *
  ****************************************************************************/
 

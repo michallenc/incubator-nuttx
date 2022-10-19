@@ -34,18 +34,32 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#ifndef NULL
-#  define NULL ((FAR void *)0)
-#endif
+#define ROUNDUP(x, y)     (((x) + (y) - 1) / (y) * (y))
+
+/* Fix the I/O Buffer size with specified alignment size */
+
+#define IOB_ALIGN_SIZE    ROUNDUP(sizeof(struct iob_s), CONFIG_IOB_ALIGNMENT)
+#define IOB_BUFFER_SIZE   (IOB_ALIGN_SIZE * CONFIG_IOB_NBUFFERS + \
+                           CONFIG_IOB_ALIGNMENT - 1)
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-/* This is a pool of pre-allocated I/O buffers */
+/* Following raw buffer will be divided into iob_s instances, the initial
+ * procedure will ensure that the member io_head of each iob_s is aligned
+ * to the CONFIG_IOB_ALIGNMENT memory boundary.
+ */
 
-static struct iob_s        g_iob_pool[CONFIG_IOB_NBUFFERS];
+#ifdef IOB_SECTION
+static uint8_t g_iob_buffer[IOB_BUFFER_SIZE] locate_data(IOB_SECTION);
+#else
+static uint8_t g_iob_buffer[IOB_BUFFER_SIZE];
+#endif
+
 #if CONFIG_IOB_NCHAINS > 0
+/* This is a pool of pre-allocated iob_qentry_s buffers */
+
 static struct iob_qentry_s g_iob_qpool[CONFIG_IOB_NCHAINS];
 #endif
 
@@ -73,19 +87,22 @@ FAR struct iob_qentry_s *g_iob_qcommitted;
 
 /* Counting semaphores that tracks the number of free IOBs/qentries */
 
-sem_t g_iob_sem = SEM_INITIALIZER(CONFIG_IOB_NBUFFERS);
+sem_t g_iob_sem = NXSEM_INITIALIZER(CONFIG_IOB_NBUFFERS,
+                                    PRIOINHERIT_FLAGS_DISABLE);
 
 #if CONFIG_IOB_THROTTLE > 0
 /* Counts available I/O buffers when throttled */
 
-sem_t g_throttle_sem = SEM_INITIALIZER(CONFIG_IOB_NBUFFERS -
-                                       CONFIG_IOB_THROTTLE);
+sem_t g_throttle_sem = NXSEM_INITIALIZER(CONFIG_IOB_NBUFFERS -
+                                        CONFIG_IOB_THROTTLE,
+                                        PRIOINHERIT_FLAGS_DISABLE);
 #endif
 
 #if CONFIG_IOB_NCHAINS > 0
 /* Counts free I/O buffer queue containers */
 
-sem_t g_qentry_sem = SEM_INITIALIZER(CONFIG_IOB_NCHAINS);
+sem_t g_qentry_sem = NXSEM_INITIALIZER(CONFIG_IOB_NCHAINS,
+                                       PRIOINHERIT_FLAGS_DISABLE);
 #endif
 
 /****************************************************************************
@@ -103,12 +120,22 @@ sem_t g_qentry_sem = SEM_INITIALIZER(CONFIG_IOB_NCHAINS);
 void iob_initialize(void)
 {
   int i;
+  uintptr_t buf;
 
-  /* Add each I/O buffer to the free list */
+  /* Get a start address which plus offsetof(struct iob_s, io_head) is
+   * aligned to the CONFIG_IOB_ALIGNMENT memory boundary
+   */
+
+  buf = ROUNDUP((uintptr_t)g_iob_buffer + offsetof(struct iob_s, io_head),
+                CONFIG_IOB_ALIGNMENT) - offsetof(struct iob_s, io_head);
+
+  /* Get I/O buffer instance from the start address and add each I/O buffer
+   * to the free list
+   */
 
   for (i = 0; i < CONFIG_IOB_NBUFFERS; i++)
     {
-      FAR struct iob_s *iob = &g_iob_pool[i];
+      FAR struct iob_s *iob = (FAR struct iob_s *)(buf + i * IOB_ALIGN_SIZE);
 
       /* Add the pre-allocate I/O buffer to the head of the free list */
 

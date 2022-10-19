@@ -97,8 +97,7 @@ static inline void sendto_ipselect(FAR struct net_driver_s *dev,
 #endif
 static int sendto_next_transfer(FAR struct udp_conn_s *conn);
 static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
-                                    FAR void *pvconn, FAR void *pvpriv,
-                                    uint16_t flags);
+                                    FAR void *pvpriv, uint16_t flags);
 
 /****************************************************************************
  * Private Functions
@@ -352,10 +351,9 @@ static int sendto_next_transfer(FAR struct udp_conn_s *conn)
  ****************************************************************************/
 
 static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
-                                    FAR void *pvconn, FAR void *pvpriv,
-                                    uint16_t flags)
+                                    FAR void *pvpriv, uint16_t flags)
 {
-  FAR struct udp_conn_s *conn = (FAR struct udp_conn_s *)pvpriv;
+  FAR struct udp_conn_s *conn = pvpriv;
 
   DEBUGASSERT(dev != NULL && conn != NULL);
 
@@ -501,6 +499,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 {
   FAR struct udp_wrbuffer_s *wrb;
   FAR struct udp_conn_s *conn;
+  unsigned int timeout;
   bool nonblock;
   bool empty;
   int ret = OK;
@@ -628,6 +627,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 
   nonblock = _SS_ISNONBLOCK(conn->sconn.s_flags) ||
                             (flags & MSG_DONTWAIT) != 0;
+  timeout  = _SO_TIMEOUT(conn->sconn.s_sndtimeo);
 
   /* Dump the incoming buffer */
 
@@ -650,7 +650,16 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
               goto errout_with_lock;
             }
 
-          net_lockedwait_uninterruptible(&conn->sndsem);
+          ret = net_timedwait_uninterruptible(&conn->sndsem, timeout);
+          if (ret < 0)
+            {
+              if (ret == -ETIMEDOUT)
+                {
+                  ret = -EAGAIN;
+                }
+
+              goto errout_with_lock;
+            }
         }
 #endif /* CONFIG_NET_SEND_BUFSIZE */
 
@@ -664,7 +673,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
         }
       else
         {
-          wrb = udp_wrbuffer_alloc();
+          wrb = udp_wrbuffer_timedalloc(timeout);
         }
 
       if (wrb == NULL)
@@ -672,7 +681,16 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
           /* A buffer allocation error occurred */
 
           nerr("ERROR: Failed to allocate write buffer\n");
-          ret = nonblock ? -EAGAIN : -ENOMEM;
+
+          if (nonblock || timeout != UINT_MAX)
+            {
+              ret = -EAGAIN;
+            }
+          else
+            {
+              ret = -ENOMEM;
+            }
+
           goto errout_with_lock;
         }
 
@@ -729,8 +747,8 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
 
       if (nonblock)
         {
-          ret = iob_trycopyin(wrb->wb_iob, (FAR uint8_t *)buf, len, 0, false,
-                              IOBUSER_NET_SOCK_UDP);
+          ret = iob_trycopyin(wrb->wb_iob, (FAR uint8_t *)buf,
+                              len, 0, false);
         }
       else
         {
@@ -743,8 +761,7 @@ ssize_t psock_udp_sendto(FAR struct socket *psock, FAR const void *buf,
            */
 
           blresult = net_breaklock(&count);
-          ret = iob_copyin(wrb->wb_iob, (FAR uint8_t *)buf, len, 0, false,
-                           IOBUSER_NET_SOCK_UDP);
+          ret = iob_copyin(wrb->wb_iob, (FAR uint8_t *)buf, len, 0, false);
           if (blresult >= 0)
             {
               net_restorelock(count);

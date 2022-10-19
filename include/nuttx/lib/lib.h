@@ -41,7 +41,7 @@
  * then only the first mode is supported.
  */
 
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__)
+#if defined(__KERNEL__)
 
   /* Domain-specific allocations */
 
@@ -112,13 +112,13 @@ void lib_stream_release(FAR struct task_group_s *group);
 /* Functions defined in lib_filesem.c ***************************************/
 
 #ifdef CONFIG_STDIO_DISABLE_BUFFERING
-#  define lib_sem_initialize(s)
-#  define lib_take_semaphore(s)
-#  define lib_give_semaphore(s)
+#  define lib_lock_init(s)
+#  define lib_take_lock(s)
+#  define lib_give_lock(s)
 #else
-void lib_sem_initialize(FAR struct file_struct *stream);
-void lib_take_semaphore(FAR struct file_struct *stream);
-void lib_give_semaphore(FAR struct file_struct *stream);
+void lib_lock_init(FAR struct file_struct *stream);
+void lib_take_lock(FAR struct file_struct *stream);
+void lib_give_lock(FAR struct file_struct *stream);
 #endif
 
 /* Functions defined in lib_srand.c *****************************************/

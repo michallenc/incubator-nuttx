@@ -29,14 +29,12 @@
 #include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
-#include <dirent.h>
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
-#include <nuttx/fs/dirent.h>
 #include <nuttx/fs/ioctl.h>
 
 #include "fs_tmpfs.h"
@@ -55,14 +53,33 @@
 #  warning CONFIG_FS_TMPFS_FILE_FREEGUARD needs to be > ALLOCGUARD
 #endif
 
+#define tmpfs_lock(fs) \
+           nxrmutex_lock(&fs->tfs_lock)
+#define tmpfs_lock_object(to) \
+           nxrmutex_lock(&to->to_lock)
 #define tmpfs_lock_file(tfo) \
-           (tmpfs_lock_object((FAR struct tmpfs_object_s *)tfo))
+           nxrmutex_lock(&tfo->tfo_lock)
 #define tmpfs_lock_directory(tdo) \
-           (tmpfs_lock_object((FAR struct tmpfs_object_s *)tdo))
+           nxrmutex_lock(&tdo->tdo_lock)
+#define tmpfs_unlock(fs) \
+           nxrmutex_unlock(&fs->tfs_lock)
+#define tmpfs_unlock_object(to) \
+           nxrmutex_unlock(&to->to_lock)
 #define tmpfs_unlock_file(tfo) \
-           (tmpfs_unlock_object((FAR struct tmpfs_object_s *)tfo))
+           nxrmutex_unlock(&tfo->tfo_lock)
 #define tmpfs_unlock_directory(tdo) \
-           (tmpfs_unlock_object((FAR struct tmpfs_object_s *)tdo))
+           nxrmutex_unlock(&tdo->tdo_lock)
+
+/****************************************************************************
+ * Private Type
+ ****************************************************************************/
+
+struct tmpfs_dir_s
+{
+  struct fs_dirent_s tf_base;           /* Vfs directory structure */
+  FAR struct tmpfs_directory_s *tf_tdo; /* Directory being enumerated */
+  unsigned int tf_index;                /* Directory index */
+};
 
 /****************************************************************************
  * Private Function Prototypes
@@ -70,12 +87,6 @@
 
 /* TMPFS helpers */
 
-static int  tmpfs_lock_reentrant(FAR struct tmpfs_sem_s *sem);
-static int  tmpfs_lock(FAR struct tmpfs_s *fs);
-static void tmpfs_unlock_reentrant(FAR struct tmpfs_sem_s *sem);
-static void tmpfs_unlock(FAR struct tmpfs_s *fs);
-static int  tmpfs_lock_object(FAR struct tmpfs_object_s *to);
-static void tmpfs_unlock_object(FAR struct tmpfs_object_s *to);
 static int  tmpfs_realloc_directory(FAR struct tmpfs_directory_s *tdo,
               unsigned int nentries);
 static int  tmpfs_realloc_file(FAR struct tmpfs_file_s *tfo,
@@ -130,11 +141,12 @@ static int  tmpfs_fstat(FAR const struct file *filep, FAR struct stat *buf);
 static int  tmpfs_truncate(FAR struct file *filep, off_t length);
 
 static int  tmpfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
-              FAR struct fs_dirent_s *dir);
+              FAR struct fs_dirent_s **dir);
 static int  tmpfs_closedir(FAR struct inode *mountpt,
               FAR struct fs_dirent_s *dir);
 static int  tmpfs_readdir(FAR struct inode *mountpt,
-              FAR struct fs_dirent_s *dir);
+              FAR struct fs_dirent_s *dir,
+              FAR struct dirent *entry);
 static int  tmpfs_rewinddir(FAR struct inode *mountpt,
               FAR struct fs_dirent_s *dir);
 static int  tmpfs_bind(FAR struct inode *blkdriver, FAR const void *data,
@@ -192,106 +204,6 @@ const struct mountpt_operations tmpfs_operations =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: tmpfs_lock_reentrant
- ****************************************************************************/
-
-static int tmpfs_lock_reentrant(FAR struct tmpfs_sem_s *sem)
-{
-  pid_t me;
-  int ret = OK;
-
-  /* Do we already hold the semaphore? */
-
-  me = getpid();
-  if (me == sem->ts_holder)
-    {
-      /* Yes... just increment the count */
-
-      sem->ts_count++;
-      DEBUGASSERT(sem->ts_count > 0);
-    }
-
-  /* Take the semaphore (perhaps waiting) */
-
-  else
-    {
-      ret = nxsem_wait_uninterruptible(&sem->ts_sem);
-      if (ret >= 0)
-        {
-          /* No we hold the semaphore */
-
-          sem->ts_holder = me;
-          sem->ts_count  = 1;
-        }
-    }
-
-  return ret;
-}
-
-/****************************************************************************
- * Name: tmpfs_lock
- ****************************************************************************/
-
-static int tmpfs_lock(FAR struct tmpfs_s *fs)
-{
-  return tmpfs_lock_reentrant(&fs->tfs_exclsem);
-}
-
-/****************************************************************************
- * Name: tmpfs_lock_object
- ****************************************************************************/
-
-static int tmpfs_lock_object(FAR struct tmpfs_object_s *to)
-{
-  return tmpfs_lock_reentrant(&to->to_exclsem);
-}
-
-/****************************************************************************
- * Name: tmpfs_unlock_reentrant
- ****************************************************************************/
-
-static void tmpfs_unlock_reentrant(FAR struct tmpfs_sem_s *sem)
-{
-  DEBUGASSERT(sem->ts_holder == getpid());
-
-  /* Is this our last count on the semaphore? */
-
-  if (sem->ts_count > 1)
-    {
-      /* No.. just decrement the count */
-
-      sem->ts_count--;
-    }
-
-  /* Yes.. then we can really release the semaphore */
-
-  else
-    {
-      sem->ts_holder = TMPFS_NO_HOLDER;
-      sem->ts_count  = 0;
-      nxsem_post(&sem->ts_sem);
-    }
-}
-
-/****************************************************************************
- * Name: tmpfs_unlock
- ****************************************************************************/
-
-static void tmpfs_unlock(FAR struct tmpfs_s *fs)
-{
-  tmpfs_unlock_reentrant(&fs->tfs_exclsem);
-}
-
-/****************************************************************************
- * Name: tmpfs_unlock_object
- ****************************************************************************/
-
-static void tmpfs_unlock_object(FAR struct tmpfs_object_s *to)
-{
-  tmpfs_unlock_reentrant(&to->to_exclsem);
-}
 
 /****************************************************************************
  * Name: tmpfs_realloc_directory
@@ -435,7 +347,7 @@ static void tmpfs_release_lockedfile(FAR struct tmpfs_file_s *tfo)
 
   if (tfo->tfo_refs == 1 && (tfo->tfo_flags & TFO_FLAG_UNLINKED) != 0)
     {
-      nxsem_destroy(&tfo->tfo_exclsem.ts_sem);
+      nxrmutex_destroy(&tfo->tfo_lock);
       kmm_free(tfo->tfo_data);
       kmm_free(tfo);
     }
@@ -612,9 +524,8 @@ static FAR struct tmpfs_file_s *tmpfs_alloc_file(void)
   tfo->tfo_size  = 0;
   tfo->tfo_data  = NULL;
 
-  tfo->tfo_exclsem.ts_holder = getpid();
-  tfo->tfo_exclsem.ts_count  = 1;
-  nxsem_init(&tfo->tfo_exclsem.ts_sem, 0, 0);
+  nxrmutex_init(&tfo->tfo_lock);
+  tmpfs_lock_file(tfo);
 
   return tfo;
 }
@@ -727,7 +638,7 @@ static int tmpfs_create_file(FAR struct tmpfs_s *fs,
   /* Error exits */
 
 errout_with_file:
-  nxsem_destroy(&newtfo->tfo_exclsem.ts_sem);
+  nxrmutex_destroy(&newtfo->tfo_lock);
   kmm_free(newtfo);
 
 errout_with_parent:
@@ -760,9 +671,7 @@ static FAR struct tmpfs_directory_s *tmpfs_alloc_directory(void)
   tdo->tdo_nentries = 0;
   tdo->tdo_entry    = NULL;
 
-  tdo->tdo_exclsem.ts_holder = TMPFS_NO_HOLDER;
-  tdo->tdo_exclsem.ts_count  = 0;
-  nxsem_init(&tdo->tdo_exclsem.ts_sem, 0, 1);
+  nxrmutex_init(&tdo->tdo_lock);
 
   return tdo;
 }
@@ -880,7 +789,7 @@ static int tmpfs_create_directory(FAR struct tmpfs_s *fs,
   /* Error exits */
 
 errout_with_directory:
-  nxsem_destroy(&newtdo->tdo_exclsem.ts_sem);
+  nxrmutex_destroy(&newtdo->tdo_lock);
   kmm_free(newtdo);
 
 errout_with_parent:
@@ -1251,7 +1160,7 @@ static int tmpfs_free_callout(FAR struct tmpfs_directory_s *tdo,
 
   /* Free the object now */
 
-  nxsem_destroy(&to->to_exclsem.ts_sem);
+  nxrmutex_destroy(&to->to_lock);
   kmm_free(to);
   return TMPFS_DELETED;
 }
@@ -1587,8 +1496,15 @@ static ssize_t tmpfs_read(FAR struct file *filep, FAR char *buffer,
 
   /* Copy data from the memory object to the user buffer */
 
-  memcpy(buffer, &tfo->tfo_data[startpos], nread);
-  filep->f_pos += nread;
+  if (tfo->tfo_data != NULL)
+    {
+      memcpy(buffer, &tfo->tfo_data[startpos], nread);
+      filep->f_pos += nread;
+    }
+  else
+    {
+      DEBUGASSERT(tfo->tfo_size == 0 && nread == 0);
+    }
 
   /* Release the lock on the file */
 
@@ -1644,8 +1560,15 @@ static ssize_t tmpfs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Copy data from the memory object to the user buffer */
 
-  memcpy(&tfo->tfo_data[startpos], buffer, nwritten);
-  filep->f_pos += nwritten;
+  if (tfo->tfo_data != NULL)
+    {
+      memcpy(&tfo->tfo_data[startpos], buffer, nwritten);
+      filep->f_pos += nwritten;
+    }
+  else
+    {
+      DEBUGASSERT(tfo->tfo_size == 0 && nwritten == 0);
+    }
 
   /* Release the lock on the file */
 
@@ -1902,9 +1825,10 @@ errout_with_lock:
  ****************************************************************************/
 
 static int tmpfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
-                         FAR struct fs_dirent_s *dir)
+                         FAR struct fs_dirent_s **dir)
 {
   FAR struct tmpfs_s *fs;
+  FAR struct tmpfs_dir_s *tdir;
   FAR struct tmpfs_directory_s *tdo;
   int ret;
 
@@ -1917,11 +1841,18 @@ static int tmpfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
   fs = mountpt->i_private;
   DEBUGASSERT(fs != NULL && fs->tfs_root.tde_object != NULL);
 
+  tdir = kmm_zalloc(sizeof(*tdir));
+  if (tdir == NULL)
+    {
+      return -ENOMEM;
+    }
+
   /* Get exclusive access to the file system */
 
   ret = tmpfs_lock(fs);
   if (ret < 0)
     {
+      kmm_free(tdir);
       return ret;
     }
 
@@ -1939,8 +1870,8 @@ static int tmpfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
   ret = tmpfs_find_directory(fs, relpath, strlen(relpath), &tdo, NULL);
   if (ret >= 0)
     {
-      dir->u.tmpfs.tf_tdo   = tdo;
-      dir->u.tmpfs.tf_index = tdo->tdo_nentries;
+      tdir->tf_tdo   = tdo;
+      tdir->tf_index = tdo->tdo_nentries;
 
       tmpfs_unlock_directory(tdo);
     }
@@ -1948,6 +1879,7 @@ static int tmpfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
   /* Release the lock on the file system and return the result */
 
   tmpfs_unlock(fs);
+  *dir = &tdir->tf_base;
   return ret;
 }
 
@@ -1965,7 +1897,7 @@ static int tmpfs_closedir(FAR struct inode *mountpt,
 
   /* Get the directory structure from the dir argument */
 
-  tdo = dir->u.tmpfs.tf_tdo;
+  tdo = ((FAR struct tmpfs_dir_s *)dir)->tf_tdo;
   DEBUGASSERT(tdo != NULL);
 
   /* Decrement the reference count on the directory object */
@@ -1973,6 +1905,7 @@ static int tmpfs_closedir(FAR struct inode *mountpt,
   tmpfs_lock_directory(tdo);
   tdo->tdo_refs--;
   tmpfs_unlock_directory(tdo);
+  kmm_free(dir);
   return OK;
 }
 
@@ -1981,9 +1914,11 @@ static int tmpfs_closedir(FAR struct inode *mountpt,
  ****************************************************************************/
 
 static int tmpfs_readdir(FAR struct inode *mountpt,
-                         FAR struct fs_dirent_s *dir)
+                         FAR struct fs_dirent_s *dir,
+                         FAR struct dirent *entry)
 {
   FAR struct tmpfs_directory_s *tdo;
+  FAR struct tmpfs_dir_s *tdir;
   unsigned int index;
   int ret;
 
@@ -1992,14 +1927,15 @@ static int tmpfs_readdir(FAR struct inode *mountpt,
 
   /* Get the directory structure from the dir argument and lock it */
 
-  tdo = dir->u.tmpfs.tf_tdo;
+  tdir = (FAR struct tmpfs_dir_s *)dir;
+  tdo = tdir->tf_tdo;
   DEBUGASSERT(tdo != NULL);
 
   tmpfs_lock_directory(tdo);
 
   /* Have we reached the end of the directory? */
 
-  index = dir->u.tmpfs.tf_index;
+  index = tdir->tf_index;
   if (index-- == 0)
     {
       /* We signal the end of the directory by returning the special error:
@@ -2024,22 +1960,22 @@ static int tmpfs_readdir(FAR struct inode *mountpt,
         {
           /* A directory */
 
-           dir->fd_dir.d_type = DTYPE_DIRECTORY;
+           entry->d_type = DTYPE_DIRECTORY;
         }
       else /* to->to_type == TMPFS_REGULAR) */
         {
           /* A regular file */
 
-           dir->fd_dir.d_type = DTYPE_FILE;
+           entry->d_type = DTYPE_FILE;
         }
 
       /* Copy the entry name */
 
-      strlcpy(dir->fd_dir.d_name, tde->tde_name, sizeof(dir->fd_dir.d_name));
+      strlcpy(entry->d_name, tde->tde_name, sizeof(entry->d_name));
 
       /* Save the index for next time */
 
-      dir->u.tmpfs.tf_index = index;
+      tdir->tf_index = index;
       ret = OK;
     }
 
@@ -2055,18 +1991,20 @@ static int tmpfs_rewinddir(FAR struct inode *mountpt,
                            FAR struct fs_dirent_s *dir)
 {
   FAR struct tmpfs_directory_s *tdo;
+  FAR struct tmpfs_dir_s *tdir;
 
   finfo("mountpt: %p dir: %p\n",  mountpt, dir);
   DEBUGASSERT(mountpt != NULL && dir != NULL);
 
   /* Get the directory structure from the dir argument and lock it */
 
-  tdo = dir->u.tmpfs.tf_tdo;
+  tdir = (FAR struct tmpfs_dir_s *)dir;
+  tdo = tdir->tf_tdo;
   DEBUGASSERT(tdo != NULL);
 
   /* Set the readdir index pass the end */
 
-  dir->u.tmpfs.tf_index = tdo->tdo_nentries;
+  tdir->tf_index = tdo->tdo_nentries;
   return OK;
 }
 
@@ -2107,9 +2045,7 @@ static int tmpfs_bind(FAR struct inode *blkdriver, FAR const void *data,
 
   /* Initialize the file system state */
 
-  fs->tfs_exclsem.ts_holder = TMPFS_NO_HOLDER;
-  fs->tfs_exclsem.ts_count  = 0;
-  nxsem_init(&fs->tfs_exclsem.ts_sem, 0, 1);
+  nxrmutex_init(&fs->tfs_lock);
 
   /* Return the new file system handle */
 
@@ -2147,11 +2083,11 @@ static int tmpfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   /* Now we can destroy the root file system and the file system itself. */
 
-  nxsem_destroy(&tdo->tdo_exclsem.ts_sem);
+  nxrmutex_destroy(&tdo->tdo_lock);
   kmm_free(tdo->tdo_entry);
   kmm_free(tdo);
 
-  nxsem_destroy(&fs->tfs_exclsem.ts_sem);
+  nxrmutex_destroy(&fs->tfs_lock);
   kmm_free(fs);
   return ret;
 }
@@ -2314,7 +2250,7 @@ static int tmpfs_unlink(FAR struct inode *mountpt, FAR const char *relpath)
 
   else
     {
-      nxsem_destroy(&tfo->tfo_exclsem.ts_sem);
+      nxrmutex_destroy(&tfo->tfo_lock);
       kmm_free(tfo->tfo_data);
       kmm_free(tfo);
     }
@@ -2456,7 +2392,7 @@ static int tmpfs_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
 
   /* Free the directory object */
 
-  nxsem_destroy(&tdo->tdo_exclsem.ts_sem);
+  nxrmutex_destroy(&tdo->tdo_lock);
   kmm_free(tdo->tdo_entry);
   kmm_free(tdo);
 

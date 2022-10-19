@@ -27,7 +27,6 @@ include builtin/Make.defs
 include ctype/Make.defs
 include dirent/Make.defs
 include dlfcn/Make.defs
-include endian/Make.defs
 include errno/Make.defs
 include eventfd/Make.defs
 include fixedmath/Make.defs
@@ -144,8 +143,8 @@ endif
 # C library for the kernel phase of the two-pass kernel build
 
 ifneq ($(BIN),$(KBIN))
-$(KBIN):
-	$(Q) $(MAKE) $(KBIN) BIN=$(KBIN) BINDIR=kbin EXTRAFLAGS="$(EXTRAFLAGS)"
+$(KBIN): $(OBJS)
+	$(Q) $(MAKE) $(KBIN) BIN=$(KBIN) EXTRAFLAGS="$(EXTRAFLAGS)"
 endif
 
 # Context

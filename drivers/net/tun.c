@@ -59,7 +59,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#include <nuttx/wdog.h>
+#include <nuttx/mutex.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/net/arp.h>
 #include <nuttx/net/netdev.h>
@@ -105,12 +105,6 @@
 
 #define NET_TUN_PKTSIZE ((CONFIG_NET_TUN_PKTSIZE + CONFIG_NET_GUARDSIZE + 1) & ~1)
 
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define TUN_WDDELAY  (1 * CLK_TCK)
-
 /* This is a helper pointer for accessing the contents of the Ethernet
  * header.
  */
@@ -137,10 +131,9 @@ struct tun_device_s
   bool              bifup;     /* true:ifup false:ifdown */
   bool              read_wait;
   bool              write_wait;
-  struct wdog_s     txpoll;    /* TX poll timer */
   struct work_s     work;      /* For deferring poll work to the work queue */
   FAR struct pollfd *poll_fds;
-  sem_t             waitsem;
+  mutex_t           lock;
   sem_t             read_wait_sem;
   sem_t             write_wait_sem;
   size_t            read_d_len;
@@ -161,15 +154,12 @@ struct tun_device_s
 struct tun_driver_s
 {
   uint8_t free_tuns;
-  sem_t waitsem;
+  mutex_t lock;
 };
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
-
-static int  tun_lock(FAR struct tun_device_s *priv);
-static void tun_unlock(FAR struct tun_device_s *priv);
 
 /* Common TX logic */
 
@@ -189,11 +179,6 @@ static void tun_net_receive_tap(FAR struct tun_device_s *priv);
 static void tun_net_receive_tun(FAR struct tun_device_s *priv);
 
 static void tun_txdone(FAR struct tun_device_s *priv);
-
-/* Watchdog timer expirations */
-
-static void tun_poll_work(FAR void *arg);
-static void tun_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -247,42 +232,6 @@ static const struct file_operations g_tun_file_ops =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: tundev_lock
- ****************************************************************************/
-
-static int tundev_lock(FAR struct tun_driver_s *tun)
-{
-  return nxsem_wait_uninterruptible(&tun->waitsem);
-}
-
-/****************************************************************************
- * Name: tundev_unlock
- ****************************************************************************/
-
-static void tundev_unlock(FAR struct tun_driver_s *tun)
-{
-  nxsem_post(&tun->waitsem);
-}
-
-/****************************************************************************
- * Name: tun_lock
- ****************************************************************************/
-
-static int tun_lock(FAR struct tun_device_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
-
-/****************************************************************************
- * Name: tun_unlock
- ****************************************************************************/
-
-static void tun_unlock(FAR struct tun_device_s *priv)
-{
-  nxsem_post(&priv->waitsem);
-}
-
-/****************************************************************************
  * Name: tun_pollnotify
  ****************************************************************************/
 
@@ -308,13 +257,7 @@ static void tun_pollnotify(FAR struct tun_device_s *priv,
       return;
     }
 
-  eventset &= fds->events;
-
-  if (eventset != 0)
-    {
-      fds->revents |= eventset;
-      nxsem_post(fds->sem);
-    }
+  poll_notify(&fds, 1, eventset);
 }
 
 /****************************************************************************
@@ -760,89 +703,6 @@ static void tun_txdone(FAR struct tun_device_s *priv)
 }
 
 /****************************************************************************
- * Name: tun_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Ethernet interrupts are disabled
- *
- ****************************************************************************/
-
-static void tun_poll_work(FAR void *arg)
-{
-  FAR struct tun_device_s *priv = (FAR struct tun_device_s *)arg;
-  int ret;
-
-  /* Perform the poll */
-
-  ret = tun_lock(priv);
-  if (ret < 0)
-    {
-      /* This would indicate that the worker thread was canceled.. not a
-       * likely event.
-       */
-
-      DEBUGASSERT(ret == -ECANCELED);
-      return;
-    }
-
-  net_lock();
-
-  /* Check if there is room in the send another TX packet.  We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   */
-
-  if (priv->read_d_len == 0)
-    {
-      /* If so, poll the network for new XMIT data. */
-
-      priv->dev.d_buf = priv->read_buf;
-      devif_timer(&priv->dev, TUN_WDDELAY, tun_txpoll);
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->txpoll, TUN_WDDELAY, tun_poll_expiry, (wdparm_t)priv);
-
-  net_unlock();
-  tun_unlock(priv);
-}
-
-/****************************************************************************
- * Name: tun_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void tun_poll_expiry(wdparm_t arg)
-{
-  FAR struct tun_device_s *priv = (FAR struct tun_device_s *)arg;
-
-  /* Schedule to perform the timer expiration on the worker thread. */
-
-  work_queue(TUNWORK, &priv->work, tun_poll_work, priv, 0);
-}
-
-/****************************************************************************
  * Name: tun_ifup
  *
  * Description:
@@ -877,10 +737,6 @@ static int tun_ifup(FAR struct net_driver_s *dev)
         dev->d_ipv6addr[6], dev->d_ipv6addr[7]);
 #endif
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, TUN_WDDELAY, tun_poll_expiry, (wdparm_t)priv);
-
   priv->bifup = true;
   netdev_carrier_on(dev);
   return OK;
@@ -910,10 +766,6 @@ static int tun_ifdown(FAR struct net_driver_s *dev)
   netdev_carrier_off(dev);
 
   flags = enter_critical_section();
-
-  /* Cancel the TX poll timer */
-
-  wd_cancel(&priv->txpoll);
 
   /* Mark the device "down" */
 
@@ -947,7 +799,7 @@ static void tun_txavail_work(FAR void *arg)
   FAR struct tun_device_s *priv = (FAR struct tun_device_s *)arg;
   int ret;
 
-  ret = tun_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       /* Thread has been canceled, skip poll-related work */
@@ -959,7 +811,7 @@ static void tun_txavail_work(FAR void *arg)
 
   if (priv->read_d_len != 0)
     {
-      tun_unlock(priv);
+      nxmutex_unlock(&priv->lock);
       return;
     }
 
@@ -969,11 +821,11 @@ static void tun_txavail_work(FAR void *arg)
       /* Poll the network for new XMIT data */
 
       priv->dev.d_buf = priv->read_buf;
-      devif_timer(&priv->dev, 0, tun_txpoll);
+      devif_poll(&priv->dev, tun_txpoll);
     }
 
   net_unlock();
-  tun_unlock(priv);
+  nxmutex_unlock(&priv->lock);
 }
 
 /****************************************************************************
@@ -1098,7 +950,7 @@ static int tun_dev_init(FAR struct tun_device_s *priv,
 
   /* Initialize the mutual exlcusion and wait semaphore */
 
-  nxsem_init(&priv->waitsem, 0, 1);
+  nxmutex_init(&priv->lock);
   nxsem_init(&priv->read_wait_sem, 0, 0);
   nxsem_init(&priv->write_wait_sem, 0, 0);
 
@@ -1113,7 +965,7 @@ static int tun_dev_init(FAR struct tun_device_s *priv,
 
   if (devfmt)
     {
-      strncpy(priv->dev.d_ifname, devfmt, IFNAMSIZ);
+      strlcpy(priv->dev.d_ifname, devfmt, IFNAMSIZ);
     }
 
   /* Register the device with the OS so that socket IOCTLs can be performed */
@@ -1121,7 +973,7 @@ static int tun_dev_init(FAR struct tun_device_s *priv,
   ret = netdev_register(&priv->dev, tun ? NET_LL_TUN : NET_LL_ETHERNET);
   if (ret != OK)
     {
-      nxsem_destroy(&priv->waitsem);
+      nxmutex_destroy(&priv->lock);
       nxsem_destroy(&priv->read_wait_sem);
       nxsem_destroy(&priv->write_wait_sem);
       return ret;
@@ -1145,7 +997,7 @@ static void tun_dev_uninit(FAR struct tun_device_s *priv)
 
   netdev_unregister(&priv->dev);
 
-  nxsem_destroy(&priv->waitsem);
+  nxmutex_destroy(&priv->lock);
   nxsem_destroy(&priv->read_wait_sem);
   nxsem_destroy(&priv->write_wait_sem);
 }
@@ -1168,13 +1020,13 @@ static int tun_close(FAR struct file *filep)
     }
 
   intf = priv - g_tun_devices;
-  ret  = tundev_lock(tun);
+  ret  = nxmutex_lock(&tun->lock);
   if (ret >= 0)
     {
       tun->free_tuns |= (1 << intf);
       tun_dev_uninit(priv);
 
-      tundev_unlock(tun);
+      nxmutex_unlock(&tun->lock);
     }
 
   return ret;
@@ -1202,7 +1054,7 @@ static ssize_t tun_write(FAR struct file *filep, FAR const char *buffer,
        * thread is canceled) and no data has yet been written.
        */
 
-      ret = nxsem_wait(&priv->waitsem);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return nwritten == 0 ? (ssize_t)ret : nwritten;
@@ -1234,11 +1086,11 @@ static ssize_t tun_write(FAR struct file *filep, FAR const char *buffer,
         }
 
       priv->write_wait = true;
-      tun_unlock(priv);
+      nxmutex_unlock(&priv->lock);
       nxsem_wait(&priv->write_wait_sem);
     }
 
-  tun_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return nwritten;
 }
 
@@ -1264,7 +1116,7 @@ static ssize_t tun_read(FAR struct file *filep, FAR char *buffer,
        * thread is canceled) and no data has yet been read.
        */
 
-      ret = nxsem_wait(&priv->waitsem);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return nread == 0 ? (ssize_t)ret : nread;
@@ -1318,11 +1170,11 @@ static ssize_t tun_read(FAR struct file *filep, FAR char *buffer,
         }
 
       priv->read_wait = true;
-      tun_unlock(priv);
+      nxmutex_unlock(&priv->lock);
       nxsem_wait(&priv->read_wait_sem);
     }
 
-  tun_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return nread;
 }
 
@@ -1343,7 +1195,7 @@ int tun_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
       return -EINVAL;
     }
 
-  ret = tun_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1365,7 +1217,7 @@ int tun_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
 
       if (priv->write_d_len == 0)
         {
-          eventset |= (fds->events & POLLOUT);
+          eventset |= POLLOUT;
         }
 
       /* The write buffer sometimes could be used for TX.
@@ -1374,13 +1226,10 @@ int tun_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
 
       if (priv->read_d_len != 0 || priv->write_d_len != 0)
         {
-          eventset |= (fds->events & POLLIN);
+          eventset |= POLLIN;
         }
 
-      if (eventset)
-        {
-          tun_pollnotify(priv, eventset);
-        }
+      tun_pollnotify(priv, eventset);
     }
   else
     {
@@ -1388,7 +1237,7 @@ int tun_poll(FAR struct file *filep, FAR struct pollfd *fds, bool setup)
     }
 
 errout:
-  tun_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -1416,7 +1265,7 @@ static int tun_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           return -EINVAL;
         }
 
-      ret = tundev_lock(tun);
+      ret = nxmutex_lock(&tun->lock);
       if (ret < 0)
         {
           return ret;
@@ -1426,7 +1275,7 @@ static int tun_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       if (free_tuns == 0)
         {
-          tundev_unlock(tun);
+          nxmutex_unlock(&tun->lock);
           return -ENOMEM;
         }
 
@@ -1439,15 +1288,15 @@ static int tun_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
                          (ifr->ifr_flags & IFF_MASK) == IFF_TUN);
       if (ret != OK)
         {
-          tundev_unlock(tun);
+          nxmutex_unlock(&tun->lock);
           return ret;
         }
 
       tun->free_tuns &= ~(1 << intf);
 
       priv = filep->f_priv;
-      strncpy(ifr->ifr_name, priv->dev.d_ifname, IFNAMSIZ);
-      tundev_unlock(tun);
+      strlcpy(ifr->ifr_name, priv->dev.d_ifname, IFNAMSIZ);
+      nxmutex_unlock(&tun->lock);
 
       return OK;
     }
@@ -1476,7 +1325,7 @@ static int tun_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
 int tun_initialize(void)
 {
-  nxsem_init(&g_tun.waitsem, 0, 1);
+  nxmutex_init(&g_tun.lock);
 
   g_tun.free_tuns = (1 << CONFIG_TUN_NINTERFACES) - 1;
 

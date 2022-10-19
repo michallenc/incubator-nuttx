@@ -594,7 +594,7 @@ static int nrf52_radio_pkt_cfg(struct nrf52_radio_dev_s *dev,
 
   pcnf1 |= (cfg->bal_len << RADIO_PCNF1_BALEN_SHIFT);
 
-  /* Configure on-air endianess of packet */
+  /* Configure on-air endianness of packet */
 
   pcnf1 |= (cfg->endian << RADIO_PCNF1_ENDIAN_SHIFT);
 
@@ -726,7 +726,7 @@ static int nrf52_radio_write(struct nrf52_radio_dev_s *dev,
 
   /* Lock device */
 
-  ret = nxsem_wait(&dev->sem_excl);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -766,8 +766,7 @@ errout:
 
   /* Unlock device */
 
-  nxsem_post(&dev->sem_excl);
-
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 
@@ -786,7 +785,7 @@ static int nrf52_radio_read(struct nrf52_radio_dev_s *dev,
 
   /* Lock radio */
 
-  ret = nxsem_wait(&dev->sem_excl);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -826,8 +825,7 @@ errout:
 
   /* Unlock radio */
 
-  nxsem_post(&dev->sem_excl);
-
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 
@@ -1162,9 +1160,9 @@ nrf52_radio_initialize(int intf, struct nrf52_radio_board_s *board)
   irq_attach(dev->irq, nrf52_radio_isr, dev);
   up_enable_irq(dev->irq);
 
-  /* Initialize semaphores */
+  /* Initialize mutex */
 
-  nxsem_init(&dev->sem_excl, 0, 1);
+  nxmutex_init(&dev->lock);
 
   /* This semaphore is used for signaling and, hence, should not have
    * priority inheritance enabled.

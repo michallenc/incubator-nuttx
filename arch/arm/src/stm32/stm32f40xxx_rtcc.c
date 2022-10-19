@@ -483,12 +483,12 @@ static int rtc_setup(void)
       /* Configure RTC pre-scaler with the required values */
 
 #ifdef CONFIG_STM32_RTC_HSECLOCK
-      /* For a 1 MHz clock this yields 0.9999360041 Hz on the second
-       * timer - which is pretty close.
+      /* STMicro app note AN4759 suggests using 7999 and 124 to
+       * get exactly 1MHz when using the RTC at 8MHz.
        */
 
-      putreg32(((uint32_t)7182 << RTC_PRER_PREDIV_S_SHIFT) |
-              ((uint32_t)0x7f << RTC_PRER_PREDIV_A_SHIFT),
+      putreg32(((uint32_t)7999 << RTC_PRER_PREDIV_S_SHIFT) |
+              ((uint32_t)124 << RTC_PRER_PREDIV_A_SHIFT),
               STM32_RTC_PRER);
 #else
       /* Correct values for 32.768 KHz LSE clock and inaccurate LSI clock */
@@ -1205,7 +1205,7 @@ int up_rtc_getdatetime(struct tm *tp)
 
   tmp = (dr & RTC_DR_WDU_MASK) >> RTC_DR_WDU_SHIFT;
   tp->tm_wday = tmp % 7;
-  tp->tm_yday = tp->tm_mday +
+  tp->tm_yday = tp->tm_mday - 1 +
                 clock_daysbeforemonth(tp->tm_mon,
                                       clock_isleapyear(tp->tm_year + 1900));
   tp->tm_isdst = 0;

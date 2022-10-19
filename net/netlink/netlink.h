@@ -28,10 +28,10 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <queue.h>
 #include <poll.h>
 
 #include <netpacket/netlink.h>
+#include <nuttx/queue.h>
 #include <nuttx/net/netlink.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/wqueue.h>
@@ -73,8 +73,7 @@ struct netlink_conn_s
   /* poll() support */
 
   int key;                           /* used to cancel notifications */
-  FAR sem_t *pollsem;                /* Used to wakeup poll() */
-  FAR pollevent_t *pollevent;        /* poll() wakeup event */
+  FAR struct pollfd *fds;            /* Used to wakeup poll() */
 
   /* Queued response data */
 
@@ -178,13 +177,9 @@ int netlink_notifier_setup(worker_t worker, FAR struct netlink_conn_s *conn,
  * Input Parameters:
  *   conn - Teardown the notification for this Netlink connection.
  *
- * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
- *
  ****************************************************************************/
 
-int netlink_notifier_teardown(FAR struct netlink_conn_s *conn);
+void netlink_notifier_teardown(FAR struct netlink_conn_s *conn);
 
 /****************************************************************************
  * Name: netlink_notifier_signal

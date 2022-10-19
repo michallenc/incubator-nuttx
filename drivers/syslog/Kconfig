@@ -130,7 +130,7 @@ config SYSLOG_TIMESTAMP_LOCALTIME
 
 config SYSLOG_TIMESTAMP_FORMAT
 	string "Time format"
-	default "%e/%m/%y %H:%M:%S"
+	default "%d/%m/%y %H:%M:%S"
 	depends on SYSLOG_TIMESTAMP_FORMATTED
 	---help---
 		Formatter string for syslog timestamp printing.
@@ -139,7 +139,7 @@ config SYSLOG_TIMESTAMP_FORMAT
 config SYSLOG_TIMESTAMP_FORMAT_MICROSECOND
 	bool "Append microseconds after seconds"
 	default y
-	depends on SYSLOG_TIMESTAMP_FORMAT = "%e/%m/%y %H:%M:%S"
+	depends on SYSLOG_TIMESTAMP_FORMAT = "%d/%m/%y %H:%M:%S"
 
 config SYSLOG_TIMESTAMP_BUFFER
 	int "Formatted timestamp buffer size"
@@ -185,6 +185,16 @@ config SYSLOG_COLOR_OUTPUT
 		Enables colored output in syslog, according to message priority.
 
 comment "SYSLOG channels"
+
+config SYSLOG_DEVPATH
+	string "System log device"
+	default "/dev/kmsg" if CONFIG_RAMLOG_SYSLOG
+	default "/dev/ttyS1" if !CONFIG_RAMLOG_SYSLOG
+	---help---
+		The full path to the system logging device.  For the RAMLOG SYSLOG device,
+		this is normally "/dev/kmsg".  For character SYSLOG devices, it should be
+		some other existing character device (or file) supported by the configuration
+		(such as "/dev/ttyS1")/
 
 if !ARCH_SYSLOG
 config SYSLOG_CHAR
@@ -236,25 +246,10 @@ config SYSLOG_DEFAULT
 
 endif
 
-if SYSLOG_CHAR
-
-config SYSLOG_DEVPATH
-	string "System log device"
-	default "/dev/ttyS1"
-	---help---
-		The full path to the system logging device.  For the RAMLOG SYSLOG device,
-		this is normally "/dev/kmsg".  For character SYSLOG devices, it should be
-		some other existing character device (or file) supported by the configuration
-		(such as "/dev/ttyS1")/
-
-endif # SYSLOG_CHAR
-
 if RAMLOG_SYSLOG
 
 config RAMLOG_BUFFER_SECTION
 	string "The section where ramlog buffer is located"
-	default ".bss"
-	depends on !ARCH_SIM
 	---help---
 		The section where ramlog buffer is located.
 		The section shall not be initialized on system boot.
@@ -279,12 +274,9 @@ config SYSLOG_RPMSG_WORK_DELAY
 	int "SYSLOG RPMSG work delay(ms)"
 	default 100
 
-config SYSLOG_RPMSG_OVERWRITE
-	bool "SYSLOG RPMSG overwrite"
-	default n
-	---help---
-		Allow syslog rpmsg overwrite, maybe caused syslog lost.
-		Set 'n' if you don't want lost logs, but may harmful to preformance.
+config SYSLOG_RPMSG_CHARDEV
+	bool "SYSLOG rpmsg character device"
+	default !SYSLOG_RPMSG_WORK_DELAY
 
 endif # SYSLOG_RPMSG
 
@@ -294,6 +286,10 @@ config SYSLOG_RPMSG_SERVER
 	depends on RPTUN
 	---help---
 		Use rpmsg to receive message from remote proc.
+
+config SYSLOG_RPMSG_SERVER_CHARDEV
+	bool "SYSLOG rpmsg server character device"
+	default n
 
 menuconfig SYSLOG_FILE
 	bool "Syslog file output"

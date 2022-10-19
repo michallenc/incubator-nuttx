@@ -272,7 +272,7 @@ static inline int can_readahead(struct can_recvfrom_s *pstate)
 
           /* And free the I/O buffer chain */
 
-          iob_free_chain(iob, IOBUSER_NET_CAN_READAHEAD);
+          iob_free_chain(iob);
         }
       else
         {
@@ -281,8 +281,7 @@ static inline int can_readahead(struct can_recvfrom_s *pstate)
            * buffer queue).
            */
 
-          iob_trimhead_queue(&conn->readahead, recvlen,
-                             IOBUSER_NET_CAN_READAHEAD);
+          iob_trimhead_queue(&conn->readahead, recvlen);
         }
 
       /* do not pass frames with DLC > 8 to a legacy socket */
@@ -356,7 +355,7 @@ static inline int can_readahead_timestamp(struct can_conn_s *conn,
 
           /* And free the I/O buffer chain */
 
-          iob_free_chain(iob, IOBUSER_NET_CAN_READAHEAD);
+          iob_free_chain(iob);
         }
       else
         {
@@ -365,8 +364,7 @@ static inline int can_readahead_timestamp(struct can_conn_s *conn,
            * buffer queue).
            */
 
-          iob_trimhead_queue(&conn->readahead, recvlen,
-                             IOBUSER_NET_CAN_READAHEAD);
+          iob_trimhead_queue(&conn->readahead, recvlen);
         }
 
       return recvlen;
@@ -406,10 +404,9 @@ static int can_recv_filter(struct can_conn_s *conn, canid_t id)
 #endif
 
 static uint16_t can_recvfrom_eventhandler(FAR struct net_driver_s *dev,
-                                          FAR void *pvconn,
                                           FAR void *pvpriv, uint16_t flags)
 {
-  struct can_recvfrom_s *pstate = (struct can_recvfrom_s *)pvpriv;
+  struct can_recvfrom_s *pstate = pvpriv;
 #if defined(CONFIG_NET_CANPROTO_OPTIONS) || defined(CONFIG_NET_TIMESTAMP)
   struct can_conn_s *conn = (struct can_conn_s *)pstate->pr_sock->s_conn;
 #endif

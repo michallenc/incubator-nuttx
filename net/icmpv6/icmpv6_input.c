@@ -103,7 +103,7 @@ static uint16_t icmpv6_datahandler(FAR struct net_driver_s *dev,
    * packet.
    */
 
-  iob = iob_tryalloc(true, IOBUSER_NET_SOCK_ICMPv6);
+  iob = iob_tryalloc(true);
   if (iob == NULL)
     {
       nerr("ERROR: Failed to create new I/O buffer chain\n");
@@ -123,8 +123,7 @@ static uint16_t icmpv6_datahandler(FAR struct net_driver_s *dev,
    */
 
   addrsize = sizeof(struct sockaddr_in6);
-  ret      = iob_trycopyin(iob, &addrsize, sizeof(uint8_t), 0, true,
-                           IOBUSER_NET_SOCK_ICMPv6);
+  ret      = iob_trycopyin(iob, &addrsize, sizeof(uint8_t), 0, true);
   if (ret < 0)
     {
       /* On a failure, iob_trycopyin return a negated error value but does
@@ -138,8 +137,7 @@ static uint16_t icmpv6_datahandler(FAR struct net_driver_s *dev,
   offset = sizeof(uint8_t);
 
   ret = iob_trycopyin(iob, (FAR const uint8_t *)&inaddr,
-                      sizeof(struct sockaddr_in6), offset, true,
-                      IOBUSER_NET_SOCK_ICMPv6);
+                      sizeof(struct sockaddr_in6), offset, true);
   if (ret < 0)
     {
       /* On a failure, iob_trycopyin return a negated error value but does
@@ -158,8 +156,7 @@ static uint16_t icmpv6_datahandler(FAR struct net_driver_s *dev,
   buflen = ICMPv6SIZE;
   icmpv6 = ICMPv6BUF;
 
-  ret = iob_trycopyin(iob, (FAR uint8_t *)ICMPv6REPLY, buflen, offset, true,
-                      IOBUSER_NET_SOCK_ICMPv6);
+  ret = iob_trycopyin(iob, (FAR uint8_t *)ICMPv6REPLY, buflen, offset, true);
   if (ret < 0)
     {
       /* On a failure, iob_copyin return a negated error value but does
@@ -186,7 +183,7 @@ static uint16_t icmpv6_datahandler(FAR struct net_driver_s *dev,
   return buflen;
 
 drop_with_chain:
-  iob_free_chain(iob, IOBUSER_NET_SOCK_ICMPv6);
+  iob_free_chain(iob);
 
 drop:
   dev->d_len = 0;
@@ -372,29 +369,51 @@ void icmpv6_input(FAR struct net_driver_s *dev, unsigned int iplen)
 
         for (ndx = 0; ndx + sizeof(struct icmpv6_prefixinfo_s) <= optlen; )
           {
-            FAR struct icmpv6_srclladdr_s *sllopt =
-              (FAR struct icmpv6_srclladdr_s *)&options[ndx];
+           FAR struct icmpv6_generic_s *opt =
+                                (FAR struct icmpv6_generic_s *)&options[ndx];
 
-            if (sllopt->opttype == ICMPv6_OPT_SRCLLADDR)
+            switch (opt->opttype)
               {
-                neighbor_add(dev, ipv6->srcipaddr, sllopt->srclladdr);
-              }
+                case ICMPv6_OPT_SRCLLADDR:
+                  {
+                    FAR struct icmpv6_srclladdr_s *sllopt =
+                                      (FAR struct icmpv6_srclladdr_s *)opt;
+                    neighbor_add(dev, ipv6->srcipaddr, sllopt->srclladdr);
+                  }
+                  break;
 
-            FAR struct icmpv6_prefixinfo_s *opt =
-              (FAR struct icmpv6_prefixinfo_s *)&options[ndx];
+                case ICMPv6_OPT_PREFIX:
+                  {
+                    FAR struct icmpv6_prefixinfo_s *prefixopt =
+                                      (FAR struct icmpv6_prefixinfo_s *)opt;
 
-            /* Is this the sought for prefix? Is it the correct size? Is
-             * the "A" flag set?
-             */
+                    /* Is the "A" flag set? */
 
-            if (opt->opttype == ICMPv6_OPT_PREFIX &&
-               (opt->flags & ICMPv6_PRFX_FLAG_A) != 0)
-              {
-                /* Yes.. Notify any waiting threads */
+                    if ((prefixopt->flags & ICMPv6_PRFX_FLAG_A) != 0)
+                      {
+                        /* Yes.. Set the new network addresses. */
 
-                icmpv6_rnotify(dev, ipv6->srcipaddr,
-                               opt->prefix, opt->preflen);
-                prefix = true;
+                        icmpv6_setaddresses(dev, ipv6->srcipaddr,
+                                    prefixopt->prefix, prefixopt->preflen);
+
+                        /* Notify any waiting threads */
+
+                        icmpv6_rnotify(dev);
+                        prefix = true;
+                      }
+                  }
+                  break;
+
+                case ICMPv6_OPT_MTU:
+                  {
+                    FAR struct icmpv6_mtu_s *mtuopt =
+                                        (FAR struct icmpv6_mtu_s *)opt;
+                    dev->d_pktsize = NTOHL(mtuopt->mtu);
+                  }
+                  break;
+
+                default:
+                  break;
               }
 
             /* Skip to the next option (units of octets) */
@@ -460,7 +479,7 @@ void icmpv6_input(FAR struct net_driver_s *dev, unsigned int iplen)
 
         /* Dispatch the ECHO reply to the waiting thread */
 
-        flags = devif_conn_event(dev, conn, flags, conn->sconn.list);
+        flags = devif_conn_event(dev, flags, conn->sconn.list);
 
         /* Was the ECHO reply consumed by any waiting thread? */
 

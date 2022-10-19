@@ -30,7 +30,7 @@
 #include <fcntl.h>
 
 #include <debug.h>
-
+#include <nuttx/mutex.h>
 #include <sys/ioctl.h>
 #include <sys/eventfd.h>
 
@@ -50,7 +50,7 @@ typedef struct eventfd_waiter_sem_s
 
 struct eventfd_priv_s
 {
-  sem_t     exclsem;            /* Enforces device exclusive access */
+  mutex_t     lock;             /* Enforces device exclusive access */
   eventfd_waiter_sem_t *rdsems; /* List of blocking readers */
   eventfd_waiter_sem_t *wrsems; /* List of blocking writers */
   eventfd_t    counter;         /* eventfd counter */
@@ -81,9 +81,6 @@ static ssize_t eventfd_do_write(FAR struct file *filep,
 #ifdef CONFIG_EVENT_FD_POLL
 static int eventfd_do_poll(FAR struct file *filep, FAR struct pollfd *fds,
                        bool setup);
-
-static void eventfd_pollnotify(FAR struct eventfd_priv_s *dev,
-                               pollevent_t eventset);
 #endif
 
 static int eventfd_blocking_io(FAR struct eventfd_priv_s *dev,
@@ -132,7 +129,8 @@ static FAR struct eventfd_priv_s *eventfd_allocdev(void)
     {
       /* Initialize the private structure */
 
-      nxsem_init(&dev->exclsem, 0, 0);
+      nxmutex_init(&dev->lock);
+      nxmutex_lock(&dev->lock);
     }
 
   return dev;
@@ -140,32 +138,9 @@ static FAR struct eventfd_priv_s *eventfd_allocdev(void)
 
 static void eventfd_destroy(FAR struct eventfd_priv_s *dev)
 {
-  nxsem_destroy(&dev->exclsem);
+  nxmutex_destroy(&dev->lock);
   kmm_free(dev);
 }
-
-#ifdef CONFIG_EVENT_FD_POLL
-static void eventfd_pollnotify(FAR struct eventfd_priv_s *dev,
-                               pollevent_t eventset)
-{
-  FAR struct pollfd *fds;
-  int i;
-
-  for (i = 0; i < CONFIG_EVENT_FD_NPOLLWAITERS; i++)
-    {
-      fds = dev->fds[i];
-      if (fds)
-        {
-          fds->revents |= eventset & fds->events;
-
-          if (fds->revents != 0)
-            {
-              nxsem_post(fds->sem);
-            }
-        }
-    }
-}
-#endif
 
 static unsigned int eventfd_get_unique_minor(void)
 {
@@ -186,7 +161,7 @@ static int eventfd_do_open(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -208,7 +183,7 @@ static int eventfd_do_open(FAR struct file *filep)
       ret = OK;
     }
 
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -224,7 +199,7 @@ static int eventfd_do_close(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -241,7 +216,7 @@ static int eventfd_do_close(FAR struct file *filep)
       /* Just decrement the reference count and release the semaphore */
 
       priv->crefs -= 1;
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return OK;
     }
 
@@ -254,7 +229,7 @@ static int eventfd_do_close(FAR struct file *filep)
 
   unregister_driver(devpath);
 
-  DEBUGASSERT(priv->exclsem.semcount == 0);
+  DEBUGASSERT(nxmutex_is_locked(&priv->lock));
   eventfd_release_minor(priv->minor);
   eventfd_destroy(priv);
 
@@ -269,7 +244,7 @@ static int eventfd_blocking_io(FAR struct eventfd_priv_s *dev,
   sem->next = *slist;
   *slist = sem;
 
-  nxsem_post(&dev->exclsem);
+  nxmutex_unlock(&dev->lock);
 
   /* Wait for eventfd to notify */
 
@@ -278,10 +253,10 @@ static int eventfd_blocking_io(FAR struct eventfd_priv_s *dev,
   if (ret < 0)
     {
       /* Interrupted wait, unregister semaphore
-       * TODO ensure that exclsem wait does not fail (ECANCELED)
+       * TODO ensure that lock wait does not fail (ECANCELED)
        */
 
-      nxsem_wait_uninterruptible(&dev->exclsem);
+      nxmutex_lock(&dev->lock);
 
       eventfd_waiter_sem_t *cur_sem = *slist;
 
@@ -301,11 +276,11 @@ static int eventfd_blocking_io(FAR struct eventfd_priv_s *dev,
             }
         }
 
-      nxsem_post(&dev->exclsem);
+      nxmutex_unlock(&dev->lock);
       return ret;
     }
 
-  return nxsem_wait(&dev->exclsem);
+  return nxmutex_lock(&dev->lock);
 }
 
 static ssize_t eventfd_do_read(FAR struct file *filep, FAR char *buffer,
@@ -320,7 +295,7 @@ static ssize_t eventfd_do_read(FAR struct file *filep, FAR char *buffer,
       return -EINVAL;
     }
 
-  ret = nxsem_wait(&dev->exclsem);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -332,7 +307,7 @@ static ssize_t eventfd_do_read(FAR struct file *filep, FAR char *buffer,
     {
       if (filep->f_oflags & O_NONBLOCK)
         {
-          nxsem_post(&dev->exclsem);
+          nxmutex_unlock(&dev->lock);
           return -EAGAIN;
         }
 
@@ -370,7 +345,7 @@ static ssize_t eventfd_do_read(FAR struct file *filep, FAR char *buffer,
 #ifdef CONFIG_EVENT_FD_POLL
   /* Notify all poll/select waiters */
 
-  eventfd_pollnotify(dev, POLLOUT);
+  poll_notify(dev->fds, CONFIG_EVENT_FD_NPOLLWAITERS, POLLOUT);
 #endif
 
   /* Notify all waiting writers that counter have been decremented */
@@ -384,7 +359,7 @@ static ssize_t eventfd_do_read(FAR struct file *filep, FAR char *buffer,
 
   dev->wrsems = NULL;
 
-  nxsem_post(&dev->exclsem);
+  nxmutex_unlock(&dev->lock);
   return sizeof(eventfd_t);
 }
 
@@ -403,7 +378,7 @@ static ssize_t eventfd_do_write(FAR struct file *filep,
       return -EINVAL;
     }
 
-  ret = nxsem_wait(&dev->exclsem);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -417,7 +392,7 @@ static ssize_t eventfd_do_write(FAR struct file *filep,
 
       if (filep->f_oflags & O_NONBLOCK)
         {
-          nxsem_post(&dev->exclsem);
+          nxmutex_unlock(&dev->lock);
           return -EAGAIN;
         }
 
@@ -447,7 +422,7 @@ static ssize_t eventfd_do_write(FAR struct file *filep,
 #ifdef CONFIG_EVENT_FD_POLL
   /* Notify all poll/select waiters */
 
-  eventfd_pollnotify(dev, POLLIN);
+  poll_notify(dev->fds, CONFIG_EVENT_FD_NPOLLWAITERS, POLLIN);
 #endif
 
   /* Notify all of the waiting readers */
@@ -461,7 +436,7 @@ static ssize_t eventfd_do_write(FAR struct file *filep,
 
   dev->rdsems = NULL;
 
-  nxsem_post(&dev->exclsem);
+  nxmutex_unlock(&dev->lock);
   return sizeof(eventfd_t);
 }
 
@@ -475,7 +450,7 @@ static int eventfd_do_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int i;
   pollevent_t eventset;
 
-  ret = nxsem_wait(&dev->exclsem);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -491,8 +466,8 @@ static int eventfd_do_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot                = NULL;
-      fds->priv            = NULL;
+      *slot     = NULL;
+      fds->priv = NULL;
       goto out;
     }
 
@@ -538,13 +513,10 @@ static int eventfd_do_poll(FAR struct file *filep, FAR struct pollfd *fds,
       eventset |= POLLIN;
     }
 
-  if (eventset)
-    {
-      eventfd_pollnotify(dev, eventset);
-    }
+  poll_notify(dev->fds, CONFIG_EVENT_FD_NPOLLWAITERS, eventset);
 
 out:
-  nxsem_post(&dev->exclsem);
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 #endif
@@ -596,7 +568,7 @@ int eventfd(unsigned int count, int flags)
 
   /* Device is ready for use */
 
-  nxsem_post(&new_dev->exclsem);
+  nxmutex_unlock(&new_dev->lock);
 
   /* Try open new device */
 

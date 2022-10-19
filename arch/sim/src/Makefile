@@ -61,7 +61,7 @@ CSRCS  = up_initialize.c up_idle.c up_interruptcontext.c up_initialstate.c
 CSRCS += up_createstack.c up_usestack.c up_releasestack.c up_stackframe.c
 CSRCS += up_unblocktask.c up_blocktask.c up_releasepending.c
 CSRCS += up_reprioritizertr.c up_exit.c up_schedulesigaction.c
-CSRCS += up_heap.c up_uart.c up_assert.c up_puts.c
+CSRCS += up_heap.c up_uart.c up_assert.c up_nputs.c
 CSRCS += up_copyfullstate.c
 CSRCS += up_sigdeliver.c
 
@@ -75,13 +75,21 @@ CSRCS += up_vfork.c
 endif
 endif
 
-VPATH = sim
+VPATH = :sim
+ifeq ($(CONFIG_WINDOWS_NATIVE),y)
+  VPATH += :sim/win
+else
+  VPATH += :sim/posix
+endif
 DEPPATH = $(patsubst %,--dep-path %,$(subst :, ,$(VPATH)))
 
+CFLAGS += -fvisibility=default
 HOSTCFLAGS = $(ARCHWARNINGS) $(ARCHOPTIMIZATION) \
-   $(ARCHCFLAGS) $(HOSTINCLUDES) $(EXTRAFLAGS) -D__SIM__ -pipe
+   $(ARCHCFLAGS) $(HOSTINCLUDES) $(EXTRAFLAGS) -D__SIM__ -pipe \
+   -fvisibility=default
 
 HOSTCFLAGS += ${shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)}
+HOSTCFLAGS += ${shell $(INCDIR) "$(CC)" $(ARCH_SRCDIR)$(DELIM)chip}
 ifeq ($(CONFIG_HOST_MACOS),y)
   HOSTCFLAGS += -Wno-deprecated-declarations
 endif
@@ -109,7 +117,6 @@ endif
 
 ifeq ($(CONFIG_SMP),y)
   CSRCS += up_smpsignal.c up_cpuidlestack.c
-  REQUIREDOBJS += up_smpsignal$(OBJEXT)
   HOSTSRCS += up_simsmp.c
 endif
 
@@ -132,7 +139,6 @@ ifeq ($(CONFIG_SIM_X11FB),y)
   STDLIBS += -lX11 -lXext
 ifeq ($(CONFIG_SIM_TOUCHSCREEN),y)
   CSRCS += up_touchscreen.c
-  REQUIREDOBJS += up_touchscreen$(OBJEXT)
   HOSTSRCS += up_x11eventloop.c
 else ifeq ($(CONFIG_SIM_AJOYSTICK),y)
   CSRCS += up_ajoystick.c
@@ -247,7 +253,7 @@ RELLIBS += -lboard
 
 all: up_head$(OBJEXT) libarch$(LIBEXT)
 
-.PHONY: board/libboard$(LIBEXT) export_startup clean distclean cleanrel depend
+.PHONY: export_startup clean distclean cleanrel depend
 
 $(AOBJS): %$(OBJEXT): %.S
 	$(call ASSEMBLE, $<, $@)
@@ -294,7 +300,9 @@ nuttx-names.dat: nuttx-names.in
 	$(call PREPROCESS, nuttx-names.in, nuttx-names.dat)
 
 define LINK_ALLSYMS
-	$(Q) $(TOPDIR)/tools/mkallsyms.sh noconst $(NUTTX) $(CROSSDEV) > allsyms.tmp
+	$(if $(CONFIG_HOST_MACOS), \
+	$(Q) $(TOPDIR)/tools/mkallsyms.sh noconst $(NUTTX) $(CROSSDEV) > allsyms.tmp, \
+	$(Q) $(TOPDIR)/tools/mkallsyms.py $(NUTTX) allsyms.tmp)
 	$(Q) $(call COMPILE, -x c allsyms.tmp, allsyms$(OBJEXT))
 	$(if $(CONFIG_HAVE_CXX),\
 	$(Q) "$(CXX)" $(CFLAGS) $(LDFLAGS) -o $(NUTTX) \
@@ -340,10 +348,9 @@ endif
 
 # This is part of the top-level export target
 
-export_startup: board/libboard$(LIBEXT) up_head.o $(HOSTOBJS) nuttx-names.dat
+export_startup: up_head.o $(HOSTOBJS) nuttx-names.dat
 	cp up_head.o $(HOSTOBJS) ${EXPORT_DIR}/startup
 	cp nuttx-names.dat ${EXPORT_DIR}/libs
-	echo main NXmain >> ${EXPORT_DIR}/libs/nuttx-names.dat
 
 # Dependencies
 

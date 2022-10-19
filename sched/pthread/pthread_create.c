@@ -33,19 +33,19 @@
 #include <debug.h>
 #include <assert.h>
 #include <errno.h>
-#include <queue.h>
 
+#include <nuttx/queue.h>
 #include <nuttx/sched.h>
 #include <nuttx/arch.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/pthread.h>
-#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "group/group.h"
 #include "clock/clock.h"
 #include "pthread/pthread.h"
+#include "tls/tls.h"
 
 /****************************************************************************
  * Public Data
@@ -151,9 +151,8 @@ static inline void pthread_addjoininfo(FAR struct task_group_s *group,
 static void pthread_start(void)
 {
   FAR struct pthread_tcb_s *ptcb = (FAR struct pthread_tcb_s *)this_task();
-  FAR struct join_s *pjoin = (FAR struct join_s *)ptcb->joininfo;
 
-  DEBUGASSERT(pjoin != NULL);
+  DEBUGASSERT(ptcb->joininfo != NULL);
 
   /* The priority of this thread may have been boosted to avoid priority
    * inversion problems.  If that is the case, then drop to the correct
@@ -215,7 +214,6 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
                       pthread_startroutine_t entry, pthread_addr_t arg)
 {
   FAR struct pthread_tcb_s *ptcb;
-  FAR struct tls_info_s *info;
   FAR struct join_s *pjoin;
   struct sched_param param;
   int policy;
@@ -291,8 +289,7 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
     {
       /* Allocate the stack for the TCB */
 
-      ret = up_create_stack((FAR struct tcb_s *)ptcb,
-                            up_tls_size() + attr->stacksize,
+      ret = up_create_stack((FAR struct tcb_s *)ptcb, attr->stacksize,
                             TCB_FLAG_TTYPE_PTHREAD);
     }
 
@@ -304,20 +301,12 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
 
   /* Initialize thread local storage */
 
-  info = up_stack_frame(&ptcb->cmn, up_tls_size());
-  if (info == NULL)
+  ret = tls_init_info(&ptcb->cmn);
+  if (ret != OK)
     {
-      errcode = ENOMEM;
+      errcode = -ret;
       goto errout_with_join;
     }
-
-  DEBUGASSERT(info == ptcb->cmn.stack_alloc_ptr);
-
-  up_tls_initialize(info);
-
-  /* Attach per-task info in group to TLS */
-
-  info->tl_task = ptcb->cmn.group->tg_info;
 
   /* Should we use the priority and scheduler specified in the pthread
    * attributes?  Or should we use the current thread's priority and
@@ -569,9 +558,9 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
   sched_lock();
   if (ret == OK)
     {
-      pthread_sem_take(&ptcb->cmn.group->tg_joinsem, NULL, false);
+      nxmutex_lock(&ptcb->cmn.group->tg_joinlock);
       pthread_addjoininfo(ptcb->cmn.group, pjoin);
-      pthread_sem_give(&ptcb->cmn.group->tg_joinsem);
+      nxmutex_unlock(&ptcb->cmn.group->tg_joinlock);
       nxtask_activate((FAR struct tcb_s *)ptcb);
 
       /* Return the thread information to the caller */
@@ -586,7 +575,7 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
   else
     {
       sched_unlock();
-      dq_rem((FAR dq_entry_t *)ptcb, (FAR dq_queue_t *)&g_inactivetasks);
+      dq_rem((FAR dq_entry_t *)ptcb, &g_inactivetasks);
       nxsem_destroy(&pjoin->exit_sem);
 
       errcode = EIO;

@@ -287,7 +287,7 @@ int timer_settime(timer_t timerid, int flags,
     {
       /* Calculate a delay corresponding to the absolute time in 'value' */
 
-      clock_abstime2ticks(timer->pt_clock, &value->it_value, &delay);
+      ret = clock_abstime2ticks(timer->pt_clock, &value->it_value, &delay);
     }
   else
     {
@@ -296,21 +296,28 @@ int timer_settime(timer_t timerid, int flags,
        * returns success.
        */
 
-      clock_time2ticks(&value->it_value, &delay);
+      ret = clock_time2ticks(&value->it_value, &delay);
     }
 
-  /* If the time is in the past or now, then set up the next interval
-   * instead (assuming a repetitive timer).
+  if (ret < 0)
+    {
+      set_errno(-ret);
+      ret = ERROR;
+      goto errout;
+    }
+
+  /* If the specified time has already passed, the function shall succeed
+   * and the expiration notification shall be made.
    */
 
-  if (delay <= 0)
+  if (delay < 0)
     {
-      delay = timer->pt_delay;
+      delay = 0;
     }
 
   /* Then start the watchdog */
 
-  if (delay > 0)
+  if (delay >= 0)
     {
       ret = wd_start(&timer->pt_wdog, delay, timer_timeout, (wdparm_t)timer);
       if (ret < 0)
@@ -324,6 +331,7 @@ int timer_settime(timer_t timerid, int flags,
         }
     }
 
+errout:
   leave_critical_section(intflags);
   return ret;
 }

@@ -37,12 +37,11 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
-
-#include <crc8.h>
-#include <crc16.h>
-#include <crc32.h>
 #include <debug.h>
 
+#include <nuttx/crc8.h>
+#include <nuttx/crc16.h>
+#include <nuttx/crc32.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
@@ -1324,7 +1323,6 @@ static int smart_setsectorsize(FAR struct smart_struct_s *dev, uint16_t size)
    */
 
 errexit:
-
 #ifndef CONFIG_MTD_SMART_MINIMIZE_RAM
   if (dev->smap)
     {
@@ -1938,7 +1936,7 @@ static int smart_scan(FAR struct smart_struct_s *dev)
 #endif
 #ifdef CONFIG_SMARTFS_MULTI_ROOT_DIRS
   int       x;
-  char      devname[22];
+  char      devname[32];
   FAR struct smart_multiroot_device_s *rootdirdev;
 #endif
   static const uint16_t sizetbl[8] =
@@ -2192,8 +2190,7 @@ static int smart_scan(FAR struct smart_struct_s *dev)
             {
               if (dev->partname[0] != '\0')
                 {
-                  snprintf(dev->rwbuffer, sizeof(devname),
-                           "/dev/smart%d%sd%d",
+                  snprintf(devname, sizeof(devname), "/dev/smart%d%sd%d",
                            dev->minor, dev->partname, x + 1);
                 }
               else
@@ -2219,8 +2216,6 @@ static int smart_scan(FAR struct smart_struct_s *dev)
 
               rootdirdev->dev = dev;
               rootdirdev->rootdirnum = x;
-              ret = register_blockdriver(dev->rwbuffer, &g_bops, 0,
-                                         rootdirdev);
 
               /* Inode private data is a reference to the SMART device
                * structure.
@@ -4979,8 +4974,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
     {
       ferr("ERROR: Logical sector %d too large\n", req->logsector);
 
-      ret = -EINVAL;
-      goto errout;
+      return -EINVAL;
     }
 
 #ifndef CONFIG_MTD_SMART_MINIMIZE_RAM
@@ -4991,8 +4985,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
   if (physsector == 0xffff)
     {
       ferr("ERROR: Logical sector %d not allocated\n", req->logsector);
-      ret = -EINVAL;
-      goto errout;
+      return -EINVAL;
     }
 
 #ifdef CONFIG_MTD_SMART_ENABLE_CRC
@@ -5008,8 +5001,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
       /* TODO:  Mark the block bad */
 
       ferr("ERROR: Error reading phys sector %d\n", physsector);
-      ret = -EIO;
-      goto errout;
+      return -EIO;
     }
 
 #if SMART_STATUS_VERSION == 1
@@ -5035,8 +5027,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
 
           ferr("ERROR: Error validating sector %d CRC during read\n",
                physsector);
-          ret = -EIO;
-          goto errout;
+          return -EIO;
         }
     }
 
@@ -5056,8 +5047,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
   if (ret != sizeof(struct smart_sect_header_s))
     {
       ferr("ERROR: Error reading sector %d header\n", physsector);
-      ret = -EIO;
-      goto errout;
+      return -EIO;
     }
 
   /* Do a sanity check on the header data */
@@ -5070,8 +5060,7 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
 
       ferr("ERROR: Error in logical sector %d header, phys=%d\n",
           req->logsector, physsector);
-      ret = -EIO;
-      goto errout;
+      return -EIO;
     }
 
   /* Read the sector data into the buffer */
@@ -5085,13 +5074,9 @@ static int smart_readsector(FAR struct smart_struct_s *dev,
   if (ret != req->count)
     {
       ferr("ERROR: Error reading phys sector %d\n", physsector);
-      ret = -EIO;
-      goto errout;
+      return -EIO;
     }
-
 #endif
-
-errout:
 
   return ret;
 }
@@ -5755,7 +5740,7 @@ static int smart_fsck_file(FAR struct smart_struct_s *dev,
 
       /* next logical sector */
 
-      logsector = *(uint16_t *)chain->nextsector;
+      logsector = SMARTFS_NEXTSECTOR(chain);
     }
   while (logsector != 0xffff);
 
@@ -5883,7 +5868,7 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
 
   /* Check next sector recursively */
 
-  nextsector = *(uint16_t *)chain->nextsector;
+  nextsector = SMARTFS_NEXTSECTOR(chain);
 
   if (nextsector != 0xffff)
     {
@@ -5897,7 +5882,7 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
 
           ferr("Invalidate next log sector %d\n", nextsector);
 
-          *(uint16_t *)chain->nextsector = 0xffff;
+          SMARTFS_SET_NEXTSECTOR(chain, 0xffff);
 
           /* Set flag to relocate later */
 
@@ -5932,10 +5917,9 @@ static int smart_fsck_directory(FAR struct smart_struct_s *dev,
         }
 
 #ifdef CONFIG_DEBUG_FS_INFO
-      strncpy(entryname,
+      strlcpy(entryname,
               (const char *) (cur + sizeof(struct smart_entry_header_s)),
-              dev->namesize);
-      entryname[dev->namesize] = '\0';
+              sizeof(entryname));
       finfo("Check entry (name=%s flags=%02x logsector=%02x)\n",
             entryname, entry->flags, entry->firstsector);
 #endif
@@ -6214,7 +6198,7 @@ int smart_initialize(int minor, FAR struct mtd_dev_s *mtd,
       dev->namesize = CONFIG_SMARTFS_MAXNAMLEN;
       if (partname)
         {
-          strncpy(dev->partname, partname, SMART_PARTNAME_SIZE);
+          strlcpy(dev->partname, partname, SMART_PARTNAME_SIZE);
         }
       else
         {

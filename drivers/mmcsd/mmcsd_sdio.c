@@ -50,7 +50,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/sdio.h>
 #include <nuttx/mmcsd.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include "mmcsd.h"
 #include "mmcsd_sdio.h"
@@ -68,7 +68,7 @@
 /* Timing (all in units of microseconds) */
 
 #define MMCSD_POWERUP_DELAY     ((useconds_t)250)    /* 74 clock cycles @ 400KHz = 185uS */
-#define MMCSD_IDLE_DELAY        ((useconds_t)50000)  /* Short delay to allow change to IDLE state */
+#define MMCSD_IDLE_DELAY        ((useconds_t)100000) /* Short delay to allow change to IDLE state */
 #define MMCSD_DSR_DELAY         ((useconds_t)100000) /* Time to wait after setting DSR */
 #define MMCSD_CLK_DELAY         ((useconds_t)5000)   /* Delay after changing clock speeds */
 
@@ -93,6 +93,8 @@
 # define MMCSD_MULTIBLOCK_LIMIT  CONFIG_MMCSD_MULTIBLOCK_LIMIT
 #endif
 
+#define MMCSD_CAPACITY(b, s)    ((s) >= 10 ? (b) << ((s) - 10) : (b) >> (10 - (s)))
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -103,7 +105,7 @@ struct mmcsd_state_s
 {
   FAR struct sdio_dev_s *dev;      /* The SDIO device bound to this instance */
   uint8_t  crefs;                  /* Open references on the driver */
-  sem_t  sem;                      /* Assures mutually exclusive access to the slot */
+  mutex_t  lock;                   /* Assures mutually exclusive access to the slot */
 
   /* Status flags */
 
@@ -130,12 +132,6 @@ struct mmcsd_state_s
   uint8_t  blockshift;             /* Log2 of blocksize */
   uint16_t blocksize;              /* Read block length (== block size) */
   uint32_t nblocks;                /* Number of blocks */
-
-#ifdef CONFIG_HAVE_LONG_LONG
-  uint64_t capacity;               /* Total capacity of volume */
-#else
-  uint32_t capacity;               /* Total capacity of volume (Limited to 4Gb) */
-#endif
 };
 
 /****************************************************************************
@@ -144,8 +140,8 @@ struct mmcsd_state_s
 
 /* Misc Helpers *************************************************************/
 
-static int    mmcsd_takesem(FAR struct mmcsd_state_s *priv);
-static void   mmcsd_givesem(FAR struct mmcsd_state_s *priv);
+static int    mmcsd_lock(FAR struct mmcsd_state_s *priv);
+static void   mmcsd_unlock(FAR struct mmcsd_state_s *priv);
 
 /* Command/response helpers *************************************************/
 
@@ -248,17 +244,17 @@ static const struct block_operations g_bops =
  * Misc Helpers
  ****************************************************************************/
 
-static int mmcsd_takesem(FAR struct mmcsd_state_s *priv)
+static int mmcsd_lock(FAR struct mmcsd_state_s *priv)
 {
   int ret;
 
-  /* Take the semaphore, giving exclusive access to the driver (perhaps
+  /* Take the lock, giving exclusive access to the driver (perhaps
    * waiting)
    */
 
   if (!up_interrupt_context() && !sched_idletask())
     {
-      ret = nxsem_wait_uninterruptible(&priv->sem);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return ret;
@@ -280,11 +276,11 @@ static int mmcsd_takesem(FAR struct mmcsd_state_s *priv)
   return ret;
 }
 
-static void mmcsd_givesem(FAR struct mmcsd_state_s *priv)
+static void mmcsd_unlock(FAR struct mmcsd_state_s *priv)
 {
   if (!up_interrupt_context() && !sched_idletask())
     {
-      /* Release the SDIO bus lock, then the MMC/SD driver semaphore in the
+      /* Release the SDIO bus lock, then the MMC/SD driver mutex in the
        * opposite order that they were taken to assure that no deadlock
        * conditions will arise.
        */
@@ -292,7 +288,7 @@ static void mmcsd_givesem(FAR struct mmcsd_state_s *priv)
 #ifdef CONFIG_SDIO_MUXBUS
       SDIO_LOCK(priv->dev, FALSE);
 #endif
-      nxsem_post(&priv->sem);
+      nxmutex_unlock(&priv->lock);
     }
 }
 
@@ -537,7 +533,6 @@ static int mmcsd_get_scr(FAR struct mmcsd_state_s *priv, uint32_t scr[2])
  *   priv->wrprotect   true: card is write protected (from CSD)
  *   priv->blocksize   Read block length (== block size)
  *   priv->nblocks     Number of blocks
- *   priv->capacity    Total capacity of volume
  *
  ****************************************************************************/
 
@@ -655,11 +650,6 @@ static void mmcsd_decode_csd(FAR struct mmcsd_state_s *priv, uint32_t csd[4])
 
           priv->blockshift      = readbllen;
           priv->blocksize       = (1 << readbllen);
-#ifdef CONFIG_HAVE_LONG_LONG
-          priv->capacity        = ((uint64_t)(priv->nblocks)) << readbllen;
-#else
-          priv->capacity        = (priv->nblocks << readbllen);
-#endif
 
           if (priv->blocksize > 512)
             {
@@ -692,14 +682,10 @@ static void mmcsd_decode_csd(FAR struct mmcsd_state_s *priv, uint32_t csd[4])
            */
 
           uint32_t csize        = ((csd[1] & 0x3f) << 16) | (csd[2] >> 16);
-#ifdef CONFIG_HAVE_LONG_LONG
-          priv->capacity        = ((uint64_t)(csize + 1)) << 19;
-#else
-          priv->capacity        = (csize + 1) << 19;
-#endif
+
           priv->blockshift      = 9;
           priv->blocksize       = 1 << 9;
-          priv->nblocks         = priv->capacity >> 9;
+          priv->nblocks         = (csize + 1) << (19 - priv->blockshift);
 
 #ifdef CONFIG_DEBUG_FS_INFO
           decoded.u.sdblock.csize        = csize;
@@ -724,7 +710,6 @@ static void mmcsd_decode_csd(FAR struct mmcsd_state_s *priv, uint32_t csd[4])
                                   (1 << (csizemult + 2));
       priv->blockshift          = readbllen;
       priv->blocksize           = (1 << readbllen);
-      priv->capacity            = (priv->nblocks << readbllen);
 
       /* Some devices, such as 2Gb devices, report blocksizes larger than
        * 512 bytes but still expect to be accessed with a 512 byte blocksize.
@@ -893,8 +878,8 @@ static void mmcsd_decode_csd(FAR struct mmcsd_state_s *priv, uint32_t csd[4])
         decoded.fileformat, decoded.mmcecc, decoded.crc);
 
   finfo("Capacity: %luKb, Block size: %db, nblocks: %d wrprotect: %d\n",
-         (unsigned long)(priv->capacity / 1024), priv->blocksize,
-         priv->nblocks, priv->wrprotect);
+        (unsigned long)MMCSD_CAPACITY(priv->nblocks, priv->blockshift),
+        priv->blocksize, priv->nblocks, priv->wrprotect);
 #endif
 }
 
@@ -2043,14 +2028,14 @@ static int mmcsd_open(FAR struct inode *inode)
 
   DEBUGASSERT(priv->crefs < MAX_CREFS);
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
     }
 
   priv->crefs++;
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return OK;
 }
 
@@ -2073,14 +2058,14 @@ static int mmcsd_close(FAR struct inode *inode)
   /* Decrement the reference count on the block driver */
 
   DEBUGASSERT(priv->crefs > 0);
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
     }
 
   priv->crefs--;
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return OK;
 }
 
@@ -2109,7 +2094,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
 
   if (nsectors > 0)
     {
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2153,7 +2138,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
           buffer += nread * priv->blocksize;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   /* On success, return the number of blocks read */
@@ -2187,7 +2172,7 @@ static ssize_t mmcsd_write(FAR struct inode *inode,
 
   if (nsectors > 0)
     {
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2231,7 +2216,7 @@ static ssize_t mmcsd_write(FAR struct inode *inode,
           buffer += nwrite * priv->blocksize;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   /* On success, return the number of blocks written */
@@ -2259,7 +2244,7 @@ static int mmcsd_geometry(FAR struct inode *inode, struct geometry *geometry)
       /* Is there a (supported) card inserted in the slot? */
 
       priv = (FAR struct mmcsd_state_s *)inode->i_private;
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2293,7 +2278,7 @@ static int mmcsd_geometry(FAR struct inode *inode, struct geometry *geometry)
           ret = OK;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   return ret;
@@ -2317,7 +2302,7 @@ static int mmcsd_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
 
   /* Process the IOCTL by command */
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
@@ -2362,7 +2347,7 @@ static int mmcsd_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
       break;
     }
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return ret;
 }
 
@@ -2394,7 +2379,7 @@ static void mmcsd_mediachange(FAR void *arg)
 
   /* Is there a card present in the slot? */
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return;
@@ -2425,7 +2410,7 @@ static void mmcsd_mediachange(FAR void *arg)
       SDIO_CALLBACKENABLE(priv->dev, SDIOMEDIA_INSERTED);
     }
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
 }
 
 /****************************************************************************
@@ -3377,8 +3362,8 @@ static int mmcsd_probe(FAR struct mmcsd_state_s *priv)
             {
               /* Yes...  */
 
-              finfo("Capacity: %lu Kbytes\n",
-                    (unsigned long)(priv->capacity / 1024));
+              finfo("Capacity: %" PRIu32 " Kbytes\n",
+                    MMCSD_CAPACITY(priv->nblocks, priv->blockshift));
               priv->mediachanged = true;
             }
 
@@ -3432,7 +3417,6 @@ static int mmcsd_removed(FAR struct mmcsd_state_s *priv)
    * be), and that the card has never been initialized.
    */
 
-  priv->capacity     = 0; /* Capacity=0 sometimes means no media */
   priv->blocksize    = 0;
   priv->probed       = false;
   priv->mediachanged = false;
@@ -3464,7 +3448,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
 {
   int ret;
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
@@ -3480,7 +3464,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
   if (SDIO_ATTACH(priv->dev))
     {
       ferr("ERROR: Unable to attach MMC/SD interrupts\n");
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
       return -EBUSY;
     }
 
@@ -3541,7 +3525,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
    * the slot was successfully configured.
    */
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return ret;
 }
 
@@ -3607,7 +3591,7 @@ int mmcsd_slotinitialize(int minor, FAR struct sdio_dev_s *dev)
   /* Initialize the MMC/SD state structure */
 
   memset(priv, 0, sizeof(struct mmcsd_state_s));
-  nxsem_init(&priv->sem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   /* Bind the MMCSD driver to the MMCSD state structure */
 
@@ -3664,7 +3648,7 @@ int mmcsd_slotinitialize(int minor, FAR struct sdio_dev_s *dev)
 errout_with_hwinit:
   mmcsd_hwuninitialize(priv);
 errout_with_alloc:
-  nxsem_destroy(&priv->sem);
+  nxmutex_destroy(&priv->lock);
   kmm_free(priv);
   return ret;
 }

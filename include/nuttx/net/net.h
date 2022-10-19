@@ -33,8 +33,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <semaphore.h>
-#include <queue.h>
 
+#include <nuttx/queue.h>
 #ifdef CONFIG_MM_IOB
 #  include <nuttx/mm/iob.h>
 #endif
@@ -144,7 +144,8 @@ enum net_lltype_e
   NET_LL_IEEE802154,   /* IEEE 802.15.4 MAC */
   NET_LL_PKTRADIO,     /* Non-standard packet radio */
   NET_LL_MBIM,         /* CDC-MBIM USB host driver */
-  NET_LL_CAN           /* CAN bus */
+  NET_LL_CAN,          /* CAN bus */
+  NET_LL_CELL          /* Cellular Virtual Network Device */
 };
 
 /* This defines a bitmap big enough for one bit for each socket option */
@@ -196,8 +197,8 @@ struct sock_intf_s
   CODE ssize_t    (*si_recvmsg)(FAR struct socket *psock,
                     FAR struct msghdr *msg, int flags);
   CODE int        (*si_close)(FAR struct socket *psock);
-  CODE int        (*si_ioctl)(FAR struct socket *psock, int cmd,
-                    FAR void *arg, size_t arglen);
+  CODE int        (*si_ioctl)(FAR struct socket *psock,
+                    int cmd, unsigned long arg);
   CODE int        (*si_socketpair)(FAR struct socket *psocks[2]);
 #ifdef CONFIG_NET_SENDFILE
   CODE ssize_t    (*si_sendfile)(FAR struct socket *psock,
@@ -245,6 +246,10 @@ struct socket_conn_s
 #endif
 #ifdef CONFIG_NET_TIMESTAMP
   int32_t       s_timestamp; /* Socket timestamp enabled/disabled */
+#endif
+#ifdef CONFIG_NET_BINDTODEVICE
+  uint8_t       s_boundto;   /* Index of the interface we are bound to.
+                              * Unbound: 0, Bound: 1-MAX_IFINDEX */
 #endif
 #endif
 
@@ -309,6 +314,23 @@ extern "C"
  ****************************************************************************/
 
 void net_initialize(void);
+
+/****************************************************************************
+ * Name: net_ioctl_arglen
+ *
+ * Description:
+ *   Calculate the ioctl argument buffer length.
+ *
+ * Input Parameters:
+ *
+ *   cmd      The ioctl command
+ *
+ * Returned Value:
+ *   The argument buffer length, or error code.
+ *
+ ****************************************************************************/
+
+ssize_t net_ioctl_arglen(int cmd);
 
 /****************************************************************************
  * Critical section management.
@@ -479,7 +501,6 @@ int net_lockedwait_uninterruptible(sem_t *sem);
  * Input Parameters:
  *   throttled  - An indication of the IOB allocation is "throttled"
  *   timeout    - The relative time to wait until a timeout is declared.
- *   consumerid - id representing who is consuming the IOB
  *
  * Returned Value:
  *   A pointer to the newly allocated IOB is returned on success.  NULL is
@@ -487,8 +508,7 @@ int net_lockedwait_uninterruptible(sem_t *sem);
  *
  ****************************************************************************/
 
-FAR struct iob_s *net_iobtimedalloc(bool throttled, unsigned int timeout,
-                                    enum iob_user_e consumerid);
+FAR struct iob_s *net_iobtimedalloc(bool throttled, unsigned int timeout);
 
 /****************************************************************************
  * Name: net_ioballoc
@@ -504,7 +524,6 @@ FAR struct iob_s *net_iobtimedalloc(bool throttled, unsigned int timeout,
  *
  * Input Parameters:
  *   throttled  - An indication of the IOB allocation is "throttled"
- *   consumerid - id representing who is consuming the IOB
  *
  * Returned Value:
  *   A pointer to the newly allocated IOB is returned on success.  NULL is
@@ -512,7 +531,7 @@ FAR struct iob_s *net_iobtimedalloc(bool throttled, unsigned int timeout,
  *
  ****************************************************************************/
 
-FAR struct iob_s *net_ioballoc(bool throttled, enum iob_user_e consumerid);
+FAR struct iob_s *net_ioballoc(bool throttled);
 #endif
 
 /****************************************************************************

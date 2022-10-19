@@ -40,15 +40,21 @@
 
 #ifdef CONFIG_PRIORITY_INHERITANCE
 # if CONFIG_SEM_PREALLOCHOLDERS > 0
+/* semcount, waitlist, flags, hhead */
+
 #  define NXSEM_INITIALIZER(c, f) \
-    {(c), (f), NULL}                    /* semcount, flags, hhead */
+    {(c), SEM_WAITLIST_INITIALIZER, (f), NULL}
 # else
+/* semcount, waitlist, flags, holder[2] */
+
 #  define NXSEM_INITIALIZER(c, f) \
-    {(c), (f), {SEMHOLDER_INITIALIZER, SEMHOLDER_INITIALIZER}}  /* semcount, flags, holder[2] */
+    {(c), SEM_WAITLIST_INITIALIZER, (f), {SEMHOLDER_INITIALIZER, SEMHOLDER_INITIALIZER}}
 # endif
 #else /* CONFIG_PRIORITY_INHERITANCE */
+/* semcount, waitlist */
+
 #  define NXSEM_INITIALIZER(c, f) \
-    {(c)}                               /* semcount, flags */
+    {(c), SEM_WAITLIST_INITIALIZER}
 #endif /* CONFIG_PRIORITY_INHERITANCE */
 
 /* Most internal nxsem_* interfaces are not available in the user space in
@@ -348,10 +354,6 @@ int nxsem_clockwait(FAR sem_t *sem, clockid_t clockid,
  *
  * Input Parameters:
  *   sem     - Semaphore object
- *   start   - The system time that the delay is relative to.  If the
- *             current time is not the same as the start time, then the
- *             delay will be adjust so that the end time will be the same
- *             in any event.
  *   delay   - Ticks to wait from the start time until the semaphore is
  *             posted.  If ticks is zero, then this function is equivalent
  *             to sem_trywait().
@@ -366,7 +368,7 @@ int nxsem_clockwait(FAR sem_t *sem, clockid_t clockid,
  *
  ****************************************************************************/
 
-int nxsem_tickwait(FAR sem_t *sem, clock_t start, uint32_t delay);
+int nxsem_tickwait(FAR sem_t *sem, uint32_t delay);
 
 /****************************************************************************
  * Name: nxsem_post
@@ -570,7 +572,7 @@ int nxsem_timedwait_uninterruptible(FAR sem_t *sem,
  * Name: nxsem_clockwait_uninterruptible
  *
  * Description:
- *   This function is wrapped version of nxsem_timedwait(), which is
+ *   This function is wrapped version of nxsem_clockwait(), which is
  *   uninterruptible and convenient for use.
  *
  * Input Parameters:
@@ -608,10 +610,6 @@ int nxsem_clockwait_uninterruptible(FAR sem_t *sem, clockid_t clockid,
  *
  * Input Parameters:
  *   sem     - Semaphore object
- *   start   - The system time that the delay is relative to.  If the
- *             current time is not the same as the start time, then the
- *             delay will be adjust so that the end time will be the same
- *             in any event.
  *   delay   - Ticks to wait from the start time until the semaphore is
  *             posted.  If ticks is zero, then this function is equivalent
  *             to sem_trywait().
@@ -632,8 +630,7 @@ int nxsem_clockwait_uninterruptible(FAR sem_t *sem, clockid_t clockid,
  *
  ****************************************************************************/
 
-int nxsem_tickwait_uninterruptible(FAR sem_t *sem, clock_t start,
-                                   uint32_t delay);
+int nxsem_tickwait_uninterruptible(FAR sem_t *sem, uint32_t delay);
 
 #undef EXTERN
 #ifdef __cplusplus

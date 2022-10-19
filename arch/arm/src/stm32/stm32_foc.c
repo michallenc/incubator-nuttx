@@ -32,6 +32,7 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 
 #include "arm_internal.h"
 #include "stm32_pwm.h"
@@ -222,7 +223,7 @@
 /* FOC ADC trigger on CCR4 **************************************************/
 
 /* PWM channels configuration:
- *   - n channels for phases PWM (CCR1, CCR2, CCR3)
+ *   - 3 channels for phases PWM (CCR1, CCR2, CCR3)
  *   - 1 channel for ADC injection sequence trigger (CCR4)
  */
 
@@ -246,17 +247,17 @@
  */
 
 #  if defined(CONFIG_STM32_HAVE_IP_ADC_V2)
-#    ifdef CONFIG_STM32_HAVE_TIM1
+#    ifdef CONFIG_STM32_FOC_USE_TIM1
 #      define ADC_JEXTSEL_T1CC4 (ADC12_JSQR_JEXTSEL_T1CC4)
 #    endif
-#    ifdef CONFIG_STM32_HAVE_TIM8
+#    ifdef CONFIG_STM32_FOC_USE_TIM8
 #      define ADC_JEXTSEL_T8CC4 (ADC12_JSQR_JEXTSEL_T8CC4)
 #    endif
 #  elif defined(CONFIG_STM32_HAVE_IP_ADC_V1)
-#    ifdef CONFIG_STM32_HAVE_TIM1
+#    ifdef CONFIG_STM32_FOC_USE_TIM1
 #      define ADC_JEXTSEL_T1CC4  (ADC_CR2_JEXTSEL_T1CC4)
 #    endif
-#    ifdef CONFIG_STM32_HAVE_TIM8
+#    ifdef CONFIG_STM32_FOC_USE_TIM8
 #      define ADC_JEXTSEL_T8CC4  (ADC_CR2_JEXTSEL_T8CC4)
 #    endif
 #  else
@@ -392,7 +393,7 @@
  */
 
 #ifdef CONFIG_STM32_FOC_USE_ADC1
-#  ifndef CONFIG_STM32_HAVE_ADC1
+#  ifndef CONFIG_STM32_ADC1
 #    error ADC1 not supported !
 #  endif
 #  ifndef ADC1_HAVE_JEXTCFG
@@ -406,7 +407,7 @@
 #  endif
 #endif
 #ifdef CONFIG_STM32_FOC_USE_ADC2
-#  ifndef CONFIG_STM32_HAVE_ADC2
+#  ifndef CONFIG_STM32_ADC2
 #    error ADC2 not supported !
 #  endif
 #  ifndef ADC2_HAVE_JEXTCFG
@@ -420,7 +421,7 @@
 #  endif
 #endif
 #ifdef CONFIG_STM32_FOC_USE_ADC3
-#  ifndef CONFIG_STM32_HAVE_ADC3
+#  ifndef CONFIG_STM32_ADC3
 #    error ADC3 not supported !
 #  endif
 #  ifndef ADC3_HAVE_JEXTCFG
@@ -434,7 +435,7 @@
 #  endif
 #endif
 #ifdef CONFIG_STM32_FOC_USE_ADC4
-#  ifndef CONFIG_STM32_HAVE_ADC4
+#  ifndef CONFIG_STM32_ADC4
 #    error ADC4 not supported !
 #  endif
 #  ifndef ADC4_HAVE_JEXTCFG
@@ -514,13 +515,13 @@
 
 #if defined(CONFIG_STM32_HAVE_IP_ADC_V1) && !defined(HAVE_BASIC_ADC)
 #  define FOC_ADC_HAVE_CMN (1)
-#  ifdef CONFIG_STM32_HAVE_ADC1
+#  ifdef CONFIG_STM32_FOC_USE_ADC1
 #    define FOC_ADC1_CMN (&g_stm32_foc_adccmn123)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC2
+#  ifdef CONFIG_STM32_FOC_USE_ADC2
 #    define FOC_ADC2_CMN (&g_stm32_foc_adccmn123)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC3
+#  ifdef CONFIG_STM32_FOC_USE_ADC3
 #    define FOC_ADC3_CMN (&g_stm32_foc_adccmn123)
 #  endif
 #endif
@@ -529,13 +530,13 @@
 
 #if defined(CONFIG_STM32_HAVE_IP_ADC_V1) && defined(HAVE_BASIC_ADC)
 #  undef FOC_ADC_HAVE_CMN
-#  ifdef CONFIG_STM32_HAVE_ADC1
+#  ifdef CONFIG_STM32_FOC_USE_ADC1
 #    define FOC_ADC1_CMN (0)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC2
+#  ifdef CONFIG_STM32_FOC_USE_ADC2
 #    define FOC_ADC2_CMN (0)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC3
+#  ifdef CONFIG_STM32_FOC_USE_ADC3
 #    define FOC_ADC3_CMN (0)
 #  endif
 #endif
@@ -544,16 +545,16 @@
 
 #ifdef CONFIG_STM32_HAVE_IP_ADC_V2
 #  define FOC_ADC_HAVE_CMN (1)
-#  ifdef CONFIG_STM32_HAVE_ADC1
+#  ifdef CONFIG_STM32_FOC_USE_ADC1
 #    define FOC_ADC1_CMN (&g_stm32_foc_adccmn12)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC2
+#  ifdef CONFIG_STM32_FOC_USE_ADC2
 #    define FOC_ADC2_CMN (&g_stm32_foc_adccmn12)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC3
+#  ifdef CONFIG_STM32_FOC_USE_ADC3
 #    define FOC_ADC3_CMN (&g_stm32_foc_adccmn34)
 #  endif
-#  ifdef CONFIG_STM32_HAVE_ADC4
+#  ifdef CONFIG_STM32_FOC_USE_ADC4
 #    define FOC_ADC4_CMN (&g_stm32_foc_adccmn34)
 #  endif
 #endif
@@ -705,7 +706,7 @@ struct stm32_foc_dev_s
 struct stm32_foc_adccmn_s
 {
   uint8_t       cntr; /* ADC common counter */
-  sem_t         sem;  /* Lock data */
+  mutex_t       lock; /* Lock data */
 };
 
 /* STM32 FOC volatile data */
@@ -1340,7 +1341,7 @@ static int stm32_foc_setup(struct foc_dev_s *dev)
 #ifdef FOC_ADC_HAVE_CMN
   /* Lock ADC common data */
 
-  ret = nxsem_wait_uninterruptible(&priv->adc_cmn->sem);
+  ret = nxmutex_lock(&priv->adc_cmn->lock);
   if (ret < 0)
     {
       goto errout;
@@ -1361,7 +1362,7 @@ static int stm32_foc_setup(struct foc_dev_s *dev)
 
   /* Unlock ADC common data */
 
-  nxsem_post(&priv->adc_cmn->sem);
+  nxmutex_unlock(&priv->adc_cmn->lock);
 #endif
 
   /* Setup PWM */
@@ -1474,7 +1475,7 @@ static int stm32_foc_shutdown(struct foc_dev_s *dev)
 #ifdef FOC_ADC_HAVE_CMN
   /* Lock ADC common data */
 
-  ret = nxsem_wait_uninterruptible(&priv->adc_cmn->sem);
+  ret = nxmutex_lock(&priv->adc_cmn->lock);
   if (ret < 0)
     {
       goto errout;
@@ -1497,7 +1498,7 @@ static int stm32_foc_shutdown(struct foc_dev_s *dev)
 #ifdef FOC_ADC_HAVE_CMN
   /* Unlock ADC common data */
 
-  nxsem_post(&priv->adc_cmn->sem);
+  nxmutex_unlock(&priv->adc_cmn->lock);
 #endif
 
   /* Call board-specific shutdown */
@@ -1660,7 +1661,7 @@ static int stm32_foc_adc_handler(int irq, void *context, void *arg)
               ret = foc_dev->adc_isr(dev);
               if (ret < 0)
                 {
-                  DEBUGASSERT(0);
+                  DEBUGPANIC();
                 }
             }
 
@@ -2355,9 +2356,9 @@ stm32_foc_initialize(int inst, struct stm32_foc_board_s *board)
   modifyreg32(FOC_PWM_FZ_REG, 0, pwmfzbit);
 
 #ifdef FOC_ADC_HAVE_CMN
-  /* Initialize ADC common data semaphore  */
+  /* Initialize ADC common data mutex  */
 
-  nxsem_init(&foc_priv->adc_cmn->sem, 0, 1);
+  nxmutex_init(&foc_priv->adc_cmn->lock);
 #endif
 
   /* Initialize calibration semaphore */

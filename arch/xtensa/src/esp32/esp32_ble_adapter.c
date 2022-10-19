@@ -447,24 +447,24 @@ extern int coex_register_bt_cb(coex_func_cb_t cb);
 extern void coex_bb_reset_unlock(uint32_t restore);
 extern uint32_t coex_bb_reset_lock(void);
 
-extern char _bss_start_btdm;
-extern char _bss_end_btdm;
-extern char _data_start_btdm;
-extern char _data_end_btdm;
-extern uint32_t _data_start_btdm_rom;
-extern uint32_t _data_end_btdm_rom;
+extern uint8_t _bss_start_btdm[];
+extern uint8_t _bss_end_btdm[];
+extern uint8_t _data_start_btdm[];
+extern uint8_t _data_end_btdm[];
+extern const uint8_t _data_start_btdm_rom[];
+extern const uint8_t _data_end_btdm_rom[];
 
-extern uint32_t _bt_bss_start;
-extern uint32_t _bt_bss_end;
-extern uint32_t _btdm_bss_start;
-extern uint32_t _btdm_bss_end;
-extern uint32_t _bt_data_start;
-extern uint32_t _bt_data_end;
-extern uint32_t _btdm_data_start;
-extern uint32_t _btdm_data_end;
+extern uint8_t _bt_bss_start[];
+extern uint8_t _bt_bss_end[];
+extern uint8_t _btdm_bss_start[];
+extern uint8_t _btdm_bss_end[];
+extern uint8_t _bt_data_start[];
+extern uint8_t _bt_data_end[];
+extern uint8_t _btdm_data_start[];
+extern uint8_t _btdm_data_end[];
 
-extern char _bt_tmp_bss_start;
-extern char _bt_tmp_bss_end;
+extern uint8_t _bt_tmp_bss_start[];
+extern uint8_t _bt_tmp_bss_end[];
 
 void intr_matrix_set(int cpu_no, uint32_t model_num, uint32_t intr_num);
 
@@ -1261,7 +1261,6 @@ static void esp_update_time(struct timespec *timespec, uint32_t ticks)
 static int semphr_take_wrapper(void *semphr, uint32_t block_time_ms)
 {
   int ret;
-  struct timespec timeout;
   sem_t *sem = (sem_t *)semphr;
 
   if (block_time_ms == OSI_FUNCS_TIME_BLOCKING)
@@ -1274,19 +1273,7 @@ static int semphr_take_wrapper(void *semphr, uint32_t block_time_ms)
     }
   else
     {
-      ret = clock_gettime(CLOCK_REALTIME, &timeout);
-      if (ret < 0)
-        {
-          wlerr("Failed to get time\n");
-          return esp_errno_trans(ret);
-        }
-
-      if (block_time_ms)
-        {
-          esp_update_time(&timeout, MSEC2TICK(block_time_ms));
-        }
-
-      ret = sem_timedwait(sem, &timeout);
+      ret = nxsem_tickwait(sem, MSEC2TICK(block_time_ms));
     }
 
   return esp_errno_trans(ret);
@@ -1936,7 +1923,7 @@ static void btdm_sleep_enter_phase1_wrapper(uint32_t lpcycles)
   else
     {
       wlerr("timer start failed");
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 }
 
@@ -1965,7 +1952,7 @@ static void btdm_sleep_enter_phase2_wrapper(void)
         }
       else
         {
-          DEBUGASSERT(0);
+          DEBUGPANIC();
         }
 
       if (g_lp_stat.pm_lock_released == false)
@@ -2001,7 +1988,7 @@ static void btdm_sleep_exit_phase3_wrapper(void)
   if (btdm_sleep_clock_sync())
     {
       wlerr("sleep eco state err\n");
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
   if (btdm_controller_get_sleep_mode() == ESP_BT_SLEEP_MODE_1)
@@ -2040,11 +2027,11 @@ static void btdm_controller_mem_init(void)
 
   /* initialise .data section */
 
-  memcpy(&_data_start_btdm, (void *)_data_start_btdm_rom,
-         &_data_end_btdm - &_data_start_btdm);
+  memcpy(_data_start_btdm, _data_start_btdm_rom,
+         _data_end_btdm - _data_start_btdm);
 
   wlinfo(".data initialise [0x%08x] <== [0x%08x]\n",
-         (uint32_t)&_data_start_btdm, _data_start_btdm_rom);
+         (uint32_t)_data_start_btdm, (uint32_t)_data_start_btdm_rom);
 
   /* initial em, .bss section */
 
@@ -2477,7 +2464,7 @@ int esp32_bt_controller_deinit(void)
     }
   else
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
 #ifdef CONFIG_PM
@@ -2553,7 +2540,7 @@ int esp32_bt_controller_disable(void)
     }
   else
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 #endif
 

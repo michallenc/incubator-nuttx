@@ -56,7 +56,7 @@
 
 #include <nuttx/clock.h>
 #include <nuttx/kmalloc.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
@@ -88,7 +88,7 @@ struct udp_conn_s g_udp_connections[CONFIG_NET_UDP_CONNS];
 /* A list of all free UDP connections */
 
 static dq_queue_t g_free_udp_connections;
-static sem_t g_free_sem = SEM_INITIALIZER(1);
+static mutex_t g_free_lock = NXMUTEX_INITIALIZER;
 
 /* A list of all allocated UDP connections */
 
@@ -97,21 +97,6 @@ static dq_queue_t g_active_udp_connections;
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: _udp_semtake() and _udp_semgive()
- *
- * Description:
- *   Take/give semaphore
- *
- ****************************************************************************/
-
-static inline void _udp_semtake(FAR sem_t *sem)
-{
-  net_lockedwait_uninterruptible(sem);
-}
-
-#define _udp_semgive(sem) nxsem_post(sem)
 
 /****************************************************************************
  * Name: udp_find_conn()
@@ -604,9 +589,9 @@ FAR struct udp_conn_s *udp_alloc(uint8_t domain)
 {
   FAR struct udp_conn_s *conn;
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
-  _udp_semtake(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
 #ifndef CONFIG_NET_ALLOC_CONNS
   conn = (FAR struct udp_conn_s *)dq_remfirst(&g_free_udp_connections);
 #else
@@ -619,9 +604,6 @@ FAR struct udp_conn_s *udp_alloc(uint8_t domain)
       conn->flags   = 0;
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
       conn->domain  = domain;
-#endif
-#ifdef CONFIG_NET_UDP_BINDTODEVICE
-      conn->boundto = 0;  /* Not bound to any interface */
 #endif
       conn->lport   = 0;
       conn->ttl     = IP_TTL_DEFAULT;
@@ -645,7 +627,7 @@ FAR struct udp_conn_s *udp_alloc(uint8_t domain)
       dq_addlast(&conn->sconn.node, &g_active_udp_connections);
     }
 
-  _udp_semgive(&g_free_sem);
+  nxmutex_unlock(&g_free_lock);
   return conn;
 }
 
@@ -664,11 +646,11 @@ void udp_free(FAR struct udp_conn_s *conn)
   FAR struct udp_wrbuffer_s *wrbuffer;
 #endif
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
   DEBUGASSERT(conn->crefs == 0);
 
-  _udp_semtake(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
   conn->lport = 0;
 
   /* Remove the connection from the active list */
@@ -677,7 +659,7 @@ void udp_free(FAR struct udp_conn_s *conn)
 
   /* Release any read-ahead buffers attached to the connection */
 
-  iob_free_queue(&conn->readahead, IOBUSER_NET_UDP_READAHEAD);
+  iob_free_queue(&conn->readahead);
 
 #ifdef CONFIG_NET_UDP_WRITE_BUFFERS
   /* Release any write buffers attached to the connection */
@@ -703,7 +685,7 @@ void udp_free(FAR struct udp_conn_s *conn)
   /* Free the connection */
 
   dq_addlast(&conn->sconn.node, &g_free_udp_connections);
-  _udp_semgive(&g_free_sem);
+  nxmutex_unlock(&g_free_lock);
 }
 
 /****************************************************************************

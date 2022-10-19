@@ -7,7 +7,7 @@
  *   Ported by: Darcy Gong
  *
  * It derives from the Rhombus OS math library by Nick Johnson which has
- * a compatibile, MIT-style license:
+ * a compatible, MIT-style license:
  *
  * Copyright (C) 2009-2011 Nick Johnson <nickbjohnson4224 at gmail.com>
  *
@@ -70,7 +70,7 @@ float asinf(float x)
 
   /* Verify that the input value is in the domain of the function */
 
-  if (x < -1.0F || x > 1.0F || isnan(x))
+  if (x < -1.0F || x > 1.0F || isnanf(x))
     {
       return NAN_F;
     }

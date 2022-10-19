@@ -38,8 +38,8 @@
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
-#include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/arp.h>
 #include <nuttx/net/netdev.h>
@@ -104,12 +104,6 @@
            "CONFIG_IOB_NBUFFERS to avoid waiting on req_data"
 #endif
 
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define TXPOLL_WDDELAY   (1*CLK_TCK)
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -137,11 +131,10 @@ struct macnet_driver_s
 
   /* For internal use by this driver */
 
-  sem_t md_exclsem;               /* Exclusive access to struct */
+  mutex_t md_lock;                /* Exclusive access to struct */
   struct macnet_callback_s md_cb; /* Callback information */
   MACHANDLE md_mac;               /* Contained MAC interface */
   bool md_bifup;                  /* true:ifup false:ifdown */
-  struct wdog_s md_txpoll;        /* TX poll timer */
   struct work_s md_pollwork;      /* Defer poll work to the work queue */
 
   /* Hold a list of events */
@@ -184,8 +177,6 @@ static int  macnet_rxframe(FAR struct macnet_driver_s *maccb,
 /* Common TX logic */
 
 static int  macnet_txpoll_callback(FAR struct net_driver_s *dev);
-static void macnet_txpoll_work(FAR void *arg);
-static void macnet_txpoll_expiry(wdparm_t arg);
 
 /* IOCTL support */
 
@@ -372,7 +363,7 @@ static int macnet_notify(FAR struct mac802154_maccb_s *maccb,
        *  back to trying to get access again
        */
 
-      while (nxsem_wait(&priv->md_exclsem) < 0);
+      while (nxmutex_lock(&priv->md_lock) < 0);
 
       sq_addlast((FAR sq_entry_t *)primitive, &priv->primitive_queue);
 
@@ -393,7 +384,7 @@ static int macnet_notify(FAR struct mac802154_maccb_s *maccb,
                              SI_QUEUE, &priv->md_notify_work);
         }
 
-      nxsem_post(&priv->md_exclsem);
+      nxmutex_unlock(&priv->md_lock);
       return OK;
     }
 
@@ -532,78 +523,6 @@ static int macnet_txpoll_callback(FAR struct net_driver_s *dev)
    */
 
   return 0;
-}
-
-/****************************************************************************
- * Name: macnet_txpoll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void macnet_txpoll_work(FAR void *arg)
-{
-  FAR struct macnet_driver_s *priv = (FAR struct macnet_driver_s *)arg;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-#ifdef CONFIG_NET_6LOWPAN
-  /* Make sure the our single packet buffer is attached */
-
-  priv->md_dev.r_dev.d_buf = priv->md_iobuffer.rb_buf;
-#endif
-
-  /* Then perform the poll */
-
-  devif_timer(&priv->md_dev.r_dev, TXPOLL_WDDELAY, macnet_txpoll_callback);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->md_txpoll, TXPOLL_WDDELAY,
-           macnet_txpoll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: macnet_txpoll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void macnet_txpoll_expiry(wdparm_t arg)
-{
-  FAR struct macnet_driver_s *priv = (FAR struct macnet_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(WPANWORK, &priv->md_pollwork, macnet_txpoll_work, priv, 0);
 }
 
 /****************************************************************************
@@ -760,11 +679,6 @@ static int macnet_ifup(FAR struct net_driver_s *dev)
              dev->d_mac.radio.nv_addr[0], dev->d_mac.radio.nv_addr[1]);
 #endif
 
-      /* Set and activate a timer process */
-
-      wd_start(&priv->md_txpoll, TXPOLL_WDDELAY,
-               macnet_txpoll_expiry, (wdparm_t)priv);
-
       ret = OK;
     }
 
@@ -799,10 +713,6 @@ static int macnet_ifdown(FAR struct net_driver_s *dev)
   /* Disable interruption */
 
   flags = enter_critical_section();
-
-  /* Cancel the TX poll timer and TX timeout timers */
-
-  wd_cancel(&priv->md_txpoll);
 
   /* Put the EMAC in its reset, non-operational state.  This should be
    * a known configuration that will guarantee the macnet_ifup() always
@@ -995,10 +905,10 @@ static int macnet_ioctl(FAR struct net_driver_s *dev, int cmd,
                                       dev->d_private;
   int ret = -EINVAL;
 
-  ret = nxsem_wait(&priv->md_exclsem);
+  ret = nxmutex_lock(&priv->md_lock);
   if (ret < 0)
     {
-      wlerr("ERROR: nxsem_wait failed: %d\n", ret);
+      wlerr("ERROR: nxmutex_lock failed: %d\n", ret);
       return ret;
     }
 
@@ -1072,7 +982,7 @@ static int macnet_ioctl(FAR struct net_driver_s *dev, int cmd,
                         }
 
                       priv->md_eventpending = true;
-                      nxsem_post(&priv->md_exclsem);
+                      nxmutex_unlock(&priv->md_lock);
 
                       /* Wait to be signaled when an event is queued */
 
@@ -1087,10 +997,10 @@ static int macnet_ioctl(FAR struct net_driver_s *dev, int cmd,
                        * and try and pop an event off the queue
                        */
 
-                      ret = nxsem_wait(&priv->md_exclsem);
+                      ret = nxmutex_lock(&priv->md_lock);
                       if (ret < 0)
                         {
-                          wlerr("ERROR: nxsem_wait failed: %d\n", ret);
+                          wlerr("ERROR: nxmutex_lock failed: %d\n", ret);
                           return ret;
                         }
                     }
@@ -1122,7 +1032,7 @@ static int macnet_ioctl(FAR struct net_driver_s *dev, int cmd,
      ret = mac802154_ioctl(priv->md_mac, cmd, arg);
    }
 
-  nxsem_post(&priv->md_exclsem);
+  nxmutex_unlock(&priv->md_lock);
   return ret;
 }
 #endif
@@ -1203,18 +1113,18 @@ static int macnet_req_data(FAR struct radio_driver_s *netdev,
 
       /* Transfer the frame to the MAC. */
 
-      ret = mac802154_req_data(priv->md_mac, pktmeta, iob, false);
+      ret = mac802154_req_data(priv->md_mac, pktmeta, iob);
       if (ret < 0)
         {
           wlerr("ERROR: mac802154_req_data failed: %d\n", ret);
 
-          iob_free(iob, IOBUSER_WIRELESS_MAC802154_NETDEV);
+          iob_free(iob);
           for (iob = framelist; iob != NULL; iob = framelist)
             {
               /* Remove the IOB from the queue and free */
 
               framelist = iob->io_flink;
-              iob_free(iob, IOBUSER_WIRELESS_MAC802154_NETDEV);
+              iob_free(iob);
             }
 
           NETDEV_TXERRORS(&priv->md_dev.r_dev);
@@ -1357,9 +1267,9 @@ int mac802154netdev_register(MACHANDLE mac)
   dev->d_private      = priv;              /* Used to recover private state from dev */
   priv->md_mac        = mac;               /* Save the MAC interface instance */
 
-  /* Setup a locking semaphore for exclusive device driver access */
+  /* Setup a locking mutex for exclusive device driver access */
 
-  nxsem_init(&priv->md_exclsem, 0, 1);
+  nxmutex_init(&priv->md_lock);
 
   /* Set the network mask. */
 
@@ -1425,10 +1335,10 @@ int mac802154netdev_register(MACHANDLE mac)
    * it up
    */
 
-  dev->d_flags = IFF_DOWN;
   return macnet_ifdown(&priv->md_dev.r_dev);
 
 errout:
+  nxmutex_destroy(&priv->md_lock);
 
   /* Free memory and return the error */
 

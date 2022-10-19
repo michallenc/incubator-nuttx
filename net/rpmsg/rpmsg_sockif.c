@@ -33,6 +33,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/mm/circbuf.h>
 #include <nuttx/rptun/openamp.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/fs/ioctl.h>
 
@@ -92,10 +93,10 @@ struct rpmsg_socket_conn_s
   FAR struct pollfd              *fds[CONFIG_NET_RPMSG_NPOLLWAITERS];
 
   sem_t                          sendsem;
-  sem_t                          sendlock;
+  mutex_t                        sendlock;
 
   sem_t                          recvsem;
-  sem_t                          recvlock;
+  mutex_t                        recvlock;
 
   FAR void                       *recvdata;
   uint32_t                       recvlen;
@@ -149,8 +150,8 @@ static ssize_t    rpmsg_socket_sendmsg(FAR struct socket *psock,
 static ssize_t    rpmsg_socket_recvmsg(FAR struct socket *psock,
                     FAR struct msghdr *msg, int flags);
 static int        rpmsg_socket_close(FAR struct socket *psock);
-static int        rpmsg_socket_ioctl(FAR struct socket *psock, int cmd,
-                                     FAR void *arg, size_t arglen);
+static int        rpmsg_socket_ioctl(FAR struct socket *psock,
+                                     int cmd, unsigned long arg);
 
 /****************************************************************************
  * Public Data
@@ -184,16 +185,6 @@ static unsigned int g_rpmsg_id;
  * Private Functions
  ****************************************************************************/
 
-static inline void rpmsg_socket_lock(FAR sem_t *sem)
-{
-  net_lockedwait_uninterruptible(sem);
-}
-
-static inline void rpmsg_socket_unlock(FAR sem_t *sem)
-{
-  nxsem_post(sem);
-}
-
 static inline void rpmsg_socket_post(FAR sem_t *sem)
 {
   int semcount;
@@ -202,27 +193,6 @@ static inline void rpmsg_socket_post(FAR sem_t *sem)
   if (semcount < 1)
     {
       nxsem_post(sem);
-    }
-}
-
-static void rpmsg_socket_pollnotify(FAR struct rpmsg_socket_conn_s *conn,
-                                    pollevent_t eventset)
-{
-  int i;
-
-  for (i = 0; i < CONFIG_NET_RPMSG_NPOLLWAITERS; i++)
-    {
-      FAR struct pollfd *fds = conn->fds[i];
-
-      if (fds)
-        {
-          fds->revents |= (fds->events & eventset);
-
-          if (fds->revents != 0)
-            {
-              rpmsg_socket_post(fds->sem);
-            }
-        }
     }
 }
 
@@ -238,8 +208,8 @@ static FAR struct rpmsg_socket_conn_s *rpmsg_socket_alloc(void)
 
   circbuf_init(&conn->recvbuf, NULL, 0);
 
-  nxsem_init(&conn->sendlock, 0, 1);
-  nxsem_init(&conn->recvlock, 0, 1);
+  nxmutex_init(&conn->sendlock);
+  nxmutex_init(&conn->recvlock);
   nxsem_init(&conn->sendsem, 0, 0);
   nxsem_init(&conn->recvsem, 0, 0);
   nxsem_set_protocol(&conn->sendsem, SEM_PRIO_NONE);
@@ -253,8 +223,8 @@ static void rpmsg_socket_free(FAR struct rpmsg_socket_conn_s *conn)
 {
   circbuf_uninit(&conn->recvbuf);
 
-  nxsem_destroy(&conn->recvlock);
-  nxsem_destroy(&conn->sendlock);
+  nxmutex_destroy(&conn->recvlock);
+  nxmutex_destroy(&conn->sendlock);
   nxsem_destroy(&conn->sendsem);
   nxsem_destroy(&conn->recvsem);
 
@@ -272,7 +242,7 @@ static int rpmsg_socket_wakeup(FAR struct rpmsg_socket_conn_s *conn)
       return ret;
     }
 
-  rpmsg_socket_lock(&conn->recvlock);
+  nxmutex_lock(&conn->recvlock);
   space = conn->recvpos - conn->lastpos;
 
   if (space > circbuf_size(&conn->recvbuf) / 2)
@@ -284,7 +254,7 @@ static int rpmsg_socket_wakeup(FAR struct rpmsg_socket_conn_s *conn)
       ret = 1;
     }
 
-  rpmsg_socket_unlock(&conn->recvlock);
+  nxmutex_unlock(&conn->recvlock);
 
   return ret ? rpmsg_send(&conn->ept, &msg, sizeof(msg)) : 0;
 }
@@ -304,7 +274,7 @@ static int rpmsg_socket_ept_cb(FAR struct rpmsg_endpoint *ept,
 
   if (head->cmd == RPMSG_SOCKET_CMD_SYNC)
     {
-      rpmsg_socket_lock(&conn->recvlock);
+      nxmutex_lock(&conn->recvlock);
       conn->sendsize = head->size;
 
       if (conn->psock)
@@ -314,25 +284,25 @@ static int rpmsg_socket_ept_cb(FAR struct rpmsg_endpoint *ept,
         }
 
       rpmsg_socket_post(&conn->sendsem);
-      rpmsg_socket_pollnotify(conn, POLLOUT);
-      rpmsg_socket_unlock(&conn->recvlock);
+      poll_notify(conn->fds, CONFIG_NET_RPMSG_NPOLLWAITERS, POLLOUT);
+      nxmutex_unlock(&conn->recvlock);
     }
   else
     {
       FAR struct rpmsg_socket_data_s *msg = data;
       FAR uint8_t *buf = (FAR uint8_t *)msg->data;
 
-      rpmsg_socket_lock(&conn->sendlock);
+      nxmutex_lock(&conn->sendlock);
 
       conn->ackpos = msg->pos;
 
       if (rpmsg_socket_get_space(conn) > 0)
         {
           rpmsg_socket_post(&conn->sendsem);
-          rpmsg_socket_pollnotify(conn, POLLOUT);
+          poll_notify(conn->fds, CONFIG_NET_RPMSG_NPOLLWAITERS, POLLOUT);
         }
 
-      rpmsg_socket_unlock(&conn->sendlock);
+      nxmutex_unlock(&conn->sendlock);
 
       if (len > sizeof(*msg))
         {
@@ -340,7 +310,7 @@ static int rpmsg_socket_ept_cb(FAR struct rpmsg_endpoint *ept,
 
           DEBUGASSERT(len == msg->len || len == msg->len + sizeof(uint32_t));
 
-          rpmsg_socket_lock(&conn->recvlock);
+          nxmutex_lock(&conn->recvlock);
 
           if (conn->recvdata)
             {
@@ -379,10 +349,10 @@ static int rpmsg_socket_ept_cb(FAR struct rpmsg_endpoint *ept,
                   nerr("circbuf_write overflow, %zu, %zu\n", written, len);
                 }
 
-              rpmsg_socket_pollnotify(conn, POLLIN);
+              poll_notify(conn->fds, CONFIG_NET_RPMSG_NPOLLWAITERS, POLLIN);
             }
 
-          rpmsg_socket_unlock(&conn->recvlock);
+          nxmutex_unlock(&conn->recvlock);
         }
     }
 
@@ -397,7 +367,7 @@ static inline void rpmsg_socket_destroy_ept(
       return;
     }
 
-  rpmsg_socket_lock(&conn->recvlock);
+  nxmutex_lock(&conn->recvlock);
 
   if (conn->ept.rdev)
     {
@@ -411,10 +381,11 @@ static inline void rpmsg_socket_destroy_ept(
       rpmsg_destroy_ept(&conn->ept);
       rpmsg_socket_post(&conn->sendsem);
       rpmsg_socket_post(&conn->recvsem);
-      rpmsg_socket_pollnotify(conn, POLLIN | POLLOUT);
+      poll_notify(conn->fds, CONFIG_NET_RPMSG_NPOLLWAITERS,
+                  POLLIN | POLLOUT);
     }
 
-  rpmsg_socket_unlock(&conn->recvlock);
+  nxmutex_unlock(&conn->recvlock);
 }
 
 static void rpmsg_socket_ns_bound(struct rpmsg_endpoint *ept)
@@ -468,22 +439,18 @@ static void rpmsg_socket_device_destroy(FAR struct rpmsg_device *rdev,
     }
 }
 
-static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
-                                 FAR void *priv, FAR const char *name,
-                                 uint32_t dest)
+static bool rpmsg_socket_ns_match(FAR struct rpmsg_device *rdev,
+                                  FAR void *priv, FAR const char *name,
+                                  uint32_t dest)
 {
   FAR struct rpmsg_socket_conn_s *server = priv;
-  FAR struct rpmsg_socket_conn_s *tmp;
-  FAR struct rpmsg_socket_conn_s *new;
   char buf[RPMSG_NAME_SIZE];
-  int cnt = 0;
-  int ret;
 
   snprintf(buf, sizeof(buf), "%s%s", RPMSG_SOCKET_NAME_PREFIX,
            server->rpaddr.rp_name);
   if (strncmp(name, buf, strlen(buf)))
     {
-      return;
+      return false;
     }
 
   if (strlen(server->rpaddr.rp_cpu) &&
@@ -491,8 +458,21 @@ static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
     {
       /* Bind specific CPU, then only listen that CPU */
 
-      return;
+      return false;
     }
+
+  return true;
+}
+
+static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
+                                 FAR void *priv, FAR const char *name,
+                                 uint32_t dest)
+{
+  FAR struct rpmsg_socket_conn_s *server = priv;
+  FAR struct rpmsg_socket_conn_s *tmp;
+  FAR struct rpmsg_socket_conn_s *new;
+  int cnt = 0;
+  int ret;
 
   new = rpmsg_socket_alloc();
   if (!new)
@@ -522,7 +502,7 @@ static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
   strlcpy(new->rpaddr.rp_name, name + RPMSG_SOCKET_NAME_PREFIX_LEN,
           sizeof(new->rpaddr.rp_name));
 
-  rpmsg_socket_lock(&server->recvlock);
+  nxmutex_lock(&server->recvlock);
 
   for (tmp = server; tmp->next; tmp = tmp->next)
     {
@@ -530,7 +510,7 @@ static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
         {
           /* Reject the connection */
 
-          rpmsg_socket_unlock(&server->recvlock);
+          nxmutex_unlock(&server->recvlock);
           rpmsg_destroy_ept(&new->ept);
           rpmsg_socket_free(new);
           return;
@@ -539,12 +519,12 @@ static void rpmsg_socket_ns_bind(FAR struct rpmsg_device *rdev,
 
   tmp->next = new;
 
-  rpmsg_socket_unlock(&server->recvlock);
+  nxmutex_unlock(&server->recvlock);
 
   rpmsg_socket_ns_bound(&new->ept);
 
   rpmsg_socket_post(&server->recvsem);
-  rpmsg_socket_pollnotify(server, POLLIN);
+  poll_notify(server->fds, CONFIG_NET_RPMSG_NPOLLWAITERS, POLLIN);
 }
 
 static int rpmsg_socket_getaddr(FAR struct rpmsg_socket_conn_s *conn,
@@ -569,7 +549,7 @@ static int rpmsg_socket_setaddr(FAR struct rpmsg_socket_conn_s *conn,
   FAR struct sockaddr_rpmsg *rpaddr = (FAR struct sockaddr_rpmsg *)addr;
 
   if (rpaddr->rp_family != AF_RPMSG ||
-      addrlen != sizeof(struct sockaddr_rpmsg))
+      addrlen < sizeof(struct sockaddr_rpmsg))
     {
       return -EINVAL;
     }
@@ -632,7 +612,7 @@ static int rpmsg_socket_getsockname(FAR struct socket *psock,
   ret = rpmsg_socket_getaddr(psock->s_conn, addr, addrlen);
   if (ret >= 0)
     {
-      strncpy(((struct sockaddr_rpmsg *)addr)->rp_cpu,
+      strlcpy(((struct sockaddr_rpmsg *)addr)->rp_cpu,
               CONFIG_RPTUN_LOCAL_CPUNAME, RPMSG_SOCKET_CPU_SIZE);
     }
 
@@ -662,9 +642,10 @@ static int rpmsg_socket_listen(FAR struct socket *psock, int backlog)
 
   server->backlog = backlog;
   return rpmsg_register_callback(server,
-                                NULL,
-                                NULL,
-                                rpmsg_socket_ns_bind);
+                                 NULL,
+                                 NULL,
+                                 rpmsg_socket_ns_match,
+                                 rpmsg_socket_ns_bind);
 }
 
 static int rpmsg_socket_connect_internal(FAR struct socket *psock)
@@ -681,6 +662,7 @@ static int rpmsg_socket_connect_internal(FAR struct socket *psock)
   ret = rpmsg_register_callback(conn,
                                 rpmsg_socket_device_created,
                                 rpmsg_socket_device_destroy,
+                                NULL,
                                 NULL);
   if (ret < 0)
     {
@@ -702,6 +684,7 @@ static int rpmsg_socket_connect_internal(FAR struct socket *psock)
           rpmsg_unregister_callback(conn,
                                     rpmsg_socket_device_created,
                                     rpmsg_socket_device_destroy,
+                                    NULL,
                                     NULL);
         }
     }
@@ -753,7 +736,7 @@ static int rpmsg_socket_accept(FAR struct socket *psock,
     {
       FAR struct rpmsg_socket_conn_s *conn = NULL;
 
-      rpmsg_socket_lock(&server->recvlock);
+      nxmutex_lock(&server->recvlock);
 
       if (server->next)
         {
@@ -762,13 +745,14 @@ static int rpmsg_socket_accept(FAR struct socket *psock,
           conn->next = NULL;
         }
 
-      rpmsg_socket_unlock(&server->recvlock);
+      nxmutex_unlock(&server->recvlock);
 
       if (conn)
         {
           rpmsg_register_callback(conn,
                                   rpmsg_socket_device_created,
                                   rpmsg_socket_device_destroy,
+                                  NULL,
                                   NULL);
 
           if (conn->sendsize == 0)
@@ -855,34 +839,35 @@ static int rpmsg_socket_poll(FAR struct socket *psock,
 
           if (conn->next)
             {
-              eventset |= (fds->events & POLLIN);
+              eventset |= POLLIN;
             }
         }
       else if (_SS_ISCONNECTED(conn->sconn.s_flags))
         {
           if (!conn->ept.rdev)
             {
-              ret = -ECONNRESET;
-              goto errout;
+              eventset |= POLLHUP;
             }
-
-          rpmsg_socket_lock(&conn->sendlock);
-
-          if (rpmsg_socket_get_space(conn) > 0)
+          else
             {
-              eventset |= (fds->events & POLLOUT);
+              nxmutex_lock(&conn->sendlock);
+
+              if (rpmsg_socket_get_space(conn) > 0)
+                {
+                  eventset |= POLLOUT;
+                }
+
+              nxmutex_unlock(&conn->sendlock);
+
+              nxmutex_lock(&conn->recvlock);
+
+              if (!circbuf_is_empty(&conn->recvbuf))
+                {
+                  eventset |= POLLIN;
+                }
+
+              nxmutex_unlock(&conn->recvlock);
             }
-
-          rpmsg_socket_unlock(&conn->sendlock);
-
-          rpmsg_socket_lock(&conn->recvlock);
-
-          if (!circbuf_is_empty(&conn->recvbuf))
-            {
-              eventset |= (fds->events & POLLIN);
-            }
-
-          rpmsg_socket_unlock(&conn->recvlock);
         }
       else if (!_SS_ISCONNECTED(conn->sconn.s_flags) &&
                _SS_ISNONBLOCK(conn->sconn.s_flags))
@@ -891,14 +876,10 @@ static int rpmsg_socket_poll(FAR struct socket *psock,
         }
       else
         {
-          ret = -EPERM;
-          goto errout;
+          eventset |= POLLERR;
         }
 
-      if (eventset)
-        {
-          rpmsg_socket_pollnotify(conn, eventset);
-        }
+      poll_notify(conn->fds, CONFIG_NET_RPMSG_NPOLLWAITERS, eventset);
     }
   else if (fds->priv != NULL)
     {
@@ -946,9 +927,9 @@ static ssize_t rpmsg_socket_send_continuous(FAR struct socket *psock,
       uint32_t ipcsize;
       uint32_t block;
 
-      rpmsg_socket_lock(&conn->sendlock);
+      nxmutex_lock(&conn->sendlock);
       block = MIN(len - written, rpmsg_socket_get_space(conn));
-      rpmsg_socket_unlock(&conn->sendlock);
+      nxmutex_unlock(&conn->sendlock);
 
       if (block == 0)
         {
@@ -982,7 +963,7 @@ static ssize_t rpmsg_socket_send_continuous(FAR struct socket *psock,
           break;
         }
 
-      rpmsg_socket_lock(&conn->sendlock);
+      nxmutex_lock(&conn->sendlock);
 
       block = MIN(len - written, rpmsg_socket_get_space(conn));
       block = MIN(block, ipcsize - sizeof(*msg));
@@ -1008,9 +989,10 @@ static ssize_t rpmsg_socket_send_continuous(FAR struct socket *psock,
       conn->lastpos  = conn->recvpos;
       conn->sendpos += msg->len;
 
-      rpmsg_socket_unlock(&conn->sendlock);
+      nxmutex_unlock(&conn->sendlock);
 
-      ret = rpmsg_send_nocopy(&conn->ept, msg, block + sizeof(*msg));
+      ret = rpmsg_sendto_nocopy(&conn->ept, msg, block + sizeof(*msg),
+                                conn->ept.dest_addr);
       if (ret < 0)
         {
           break;
@@ -1043,9 +1025,9 @@ static ssize_t rpmsg_socket_send_single(FAR struct socket *psock,
 
   while (1)
     {
-      rpmsg_socket_lock(&conn->sendlock);
+      nxmutex_lock(&conn->sendlock);
       space = rpmsg_socket_get_space(conn);
-      rpmsg_socket_unlock(&conn->sendlock);
+      nxmutex_unlock(&conn->sendlock);
 
       if (space >= total - sizeof(*msg))
           break;
@@ -1076,7 +1058,7 @@ static ssize_t rpmsg_socket_send_single(FAR struct socket *psock,
       return -EINVAL;
     }
 
-  rpmsg_socket_lock(&conn->sendlock);
+  nxmutex_lock(&conn->sendlock);
 
   space = rpmsg_socket_get_space(conn);
   total = MIN(total, space + sizeof(*msg));
@@ -1109,9 +1091,9 @@ static ssize_t rpmsg_socket_send_single(FAR struct socket *psock,
   conn->lastpos  = conn->recvpos;
   conn->sendpos += len + sizeof(uint32_t);
 
-  rpmsg_socket_unlock(&conn->sendlock);
+  nxmutex_unlock(&conn->sendlock);
 
-  ret = rpmsg_send_nocopy(&conn->ept, msg, total);
+  ret = rpmsg_sendto_nocopy(&conn->ept, msg, total, conn->ept.dest_addr);
 
   return ret > 0 ? len : ret;
 }
@@ -1186,7 +1168,7 @@ static ssize_t rpmsg_socket_recvmsg(FAR struct socket *psock,
       return -EISCONN;
     }
 
-  rpmsg_socket_lock(&conn->recvlock);
+  nxmutex_lock(&conn->recvlock);
 
   if (psock->s_type != SOCK_STREAM)
     {
@@ -1232,7 +1214,7 @@ static ssize_t rpmsg_socket_recvmsg(FAR struct socket *psock,
   conn->recvdata = buf;
   conn->recvlen  = len;
 
-  rpmsg_socket_unlock(&conn->recvlock);
+  nxmutex_unlock(&conn->recvlock);
 
   ret = net_timedwait(&conn->recvsem,
                       _SO_TIMEOUT(conn->sconn.s_rcvtimeo));
@@ -1241,7 +1223,7 @@ static ssize_t rpmsg_socket_recvmsg(FAR struct socket *psock,
       ret = -ECONNRESET;
     }
 
-  rpmsg_socket_lock(&conn->recvlock);
+  nxmutex_lock(&conn->recvlock);
 
   if (!conn->recvdata)
     {
@@ -1253,7 +1235,7 @@ static ssize_t rpmsg_socket_recvmsg(FAR struct socket *psock,
     }
 
 out:
-  rpmsg_socket_unlock(&conn->recvlock);
+  nxmutex_unlock(&conn->recvlock);
 
   if (ret > 0)
     {
@@ -1279,6 +1261,7 @@ static int rpmsg_socket_close(FAR struct socket *psock)
       rpmsg_unregister_callback(conn,
                                 NULL,
                                 NULL,
+                                rpmsg_socket_ns_match,
                                 rpmsg_socket_ns_bind);
     }
   else
@@ -1286,6 +1269,7 @@ static int rpmsg_socket_close(FAR struct socket *psock)
       rpmsg_unregister_callback(conn,
                                 rpmsg_socket_device_created,
                                 rpmsg_socket_device_destroy,
+                                NULL,
                                 NULL);
     }
 
@@ -1294,8 +1278,8 @@ static int rpmsg_socket_close(FAR struct socket *psock)
   return 0;
 }
 
-static int rpmsg_socket_ioctl(FAR struct socket *psock, int cmd,
-                              FAR void *arg, size_t arglen)
+static int rpmsg_socket_ioctl(FAR struct socket *psock,
+                              int cmd, unsigned long arg)
 {
   FAR struct rpmsg_socket_conn_s *conn = psock->s_conn;
   int ret = OK;
@@ -1303,25 +1287,13 @@ static int rpmsg_socket_ioctl(FAR struct socket *psock, int cmd,
   switch (cmd)
     {
       case FIONREAD:
-        if (arglen != sizeof(int))
-          {
-            ret = -EINVAL;
-            break;
-          }
-
         *(FAR int *)((uintptr_t)arg) = circbuf_used(&conn->recvbuf);
-
         break;
+
       case FIONSPACE:
-        if (arglen != sizeof(int))
-          {
-            ret = -EINVAL;
-            break;
-          }
-
         *(FAR int *)((uintptr_t)arg) = rpmsg_socket_get_space(conn);
-
         break;
+
       default:
         ret = -ENOTTY;
         break;

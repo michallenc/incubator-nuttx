@@ -186,7 +186,7 @@ static void up_dumpstate(void)
   /* Get the limits on the interrupt stack memory */
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
-  istackbase = (uint16_t)&g_intstackalloc;
+  istackbase = (uint16_t)g_intstackalloc;
   istacksize = (CONFIG_ARCH_INTERRUPTSTACK & ~3);
 
   /* Show interrupt stack info */
@@ -268,12 +268,13 @@ static void _up_assert(void)
 
   if (g_current_regs || (running_task())->flink == NULL)
     {
+#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
+      board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
+#endif
+
       up_irq_save();
       for (; ; )
         {
-#if CONFIG_BOARD_RESET_ON_ASSERT >= 1
-          board_reset(CONFIG_BOARD_ASSERT_RESET_VALUE);
-#endif
 #ifdef CONFIG_ARCH_LEDS
           board_autoled_on(LED_PANIC);
           up_mdelay(250);

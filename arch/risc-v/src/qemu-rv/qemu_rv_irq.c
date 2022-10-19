@@ -36,12 +36,6 @@
 #include "chip.h"
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-volatile uintptr_t *g_current_regs[CONFIG_SMP_NCPUS];
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -64,7 +58,7 @@ void up_irqinitialize(void)
 
 #if defined(CONFIG_STACK_COLORATION) && CONFIG_ARCH_INTERRUPTSTACK > 15
   size_t intstack_size = (CONFIG_ARCH_INTERRUPTSTACK & ~15);
-  riscv_stack_color((void *)&g_intstackalloc, intstack_size);
+  riscv_stack_color(g_intstackalloc, intstack_size);
 #endif
 
   /* Set priority for all global interrupts to 1 (lowest) */
@@ -80,23 +74,16 @@ void up_irqinitialize(void)
 
   putreg32(0, QEMU_RV_PLIC_THRESHOLD);
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the common interrupt handler */
 
   riscv_exception_attach();
 
 #ifdef CONFIG_SMP
-  /* Clear MSOFT for CPU0 */
+  /* Clear RISCV_IPI for CPU0 */
 
-  putreg32(0, RISCV_CLINT_MSIP);
+  putreg32(0, RISCV_IPI);
 
-  /* Setup MSOFT for CPU0 with pause handler */
-
-  irq_attach(RISCV_IRQ_MSOFT, riscv_pause_handler, NULL);
-  up_enable_irq(RISCV_IRQ_MSOFT);
+  up_enable_irq(RISCV_IRQ_SOFT);
 #endif
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
@@ -119,21 +106,21 @@ void up_disable_irq(int irq)
 {
   int extirq;
 
-  if (irq == RISCV_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_SOFT)
     {
-      /* Read mstatus & clear machine software interrupt enable in mie */
+      /* Read m/sstatus & clear machine software interrupt enable in m/sie */
 
-      CLEAR_CSR(mie, MIE_MSIE);
+      CLEAR_CSR(CSR_IE, IE_SIE);
     }
-  else if (irq == RISCV_IRQ_MTIMER)
+  else if (irq == RISCV_IRQ_TIMER)
     {
-      /* Read mstatus & clear machine timer interrupt enable in mie */
+      /* Read m/sstatus & clear timer interrupt enable in m/sie */
 
-      CLEAR_CSR(mie, MIE_MTIE);
+      CLEAR_CSR(CSR_IE, IE_TIE);
     }
-  else if (irq > RISCV_IRQ_MEXT)
+  else if (irq > RISCV_IRQ_EXT)
     {
-      extirq = irq - RISCV_IRQ_MEXT;
+      extirq = irq - RISCV_IRQ_EXT;
 
       /* Clear enable bit for the irq */
 
@@ -161,21 +148,29 @@ void up_enable_irq(int irq)
 {
   int extirq;
 
-  if (irq == RISCV_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_SOFT)
     {
-      /* Read mstatus & set machine software interrupt enable in mie */
+      /* Read m/sstatus & set machine software interrupt enable in m/sie */
 
-      SET_CSR(mie, MIE_MSIE);
+      SET_CSR(CSR_IE, IE_SIE);
     }
+  else if (irq == RISCV_IRQ_TIMER)
+    {
+      /* Read m/sstatus & set timer interrupt enable in m/sie */
+
+      SET_CSR(CSR_IE, IE_TIE);
+    }
+#ifdef CONFIG_BUILD_KERNEL
   else if (irq == RISCV_IRQ_MTIMER)
     {
-      /* Read mstatus & set machine timer interrupt enable in mie */
+      /* Read m/sstatus & set timer interrupt enable in m/sie */
 
       SET_CSR(mie, MIE_MTIE);
     }
-  else if (irq > RISCV_IRQ_MEXT)
+#endif
+  else if (irq > RISCV_IRQ_EXT)
     {
-      extirq = irq - RISCV_IRQ_MEXT;
+      extirq = irq - RISCV_IRQ_EXT;
 
       /* Set enable bit for the irq */
 
@@ -195,16 +190,13 @@ irqstate_t up_irq_enable(void)
 {
   irqstate_t oldstat;
 
-#if 1
-  /* Enable MEIE (machine external interrupt enable) */
+  /* Enable external interrupts (mie/sie) */
 
-  /* TODO: should move to up_enable_irq() */
+  SET_CSR(CSR_IE, IE_EIE);
 
-  SET_CSR(mie, MIE_MEIE);
-#endif
+  /* Read and enable global interrupts (M/SIE) in m/sstatus */
 
-  /* Read mstatus & set machine interrupt enable (MIE) in mstatus */
+  oldstat = READ_AND_SET_CSR(CSR_STATUS, STATUS_IE);
 
-  oldstat = READ_AND_SET_CSR(mstatus, MSTATUS_MIE);
   return oldstat;
 }

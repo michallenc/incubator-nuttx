@@ -652,19 +652,17 @@ FAR struct tcp_conn_s *tcp_alloc(uint8_t domain)
 
           /* Is this connection in a state we can sacrifice. */
 
-          /* REVISIT: maybe we could check for SO_LINGER but it's buried
-           * in the socket layer.
-           */
-
-          if (tmp->tcpstateflags == TCP_CLOSING    ||
+          if ((tmp->crefs == 0) &&
+              (tmp->tcpstateflags == TCP_CLOSED    ||
+              tmp->tcpstateflags == TCP_CLOSING    ||
               tmp->tcpstateflags == TCP_FIN_WAIT_1 ||
               tmp->tcpstateflags == TCP_FIN_WAIT_2 ||
               tmp->tcpstateflags == TCP_TIME_WAIT  ||
-              tmp->tcpstateflags == TCP_LAST_ACK)
+              tmp->tcpstateflags == TCP_LAST_ACK))
             {
               /* Yes.. Is it the oldest one we have seen so far? */
 
-              if (!conn || tmp->timer > conn->timer)
+              if (!conn || tmp->timer < conn->timer)
                 {
                   /* Yes.. remember it */
 
@@ -727,7 +725,6 @@ FAR struct tcp_conn_s *tcp_alloc(uint8_t domain)
       conn->domain        = domain;
 #endif
 #ifdef CONFIG_NET_TCP_KEEPALIVE
-      conn->keeptime      = clock_systime_ticks();
       conn->keepidle      = 2 * DSEC_PER_HOUR;
       conn->keepintvl     = 2 * DSEC_PER_SEC;
       conn->keepcnt       = 3;
@@ -768,8 +765,17 @@ void tcp_free(FAR struct tcp_conn_s *conn)
    * operation.
    */
 
-  DEBUGASSERT(conn->crefs == 0);
   net_lock();
+
+  DEBUGASSERT(conn->crefs == 0);
+
+  /* Cancel close work */
+
+  work_cancel(LPWORK, &conn->clswork);
+
+  /* Cancel tcp timer */
+
+  tcp_stop_timer(conn);
 
   /* Free remaining callbacks, actually there should be only the send
    * callback for CONFIG_NET_TCP_WRITE_BUFFERS is left.
@@ -794,7 +800,7 @@ void tcp_free(FAR struct tcp_conn_s *conn)
 
   /* Release any read-ahead buffers attached to the connection */
 
-  iob_free_chain(conn->readahead, IOBUSER_NET_TCP_READAHEAD);
+  iob_free_chain(conn->readahead);
   conn->readahead = NULL;
 
 #ifdef CONFIG_NET_TCP_WRITE_BUFFERS
@@ -1022,7 +1028,6 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
       /* Fill in the necessary fields for the new connection. */
 
       conn->rto           = TCP_RTO;
-      conn->timer         = TCP_RTO;
       conn->sa            = 0;
       conn->sv            = 4;
       conn->nrtx          = 0;
@@ -1060,6 +1065,7 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
        */
 
       dq_addlast(&conn->sconn.node, &g_active_tcp_connections);
+      tcp_update_retrantimer(conn, TCP_RTO);
     }
 
   return conn;
@@ -1306,7 +1312,7 @@ int tcp_connect(FAR struct tcp_conn_s *conn, FAR const struct sockaddr *addr)
 
   conn->tx_unacked = 1;    /* TCP length of the SYN is one. */
   conn->nrtx       = 0;
-  conn->timer      = 0;    /* Send the SYN immediately. */
+  conn->timeout    = true; /* Send the SYN immediately. */
   conn->rto        = TCP_RTO;
   conn->sa         = 0;
   conn->sv         = 16;   /* Initial value of the RTT variance. */

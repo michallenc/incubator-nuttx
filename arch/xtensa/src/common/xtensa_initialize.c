@@ -29,6 +29,22 @@
 #include "xtensa.h"
 
 /****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* g_current_regs[] holds a reference to the current interrupt level
+ * register storage structure.  It is non-NULL only during interrupt
+ * processing.  Access to g_current_regs[] must be through the macro
+ * CURRENT_REGS for portability.
+ */
+
+/* For the case of architectures with multiple CPUs, then there must be one
+ * such value for each processor that can receive an interrupt.
+ */
+
+volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -47,7 +63,7 @@ static inline void xtensa_color_intstack(void)
 #ifdef CONFIG_SMP
   uint32_t *ptr = (uint32_t *)xtensa_intstack_alloc();
 #else
-  uint32_t *ptr = (uint32_t *)&g_intstackalloc;
+  uint32_t *ptr = (uint32_t *)g_intstackalloc;
 #endif
   ssize_t size;
 
@@ -84,6 +100,10 @@ static inline void xtensa_color_intstack(void)
 
 void up_initialize(void)
 {
+#if XCHAL_CP_NUM > 0
+  xtensa_set_cpenable(CONFIG_XTENSA_CP_INITSET);
+#endif
+
   xtensa_color_intstack();
 
   /* Add any extra memory fragments to the memory manager */
@@ -98,12 +118,6 @@ void up_initialize(void)
    */
 
   xtensa_pminitialize();
-#endif
-
-  /* Initialize the internal heap */
-
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
-  xtensa_imm_initialize();
 #endif
 
 #ifdef CONFIG_ARCH_DMA

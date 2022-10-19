@@ -131,7 +131,7 @@ typedef int16_t      gid_t;
 
 /* dev_t is used for device IDs */
 
-typedef uint16_t     dev_t;
+typedef uint32_t     dev_t;
 
 /* ino_t is used for file serial numbers */
 
@@ -158,7 +158,7 @@ typedef int          id_t;
  * semaphores. A key is simply an integer of type key_t
  */
 
-typedef int16_t      key_t;
+typedef int32_t      key_t;
 
 /* Signed integral type of the result of subtracting two pointers */
 
@@ -300,10 +300,29 @@ enum
   OK = 0,
 };
 
-#endif /* __ASSEMBLY__ */
-
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+#ifdef __cplusplus
+#define EXTERN extern "C"
+extern "C"
+{
+#else
+#define EXTERN extern
+#endif
+
+/* This entry point must be supplied by the application */
+
+#ifdef CONFIG_INIT_ENTRYPOINT
+int CONFIG_INIT_ENTRYPOINT(int argc, FAR char *argv[]);
+#endif
+
+#undef EXTERN
+#if defined(__cplusplus)
+}
+#endif
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __INCLUDE_SYS_TYPES_H */

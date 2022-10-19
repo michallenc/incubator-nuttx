@@ -7,6 +7,48 @@ if ARCH_ARM
 comment "ARM Options"
 
 choice
+	prompt "Toolchain Selection"
+	default ARM_TOOLCHAIN_GNU_EABI
+
+config ARM_TOOLCHAIN_IAR
+	bool "IAR ANSI C/C++ toolchain"
+	select CYGWIN_WINTOOL if WINDOWS_CYGWIN
+
+config ARM_TOOLCHAIN_BUILDROOT
+	bool "Buildroot (Cygwin or Linux)"
+	depends on !WINDOWS_NATIVE
+	select ARCH_TOOLCHAIN_GNU
+
+config ARM_TOOLCHAIN_BUILDROOT_OABI
+	bool "OABI (vs EABI)"
+	depends on !WINDOWS_NATIVE
+	select ARCH_TOOLCHAIN_GNU
+	---help---
+		Most of the older buildroot toolchains are OABI
+
+config ARM_TOOLCHAIN_GNU_EABI
+	bool "Generic GNU EABI toolchain"
+	select ARCH_TOOLCHAIN_GNU
+	---help---
+		This option should work for any modern GNU toolchain (GCC 4.5 or newer)
+
+config ARM_TOOLCHAIN_GNU_OABI
+	bool "Generic GNU OABI toolchain"
+	select ARCH_TOOLCHAIN_GNU
+	---help---
+		This option should work for any GNU toolchain.
+
+config ARM_TOOLCHAIN_CLANG
+	bool "Generic Clang toolchain"
+	select ARCH_TOOLCHAIN_CLANG
+
+config ARM_TOOLCHAIN_ARMCLANG
+	bool "ARM Compiler Clang toolchain"
+	select ARCH_TOOLCHAIN_CLANG
+
+endchoice
+
+choice
 	prompt "ARM MCU selection"
 	default ARCH_CHIP_STM32
 
@@ -68,6 +110,21 @@ config ARCH_CHIP_EOSS3
 	select ARCH_HAVE_FPU
 	---help---
 		QuickLogic EOS S3 (ARM Cortex-M4)
+
+config ARCH_CHIP_GD32F4
+	bool "GD32MCU GD32 F4"
+	select ARCH_CORTEXM4
+	select ARCH_HAVE_MPU
+	select ARCH_HAVE_FETCHADD
+	select ARCH_HAVE_I2CRESET
+	select ARCH_HAVE_HEAPCHECK
+	select ARCH_HAVE_PROGMEM
+	select ARCH_HAVE_SPI_BITORDER
+	select ARCH_HAVE_TICKLESS
+	select ARM_HAVE_MPU_UNIFIED
+	select ARMV7M_HAVE_STACKCHECK
+	---help---
+		GD32MCU GD32 architectures (ARM Cortex-M4).
 
 config ARCH_CHIP_IMX1
 	bool "NXP/Freescale iMX.1"
@@ -220,6 +277,13 @@ config ARCH_CHIP_NRF52
 	---help---
 		Nordic NRF52 architectures (ARM Cortex-M4).
 
+config ARCH_CHIP_NRF53
+	bool "Nordic NRF53"
+	select ARCH_CORTEXM33
+	depends on EXPERIMENTAL
+	---help---
+		Nordic NRF53 architectures (ARM dual Cortex-M33).
+
 config ARCH_CHIP_NUC1XX
 	bool "Nuvoton NUC100/120"
 	select ARCH_CORTEXM0
@@ -235,6 +299,8 @@ config ARCH_CHIP_RP2040
 	select ARCH_HAVE_I2CRESET
 	select ARM_HAVE_WFE_SEV
 	select LIBC_ARCH_ATOMIC
+	select ARCH_HAVE_PWM_MULTICHAN
+	select ARCH_BOARD_COMMON
 	---help---
 		Raspberry Pi RP2040 architectures (ARM dual Cortex-M0+).
 
@@ -243,8 +309,17 @@ config ARCH_CHIP_S32K1XX
 	select ARCH_HAVE_MPU
 	select ARM_HAVE_MPU_UNIFIED
 	select ARCH_HAVE_RAMFUNCS
+	select ARCH_HAVE_I2CRESET
 	---help---
 		NPX S32K1XX architectures (ARM Cortex-M0+ and Cortex-M4F).
+
+config ARCH_CHIP_S32K3XX
+	bool "NXP S32K3XX"
+	select ARCH_HAVE_MPU
+	select ARCH_HAVE_RAMFUNCS
+	select ARM_HAVE_MPU_UNIFIED
+	---help---
+		NPX S32K3XX architectures (ARM Cortex-M7).
 
 config ARCH_CHIP_SAMA5
 	bool "Atmel SAMA5"
@@ -430,6 +505,37 @@ config ARCH_CHIP_STM32U5
 	---help---
 		STMicro STM32 U5 architectures (ARM Cortex-M33).
 
+config ARCH_CHIP_STM32WB
+	bool "STMicro STM32 WB"
+	select ARCH_CORTEXM4
+	select ARCH_HAVE_FPU
+	select ARCH_HAVE_MPU
+	select ARCH_HAVE_FETCHADD
+	select ARCH_HAVE_I2CRESET
+	select ARCH_HAVE_HEAPCHECK
+	select ARCH_HAVE_PROGMEM
+	select ARCH_HAVE_SPI_BITORDER
+	select ARCH_HAVE_TICKLESS
+	select ARM_HAVE_MPU_UNIFIED
+	select ARMV7M_HAVE_STACKCHECK
+	---help---
+		STMicro STM32WB architectures (ARM Cortex-M4).
+
+config ARCH_CHIP_STM32WL5
+	bool "STMicro STM32 WL5"
+	select ARCH_CORTEXM4
+	select ARCH_HAVE_MPU
+	select ARCH_HAVE_FETCHADD
+	select ARCH_HAVE_I2CRESET
+	select ARCH_HAVE_HEAPCHECK
+	select ARCH_HAVE_PROGMEM
+	select ARCH_HAVE_SPI_BITORDER
+	select ARCH_HAVE_TICKLESS
+	select ARM_HAVE_MPU_UNIFIED
+	select ARMV7M_HAVE_STACKCHECK
+	---help---
+		STMicro STM32WL5 architectures (dual CPU ARM Cortex-M4 Cortex-M0).
+
 config ARCH_CHIP_STR71X
 	bool "STMicro STR71x"
 	select ARCH_ARM7TDMI
@@ -492,7 +598,6 @@ config ARCH_CHIP_PHY62XX
 config ARCH_CHIP_TLSR82
 	bool "Telink TLSR82XX"
 	select ARCH_ARMV6M
-	select ARCH_HAVE_BACKTRACE
 	select ARCH_HAVE_RESET
 	select LIBC_ARCH_ATOMIC
 	---help---
@@ -821,6 +926,7 @@ config ARCH_CHIP
 	default "dm320"		if ARCH_CHIP_DM320
 	default "efm32"		if ARCH_CHIP_EFM32
 	default "eoss3"		if ARCH_CHIP_EOSS3
+	default "gd32f4"	if ARCH_CHIP_GD32F4
 	default "imx1"		if ARCH_CHIP_IMX1
 	default "imx6"		if ARCH_CHIP_IMX6
 	default "imxrt"		if ARCH_CHIP_IMXRT
@@ -837,9 +943,11 @@ config ARCH_CHIP
 	default "max326xx"	if ARCH_CHIP_MAX326XX
 	default "moxart"	if ARCH_CHIP_MOXART
 	default "nrf52"		if ARCH_CHIP_NRF52
+	default "nrf53"		if ARCH_CHIP_NRF53
 	default "nuc1xx"	if ARCH_CHIP_NUC1XX
 	default "rp2040"	if ARCH_CHIP_RP2040
 	default "s32k1xx"	if ARCH_CHIP_S32K1XX
+	default "s32k3xx"	if ARCH_CHIP_S32K3XX
 	default "sama5"		if ARCH_CHIP_SAMA5
 	default "samd2l2"	if ARCH_CHIP_SAMD2X || ARCH_CHIP_SAML2X
 	default "samd5e5"	if ARCH_CHIP_SAMD5X || ARCH_CHIP_SAME5X
@@ -852,6 +960,8 @@ config ARCH_CHIP
 	default "stm32l4"	if ARCH_CHIP_STM32L4
 	default "stm32l5"	if ARCH_CHIP_STM32L5
 	default "stm32u5"	if ARCH_CHIP_STM32U5
+	default "stm32wb"	if ARCH_CHIP_STM32WB
+	default "stm32wl5"	if ARCH_CHIP_STM32WL5
 	default "str71x"	if ARCH_CHIP_STR71X
 	default "tms570"	if ARCH_CHIP_TMS570
 	default "xmc4"		if ARCH_CHIP_XMC4
@@ -883,7 +993,7 @@ config ARCH_TRUSTZONE_BOTH
 endchoice # TrustZone Configuration
 
 config ARM_THUMB
-	bool
+	bool "Thumb Mode"
 	default n
 
 config ARM_HAVE_WFE_SEV
@@ -1107,6 +1217,42 @@ config ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
 
 endif
 
+if SCHED_BACKTRACE
+
+choice
+	prompt "Choose ARM unwinder"
+	default UNWINDER_STACK_POINTER if ARM_THUMB
+	default UNWINDER_FRAME_POINTER if !ARM_THUMB
+	---help---
+		This determines which method will be used for unwinding nuttx stack
+		traces for debug.
+
+config UNWINDER_FRAME_POINTER
+	bool "Frame pointer unwinder"
+	select FRAME_POINTER
+	---help---
+		This option enables the frame pointer unwinder for unwinding
+		nuttx stack traces.
+
+config UNWINDER_STACK_POINTER
+	bool "Stack pointer unwinder"
+	---help---
+		This option enables the stack pointer unwinder for unwinding
+		nuttx stack traces.
+
+config UNWINDER_ARM
+	bool "ARM EHABI stack unwinder"
+	---help---
+		This option enables stack unwinding support in the nuttx
+		using the information automatically generated by the
+		compiler. The resulting nuttx image is slightly bigger but
+		the performance is not affected. Currently, this feature
+		only works with EABI compilers.
+
+endchoice
+
+endif
+
 if ARCH_ARMV6M
 source "arch/arm/src/armv6-m/Kconfig"
 endif
@@ -1142,6 +1288,9 @@ source "arch/arm/src/efm32/Kconfig"
 endif
 if ARCH_CHIP_EOSS3
 source "arch/arm/src/eoss3/Kconfig"
+endif
+if ARCH_CHIP_GD32F4
+source "arch/arm/src/gd32f4/Kconfig"
 endif
 if ARCH_CHIP_IMX1
 source "arch/arm/src/imx1/Kconfig"
@@ -1185,6 +1334,9 @@ endif
 if ARCH_CHIP_S32K1XX
 source "arch/arm/src/s32k1xx/Kconfig"
 endif
+if ARCH_CHIP_S32K3XX
+source arch/arm/src/s32k3xx/Kconfig
+endif
 if ARCH_CHIP_MAX326XX
 source "arch/arm/src/max326xx/Kconfig"
 endif
@@ -1193,6 +1345,9 @@ source "arch/arm/src/moxart/Kconfig"
 endif
 if ARCH_CHIP_NRF52
 source "arch/arm/src/nrf52/Kconfig"
+endif
+if ARCH_CHIP_NRF53
+source "arch/arm/src/nrf53/Kconfig"
 endif
 if ARCH_CHIP_NUC1XX
 source "arch/arm/src/nuc1xx/Kconfig"
@@ -1235,6 +1390,12 @@ source "arch/arm/src/stm32l5/Kconfig"
 endif
 if ARCH_CHIP_STM32U5
 source "arch/arm/src/stm32u5/Kconfig"
+endif
+if ARCH_CHIP_STM32WB
+source arch/arm/src/stm32wb/Kconfig
+endif
+if ARCH_CHIP_STM32WL5
+source "arch/arm/src/stm32wl5/Kconfig"
 endif
 if ARCH_CHIP_STR71X
 source "arch/arm/src/str71x/Kconfig"

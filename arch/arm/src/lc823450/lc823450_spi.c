@@ -34,7 +34,7 @@
 
 #include <arch/board/board.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
@@ -65,7 +65,7 @@ struct lc823450_spidev_s
 {
   struct spi_dev_s spidev;     /* Externally visible part of the SPI interface */
 #ifndef CONFIG_SPI_OWNBUS
-  sem_t            exclsem;    /* Held while chip is selected for mutual exclusion */
+  mutex_t          lock;       /* Held while chip is selected for mutual exclusion */
   uint32_t         frequency;  /* Requested clock frequency */
   uint32_t         actual;     /* Actual clock frequency */
   uint8_t          nbits;      /* Width of word in bits (8 to 16) */
@@ -144,11 +144,11 @@ static int spi_lock(struct spi_dev_s *dev, bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -236,7 +236,7 @@ static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
   switch (mode)
     {
       case SPIDEV_MODE0: /* CPOL=0; CPHA=0 */
-        DEBUGASSERT(0);
+        DEBUGPANIC();
         break;
 
       case SPIDEV_MODE1: /* CPOL=0; CPHA=1 */
@@ -244,7 +244,7 @@ static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
         break;
 
       case SPIDEV_MODE2: /* CPOL=1; CPHA=0 */
-        DEBUGASSERT(0);
+        DEBUGPANIC();
         break;
 
       case SPIDEV_MODE3: /* CPOL=1; CPHA=1 */
@@ -524,7 +524,7 @@ struct spi_dev_s *lc823450_spibus_initialize(int port)
       modifyreg32(MRSTCNTAPB, 0, MRSTCNTAPB_PORT5_RSTB);
 
 #ifndef CONFIG_SPI_OWNBUS
-      nxsem_init(&priv->exclsem, 0, 1);
+      nxmutex_init(&priv->lock);
 #endif
 
       /* Initialize SPI mode. It must be done before starting SPI transfer */

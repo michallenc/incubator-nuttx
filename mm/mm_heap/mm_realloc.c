@@ -72,6 +72,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
   size_t prevsize = 0;
   size_t nextsize = 0;
   FAR void *newmem;
+  bool ret;
 
   /* If oldmem is NULL, then realloc is equivalent to malloc */
 
@@ -97,7 +98,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
     {
       /* There must have been an integer overflow */
 
-      DEBUGASSERT(false);
+      DEBUGPANIC();
       return NULL;
     }
 
@@ -106,9 +107,10 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
   oldnode = (FAR struct mm_allocnode_s *)
     ((FAR char *)oldmem - SIZEOF_MM_ALLOCNODE);
 
-  /* We need to hold the MM semaphore while we muck with the nodelist. */
+  /* We need to hold the MM mutex while we muck with the nodelist. */
 
-  DEBUGVERIFY(mm_takesemaphore(heap));
+  ret = mm_lock(heap);
+  DEBUGASSERT(ret);
   DEBUGASSERT(oldnode->preceding & MM_ALLOC_BIT);
   DEBUGASSERT(mm_heapmember(heap, oldmem));
 
@@ -128,11 +130,11 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
                        oldsize - oldnode->size);
         }
 
-      MM_ADD_BACKTRACE(heap, oldnode);
-
       /* Then return the original address */
 
-      mm_givesemaphore(heap);
+      mm_unlock(heap);
+      MM_ADD_BACKTRACE(heap, oldnode);
+
       return oldmem;
     }
 
@@ -334,9 +336,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
             }
         }
 
+      mm_unlock(heap);
       MM_ADD_BACKTRACE(heap, (FAR char *)newmem - SIZEOF_MM_ALLOCNODE);
-
-      mm_givesemaphore(heap);
 
       kasan_unpoison(newmem, mm_malloc_size(newmem));
       if (newmem != oldmem)
@@ -361,7 +362,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
        * leave the original memory in place.
        */
 
-      mm_givesemaphore(heap);
+      mm_unlock(heap);
       newmem = mm_malloc(heap, size);
       if (newmem)
         {

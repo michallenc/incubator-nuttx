@@ -27,7 +27,6 @@
 #include <time.h>
 #include <string.h>
 #include <debug.h>
-#include <queue.h>
 #include <errno.h>
 
 #include "rx65n_cmtw0.h"
@@ -123,10 +122,6 @@ void rx65n_cmtw0_create(uint32_t txpoll_time, uint32_t txtimeout_time)
 
   MPC.PE7PFS.BYTE = 0x1du;
   PORTE.PMR.BYTE |= 0x80u;
-
-  /* Attach the IRQ for poll expiry */
-
-  irq_attach(RX65N_INTB170_IRQ, (xcpt_t)rx65n_poll_expiry, NULL);
 
   /* Attach the IRQ for tx timeout */
 

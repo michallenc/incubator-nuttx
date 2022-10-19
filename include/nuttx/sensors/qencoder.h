@@ -54,8 +54,6 @@
  *   Argument: uint32_t maximum position
  * QEIOC_SETINDEX - Set the index position for the encoder.
  *   Argument: uint32_t index position
- * QEIOC_SETINDEX - Set the index position for the encoder.
- *   Argument: uint32_t index position
  * QEIOC_GETINDEX - Get the index position and count of the encoder.
  *   The structure also contains current position so QEIOC_POSITION
  *   is not required when QEIOC_GETINDEX is used.
@@ -69,7 +67,7 @@
 #define QEIOC_GETINDEX     _QEIOC(0x0005) /* Arg: qe_index_s struct */
 
 #define QE_FIRST           0x0001         /* First required command */
-#define QE_NCMDS           5              /* 6 required commands */
+#define QE_NCMDS           5              /* 5 required commands */
 
 /* User defined ioctl commands are also supported. These will be forwarded
  * by the upper-half QE driver to the lower-half QE driver via the ioctl()
@@ -92,6 +90,11 @@
 
 #define QE_IMXRT_FIRST     (QE_AS5048B_FIRST + QE_AS5048B_NCMDS)
 #define QE_IMXRT_NCMDS     7
+
+/* See include/nuttx/sensors/as5048a.h */
+
+#define QE_AS5048A_FIRST   (QE_IMXRT_FIRST + QE_IMXRT_NCMDS)
+#define QE_AS5048A_NCMDS   4
 
 /****************************************************************************
  * Public Types

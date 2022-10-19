@@ -82,12 +82,13 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
 
   FAR void  *src_addr;
   uint8_t src_addr_size;
+  uint8_t offset = 0;
 
 #if CONFIG_NET_RECV_BUFSIZE > 0
   while (iob_get_queue_size(&conn->readahead) > conn->rcvbufs)
     {
       iob = iob_remove_queue(&conn->readahead);
-      iob_free_chain(iob, IOBUSER_NET_UDP_READAHEAD);
+      iob_free_chain(iob);
     }
 #endif
 
@@ -95,7 +96,7 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
    * We will not wait for an I/O buffer to become available in this context.
    */
 
-  iob = iob_tryalloc(true, IOBUSER_NET_UDP_READAHEAD);
+  iob = iob_tryalloc(true);
   if (iob == NULL)
     {
       nerr("ERROR: Failed to create new I/O buffer chain\n");
@@ -172,7 +173,8 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
    */
 
   ret = iob_trycopyin(iob, (FAR const uint8_t *)&src_addr_size,
-                      sizeof(uint8_t), 0, true, IOBUSER_NET_UDP_READAHEAD);
+                      sizeof(uint8_t), offset, true);
+  offset += sizeof(uint8_t);
   if (ret < 0)
     {
       /* On a failure, iob_trycopyin return a negated error value but does
@@ -180,12 +182,13 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
        */
 
       nerr("ERROR: Failed to add data to the I/O buffer chain: %d\n", ret);
-      iob_free_chain(iob, IOBUSER_NET_UDP_READAHEAD);
+      iob_free_chain(iob);
       return 0;
     }
 
   ret = iob_trycopyin(iob, (FAR const uint8_t *)src_addr, src_addr_size,
-                      sizeof(uint8_t), true, IOBUSER_NET_UDP_READAHEAD);
+                      offset, true);
+  offset += src_addr_size;
   if (ret < 0)
     {
       /* On a failure, iob_trycopyin return a negated error value but does
@@ -193,17 +196,30 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
        */
 
       nerr("ERROR: Failed to add data to the I/O buffer chain: %d\n", ret);
-      iob_free_chain(iob, IOBUSER_NET_UDP_READAHEAD);
+      iob_free_chain(iob);
       return 0;
     }
+
+#ifdef CONFIG_NETDEV_IFINDEX
+  ret = iob_trycopyin(iob, &dev->d_ifindex, sizeof(uint8_t), offset, true);
+  offset += sizeof(uint8_t);
+  if (ret < 0)
+    {
+      /* On a failure, iob_trycopyin return a negated error value but does
+       * not free any I/O buffers.
+       */
+
+      nerr("ERROR: Failed to add dindex to the I/O buffer chain: %d\n", ret);
+      iob_free_chain(iob);
+      return 0;
+    }
+#endif
 
   if (buflen > 0)
     {
       /* Copy the new appdata into the I/O buffer chain */
 
-      ret = iob_trycopyin(iob, buffer, buflen,
-                          src_addr_size + sizeof(uint8_t), true,
-                          IOBUSER_NET_UDP_READAHEAD);
+      ret = iob_trycopyin(iob, buffer, buflen, offset, true);
       if (ret < 0)
         {
           /* On a failure, iob_trycopyin return a negated error value but
@@ -212,7 +228,7 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
 
           nerr("ERROR: Failed to add data to the I/O buffer chain: %d\n",
                ret);
-          iob_free_chain(iob, IOBUSER_NET_UDP_READAHEAD);
+          iob_free_chain(iob);
           return 0;
         }
     }
@@ -223,7 +239,7 @@ static uint16_t udp_datahandler(FAR struct net_driver_s *dev,
   if (ret < 0)
     {
       nerr("ERROR: Failed to queue the I/O buffer chain: %d\n", ret);
-      iob_free_chain(iob, IOBUSER_NET_UDP_READAHEAD);
+      iob_free_chain(iob);
       return 0;
     }
 
@@ -317,7 +333,7 @@ uint16_t udp_callback(FAR struct net_driver_s *dev,
     {
       /* Perform the callback */
 
-      flags = devif_conn_event(dev, conn, flags, conn->sconn.list);
+      flags = devif_conn_event(dev, flags, conn->sconn.list);
 
       if ((flags & UDP_NEWDATA) != 0)
         {

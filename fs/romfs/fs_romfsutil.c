@@ -37,7 +37,6 @@
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/fs/dirent.h>
 #include <nuttx/mtd/mtd.h>
 
 #include "fs_romfs.h"
@@ -507,24 +506,6 @@ static int romfs_cachenode(FAR struct romfs_mountpt_s *rm,
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: romfs_semtake
- ****************************************************************************/
-
-int romfs_semtake(FAR struct romfs_mountpt_s *rm)
-{
-  return nxsem_wait_uninterruptible(&rm->rm_sem);
-}
-
-/****************************************************************************
- * Name: romfs_semgive
- ****************************************************************************/
-
-void romfs_semgive(FAR struct romfs_mountpt_s *rm)
-{
-  nxsem_post(&rm->rm_sem);
-}
 
 /****************************************************************************
  * Name: romfs_hwread

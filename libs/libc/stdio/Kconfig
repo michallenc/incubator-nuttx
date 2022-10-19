@@ -7,6 +7,7 @@ menu "Standard C I/O"
 
 config STDIO_DISABLE_BUFFERING
 	bool "Disable STDIO Buffering"
+	depends on FILE_STREAM
 	default n
 	---help---
 		Tiny systems may need to disable all support for I/O buffering in
@@ -53,7 +54,7 @@ config NUNGET_CHARS
 
 config LIBC_FLOATINGPOINT
 	bool "Enable floating point in printf"
-	default n
+	default !DEFAULT_SMALL && ARCH_FPU
 	---help---
 		By default, floating point support in printf, sscanf, etc. is
 		disabled.  This option will enable floating point support.

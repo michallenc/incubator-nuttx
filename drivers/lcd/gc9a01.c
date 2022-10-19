@@ -189,7 +189,8 @@ static void gc9a01_setarea(FAR struct gc9a01_dev_s *dev,
                            uint16_t x1, uint16_t y1);
 static void gc9a01_bpp(FAR struct gc9a01_dev_s *dev, int bpp);
 static void gc9a01_wrram(FAR struct gc9a01_dev_s *dev,
-                         FAR const uint16_t *buff, size_t size);
+                         FAR const uint8_t *buff, size_t size , size_t skip,
+                         size_t count);
 #ifndef CONFIG_LCD_NOGETRUN
 static void gc9a01_rdram(FAR struct gc9a01_dev_s *dev,
                          FAR uint16_t *buff, size_t size);
@@ -198,13 +199,16 @@ static void gc9a01_fill(FAR struct gc9a01_dev_s *dev, uint16_t color);
 
 /* LCD Data Transfer Methods */
 
-static int gc9a01_putrun(fb_coord_t row, fb_coord_t col,
+static int gc9a01_putrun(FAR struct lcd_dev_s *dev,
+                         fb_coord_t row, fb_coord_t col,
                          FAR const uint8_t *buffer, size_t npixels);
-static int gc9a01_putarea(fb_coord_t row_start, fb_coord_t row_end,
+static int gc9a01_putarea(FAR struct lcd_dev_s *dev,
+                          fb_coord_t row_start, fb_coord_t row_end,
                           fb_coord_t col_start, fb_coord_t col_end,
-                          FAR const uint8_t *buffer);
+                          FAR const uint8_t *buffer, fb_coord_t stride);
 #ifndef CONFIG_LCD_NOGETRUN
-static int gc9a01_getrun(fb_coord_t row, fb_coord_t col,
+static int gc9a01_getrun(FAR struct lcd_dev_s *dev,
+                         fb_coord_t row, fb_coord_t col,
                          FAR uint8_t *buffer, size_t npixels);
 #endif
 
@@ -532,17 +536,26 @@ static void gc9a01_bpp(FAR struct gc9a01_dev_s *dev, int bpp)
  * Name: gc9a01_wrram
  *
  * Description:
- *   Write to the driver's RAM.
+ *   Write to the driver's RAM. It is possible to write multiples of size
+ *   while skipping some values.
  *
  ****************************************************************************/
 
 static void gc9a01_wrram(FAR struct gc9a01_dev_s *dev,
-                         FAR const uint16_t *buff, size_t size)
+                         FAR const uint8_t *buff, size_t size, size_t skip,
+                         size_t count)
 {
+  size_t i;
+
   gc9a01_sendcmd(dev, GC9A01_RAMWR);
 
-  gc9a01_select(dev->spi, GC9A01_BYTESPP * 8);
-  SPI_SNDBLOCK(dev->spi, buff, size);
+  gc9a01_select(dev->spi, 8);
+
+  for (i = 0; i < count; i++)
+    {
+      SPI_SNDBLOCK(dev->spi, buff + (i * (size + skip)), size);
+    }
+
   gc9a01_deselect(dev->spi);
 }
 
@@ -597,6 +610,7 @@ static void gc9a01_fill(FAR struct gc9a01_dev_s *dev, uint16_t color)
  * Description:
  *   This method can be used to write a partial raster line to the LCD:
  *
+ *   dev     - The lcd device
  *   row     - Starting row to write to (range: 0 <= row < yres)
  *   col     - Starting column to write to (range: 0 <= col <= xres-npixels)
  *   buffer  - The buffer containing the run to be written to the LCD
@@ -605,17 +619,17 @@ static void gc9a01_fill(FAR struct gc9a01_dev_s *dev, uint16_t color)
  *
  ****************************************************************************/
 
-static int gc9a01_putrun(fb_coord_t row, fb_coord_t col,
+static int gc9a01_putrun(FAR struct lcd_dev_s *dev,
+                         fb_coord_t row, fb_coord_t col,
                          FAR const uint8_t *buffer, size_t npixels)
 {
-  FAR struct gc9a01_dev_s *priv = &g_lcddev;
-  FAR const uint16_t *src = (FAR const uint16_t *)buffer;
+  FAR struct gc9a01_dev_s *priv = (FAR struct gc9a01_dev_s *)dev;
 
   ginfo("row: %d col: %d npixels: %d\n", row, col, npixels);
   DEBUGASSERT(buffer && ((uintptr_t)buffer & 1) == 0);
 
   gc9a01_setarea(priv, col, row, col + npixels - 1, row);
-  gc9a01_wrram(priv, src, npixels);
+  gc9a01_wrram(priv, buffer, npixels, 0, 1);
 
   return OK;
 }
@@ -626,21 +640,29 @@ static int gc9a01_putrun(fb_coord_t row, fb_coord_t col,
  * Description:
  *   This method can be used to write a partial area to the LCD:
  *
+ *   dev       - The lcd device
  *   row_start - Starting row to write to (range: 0 <= row < yres)
  *   row_end   - Ending row to write to (range: row_start <= row < yres)
  *   col_start - Starting column to write to (range: 0 <= col <= xres)
  *   col_end   - Ending column to write to
  *               (range: col_start <= col_end < xres)
  *   buffer    - The buffer containing the area to be written to the LCD
+ *   stride    - Length of a line in bytes. This parameter may be necessary
+ *               to allow the LCD driver to calculate the offset for partial
+ *               writes when the buffer needs to be splited for row-by-row
+ *               writing.
  *
  ****************************************************************************/
 
-static int gc9a01_putarea(fb_coord_t row_start, fb_coord_t row_end,
+static int gc9a01_putarea(FAR struct lcd_dev_s *dev,
+                          fb_coord_t row_start, fb_coord_t row_end,
                           fb_coord_t col_start, fb_coord_t col_end,
-                          FAR const uint8_t *buffer)
+                          FAR const uint8_t *buffer, fb_coord_t stride)
 {
-  FAR struct gc9a01_dev_s *priv = &g_lcddev;
-  FAR const uint16_t *src = (FAR const uint16_t *)buffer;
+  FAR struct gc9a01_dev_s *priv = (FAR struct gc9a01_dev_s *)dev;
+  size_t cols = col_end - col_start + 1;
+  size_t rows = row_end - row_start + 1;
+  size_t row_size = cols * (priv->bpp >> 3);
 
   ginfo("row_start: %d row_end: %d col_start: %d col_end: %d\n",
          row_start, row_end, col_start, col_end);
@@ -648,8 +670,26 @@ static int gc9a01_putarea(fb_coord_t row_start, fb_coord_t row_end,
   DEBUGASSERT(buffer && ((uintptr_t)buffer & 1) == 0);
 
   gc9a01_setarea(priv, col_start, row_start, col_end, row_end);
-  gc9a01_wrram(priv, src,
-               (row_end - row_start + 1) * (col_end - col_start + 1));
+
+  /* If the stride is the same of the row, a single SPI transfer is enough.
+   * That is always true for lcddev. For framebuffer, that indicates a full
+   * screen or full row update.
+   */
+
+  if (stride == row_size)
+    {
+      /* simpler case, we can just send the whole buffer */
+
+      ginfo("Using full screen/full row mode\n");
+      gc9a01_wrram(priv, buffer, rows * row_size, 0, 1);
+    }
+  else
+    {
+      /* We have to go row by row */
+
+      ginfo("Falling-back to row by row mode\n");
+      gc9a01_wrram(priv, buffer, row_size, stride - row_size, rows);
+    }
 
   return OK;
 }
@@ -660,6 +700,7 @@ static int gc9a01_putarea(fb_coord_t row_start, fb_coord_t row_end,
  * Description:
  *   This method can be used to read a partial raster line from the LCD:
  *
+ *  dev     - The lcd device
  *  row     - Starting row to read from (range: 0 <= row < yres)
  *  col     - Starting column to read read (range: 0 <= col <= xres-npixels)
  *  buffer  - The buffer in which to return the run read from the LCD
@@ -669,10 +710,11 @@ static int gc9a01_putarea(fb_coord_t row_start, fb_coord_t row_end,
  ****************************************************************************/
 
 #ifndef CONFIG_LCD_NOGETRUN
-static int gc9a01_getrun(fb_coord_t row, fb_coord_t col, FAR uint8_t *buffer,
-                         size_t npixels)
+static int gc9a01_getrun(FAR struct lcd_dev_s *dev,
+                         fb_coord_t row, fb_coord_t col,
+                         FAR uint8_t *buffer, size_t npixels)
 {
-  FAR struct gc9a01_dev_s *priv = &g_lcddev;
+  FAR struct gc9a01_dev_s *priv = (FAR struct gc9a01_dev_s *)dev;
   FAR uint16_t *dest = (FAR uint16_t *)buffer;
 
   ginfo("row: %d col: %d npixels: %d\n", row, col, npixels);
@@ -731,6 +773,7 @@ static int gc9a01_getplaneinfo(FAR struct lcd_dev_s *dev,
 #endif
   pinfo->buffer = (FAR uint8_t *)priv->runbuffer; /* Run scratch buffer */
   pinfo->bpp    = priv->bpp;                      /* Bits-per-pixel */
+  pinfo->dev    = dev;                            /* The lcd device */
   return OK;
 }
 

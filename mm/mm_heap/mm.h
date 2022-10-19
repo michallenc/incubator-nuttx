@@ -27,6 +27,7 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/mutex.h>
 #include <nuttx/fs/procfs.h>
 
 #include <assert.h>
@@ -34,7 +35,6 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
-#include <semaphore.h>
 #include <unistd.h>
 
 /****************************************************************************
@@ -90,23 +90,33 @@
 #  define MM_MAX_SHIFT    (22)  /*  4 Mb */
 #endif
 
-#ifdef CONFIG_DEBUG_MM
-#  define MM_MIN_SHIFT       (MM_MIN_SHIFT_ + 2)
-#  define MM_BACKTRACE_DEPTH 8
+#if CONFIG_MM_BACKTRACE == 0
+#  define MM_MIN_SHIFT    (MM_MIN_SHIFT_ + 1)
 #  define MM_ADD_BACKTRACE(heap, ptr) \
      do \
        { \
          FAR struct mm_allocnode_s *tmp = (FAR struct mm_allocnode_s *)(ptr); \
          tmp->pid = getpid(); \
+       } \
+     while (0)
+#elif CONFIG_MM_BACKTRACE > 0
+#  define MM_MIN_SHIFT    (MM_MIN_SHIFT_ + 2)
+#  define MM_ADD_BACKTRACE(heap, ptr) \
+     do \
+       { \
+         FAR struct mm_allocnode_s *tmp = (FAR struct mm_allocnode_s *)(ptr); \
+         kasan_unpoison(tmp, SIZEOF_MM_ALLOCNODE); \
+         tmp->pid = getpid(); \
          if ((heap)->mm_procfs.backtrace) \
            { \
              memset(tmp->backtrace, 0, sizeof(tmp->backtrace)); \
-             backtrace(tmp->backtrace, MM_BACKTRACE_DEPTH); \
+             backtrace(tmp->backtrace, CONFIG_MM_BACKTRACE); \
            } \
          else \
            { \
              tmp->backtrace[0] = 0; \
            } \
+         kasan_poison(tmp, SIZEOF_MM_ALLOCNODE); \
        } \
      while (0)
 #else
@@ -165,12 +175,14 @@ typedef uint32_t mmsize_t;
 
 struct mm_allocnode_s
 {
-#ifdef CONFIG_DEBUG_MM
-  pid_t pid;                               /* The pid for caller */
-  FAR void *backtrace[MM_BACKTRACE_DEPTH]; /* The backtrace buffer for caller */
+#if CONFIG_MM_BACKTRACE >= 0
+  pid_t pid;                                /* The pid for caller */
+#  if CONFIG_MM_BACKTRACE > 0
+  FAR void *backtrace[CONFIG_MM_BACKTRACE]; /* The backtrace buffer for caller */
+#  endif
 #endif
-  mmsize_t size;                           /* Size of this chunk */
-  mmsize_t preceding;                      /* Size of the preceding chunk */
+  mmsize_t size;                            /* Size of this chunk */
+  mmsize_t preceding;                       /* Size of the preceding chunk */
 };
 
 static_assert(SIZEOF_MM_ALLOCNODE <= MM_MIN_CHUNK,
@@ -180,13 +192,15 @@ static_assert(SIZEOF_MM_ALLOCNODE <= MM_MIN_CHUNK,
 
 struct mm_freenode_s
 {
-#ifdef CONFIG_DEBUG_MM
-  pid_t pid;                               /* The pid for caller */
-  FAR void *backtrace[MM_BACKTRACE_DEPTH]; /* The backtrace buffer for caller */
+#if CONFIG_MM_BACKTRACE >= 0
+  pid_t pid;                                /* The pid for caller */
+#  if CONFIG_MM_BACKTRACE > 0
+  FAR void *backtrace[CONFIG_MM_BACKTRACE]; /* The backtrace buffer for caller */
+#  endif
 #endif
-  mmsize_t size;                           /* Size of this chunk */
-  mmsize_t preceding;                      /* Size of the preceding chunk */
-  FAR struct mm_freenode_s *flink;         /* Supports a doubly linked list */
+  mmsize_t size;                            /* Size of this chunk */
+  mmsize_t preceding;                       /* Size of the preceding chunk */
+  FAR struct mm_freenode_s *flink;          /* Supports a doubly linked list */
   FAR struct mm_freenode_s *blink;
 };
 
@@ -203,10 +217,10 @@ struct mm_delaynode_s
 struct mm_heap_s
 {
   /* Mutually exclusive access to this data set is enforced with
-   * the following un-named semaphore.
+   * the following un-named mutex.
    */
 
-  sem_t mm_semaphore;
+  sem_t mm_lock;
 
   /* This is the size of the heap provided to mm */
 
@@ -248,11 +262,10 @@ typedef CODE void (*mmchunk_handler_t)(FAR struct mm_allocnode_s *node,
  * Public Function Prototypes
  ****************************************************************************/
 
-/* Functions contained in mm_sem.c ******************************************/
+/* Functions contained in mm_lock.c *****************************************/
 
-void mm_seminitialize(FAR struct mm_heap_s *heap);
-bool mm_takesemaphore(FAR struct mm_heap_s *heap);
-void mm_givesemaphore(FAR struct mm_heap_s *heap);
+bool mm_lock(FAR struct mm_heap_s *heap);
+void mm_unlock(FAR struct mm_heap_s *heap);
 
 /* Functions contained in mm_shrinkchunk.c **********************************/
 

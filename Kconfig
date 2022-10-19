@@ -40,6 +40,16 @@ config ALLOW_GPL_COMPONENTS
 		NOTE: Please check that the license for each enabled
 		component matches your project license.
 
+config ALLOW_MIT_COMPONENTS
+	bool "Use components that have MIT licenses"
+	default n
+	---help---
+		When this option is enabled the project will allow the use
+		of components that have MIT licenses.
+
+		NOTE: Please check that the license for each enabled
+		component matches your project license.
+
 config ALLOW_BSDNORDIC_COMPONENTS
 	bool "Use components that have 5-Clause Nordic licenses"
 	depends on ARCH_CHIP_NRF52
@@ -56,7 +66,12 @@ endmenu # License Setup
 menu "Build Setup"
 
 config EXPERIMENTAL
-	bool "Prompt for development and/or incomplete code/drivers"
+	bool "Show experimental options"
+	---help---
+		Some features and drivers are considered "experimental" or
+		development/work-in-progress status. By default, these options are
+		hidden in the Kconfig menus. Enabling "Show experimental options"
+		makes these options visible and makes it possible to enable them.
 
 config DEFAULT_SMALL
 	bool "Default to smallest size"
@@ -843,6 +858,12 @@ config DEBUG_LIB_INFO
 	---help---
 		Enable C library informational output to SYSLOG.
 
+config DEBUG_SYS_QUEUE
+	bool "Queue Debug option"
+	default n
+	---help---
+		Enable sys queue debug.
+
 endif # DEBUG_LIB
 
 config DEBUG_MM
@@ -1220,7 +1241,7 @@ endif # DEBUG_LCD
 config DEBUG_LEDS
 	bool "Low-level LED Debug Features"
 	default n
-	depends on ARCH_HAVE_LEDS
+	depends on ARCH_HAVE_LEDS || WS2812
 	---help---
 		Enable LED driver debug features.
 
@@ -1858,7 +1879,7 @@ config DEBUG_TCBINFO
 	bool "Enable TCBinfo struct for debug"
 	default n
 	---help---
-		Enables tcbinfo struct for debugger infomation.
+		Enables tcbinfo struct for debugger information.
 		Selecting this option will enable g_tcbinfo in arch and
 		procfs.
 
@@ -1977,6 +1998,14 @@ config DEBUG_LINK_MAP
 		when linking NuttX ELF. That file can be useful for verifying
 		and debugging magic section games, and for seeing which
 		pieces of code get eliminated with DEBUG_OPT_UNUSED_SECTIONS.
+
+config CCACHE
+	bool "Use ccache"
+	default n
+	---help---
+		If enabled, ccache will be used during the build.
+		Build artifacts will be cached to a local storage, considerably
+		reducing build times.
 
 endmenu # Build Setup
 

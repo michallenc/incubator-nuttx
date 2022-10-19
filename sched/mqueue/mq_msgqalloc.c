@@ -86,7 +86,7 @@ int nxmq_alloc_msgq(FAR struct mq_attr *attr,
     {
       /* Initialize the new named message queue */
 
-      sq_init(&msgq->msglist);
+      list_initialize(&msgq->msglist);
       if (attr)
         {
           msgq->maxmsgs    = (int16_t)attr->mq_maxmsg;
@@ -98,7 +98,12 @@ int nxmq_alloc_msgq(FAR struct mq_attr *attr,
           msgq->maxmsgsize = MQ_MAX_BYTES;
         }
 
+#ifndef CONFIG_DISABLE_MQUEUE_NOTIFICATION
       msgq->ntpid = INVALID_PROCESS_ID;
+#endif
+
+      dq_init(&msgq->waitfornotempty);
+      dq_init(&msgq->waitfornotfull);
     }
   else
     {

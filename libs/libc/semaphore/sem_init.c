@@ -61,6 +61,8 @@
 
 int nxsem_init(FAR sem_t *sem, int pshared, unsigned int value)
 {
+  UNUSED(pshared);
+
   /* Verify that a semaphore was provided and the count is within the valid
    * range.
    */
@@ -70,6 +72,10 @@ int nxsem_init(FAR sem_t *sem, int pshared, unsigned int value)
       /* Initialize the semaphore count */
 
       sem->semcount         = (int16_t)value;
+
+      /* Initialize semaphore wait list */
+
+      dq_init(&sem->waitlist);
 
       /* Initialize to support priority inheritance */
 

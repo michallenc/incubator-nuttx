@@ -66,14 +66,17 @@
 #include <arch/xtensa/xtensa_abi.h>
 #include <arch/xtensa/xtensa_specregs.h>
 
+#include "chip.h"
 #include "syscall.h"
 #include "xtensa_asm_utils.h"
+
+#if XCHAL_CP_NUM > 0
+#  include "xtensa_coproc.S"
+#endif
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-	.text
 
 /****************************************************************************
  * Name: _xtensa_context_save
@@ -85,19 +88,17 @@
  *   This function saves Xtensa processor state.
  *   It is called directly by interrupt handling logic with interrupts
  *   disabled.  Registers PC, PS, A0, A1 (SP), A2 and A3 are saved before
- *   calling this function. 
+ *   calling this function.
  *
  *   The counterpart to this function is _xtensa_context_restore().
  *
  * Entry Conditions:
  *   - A0  = Return address to caller.
- *   - A2  = Pointer to the processor state save area
  *   - Other processor state except PC, PS, A0, A1 (SP), A2 and A3 are as at
  *     the point of interruption.
  *
  * Exit conditions:
  *   - A0  = Return address in caller.
- *   - A2, A12-A15 as at entry (preserved).
  *
  * Assumptions:
  *   - Caller is expected to have saved PC, PS, A0, A1 (SP), and A2.
@@ -105,6 +106,7 @@
  *
  ****************************************************************************/
 
+	.section HANDLER_SECTION, "ax"
 	.global	_xtensa_context_save
 	.type	_xtensa_context_save, @function
 
@@ -196,8 +198,12 @@ _xtensa_context_save:
 	wsr     a2, PS                     /* Restore PS to the value at entry */
 	wsr     a0, EPC1                   /* Restore EPC1 to the value at entry */
 	rsync
-	l32i  a0, sp, (4 * REG_TMP0)       /* Restore return address */
+	l32i	a0, sp, (4 * REG_TMP0)       /* Restore return address */
 
+#endif
+
+#if XCHAL_CP_NUM > 0
+	xtensa_coproc_savestate
 #endif
 
 	ret
@@ -230,6 +236,7 @@ _xtensa_context_save:
  *
  ****************************************************************************/
 
+	.section HANDLER_SECTION, "ax"
 	.global _xtensa_context_restore
 	.type	_xtensa_context_restore,@function
 
@@ -238,6 +245,10 @@ _xtensa_context_save:
 	.align  4
 
 _xtensa_context_restore:
+
+#if XCHAL_CP_NUM > 0
+	xtensa_coproc_restorestate
+#endif
 
 #if XCHAL_HAVE_LOOPS != 0
 	l32i	a3, a2, (4 * REG_LBEG)

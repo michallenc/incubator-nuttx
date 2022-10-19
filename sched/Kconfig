@@ -60,6 +60,26 @@ config SCHED_TICKLESS
 
 if SCHED_TICKLESS
 
+config SCHED_TICKLESS_TICK_ARGUMENT
+	bool "Scheduler use tick argument"
+	default n
+	---help---
+		Enables use of tick argument in scheduler. If enabled, then the
+		board-specific logic must provide the following functions:
+
+			int up_timer_gettick(FAR clock_t *ticks);
+
+		If SCHED_TICKLESS_ALARM is enabled, then these additional interfaces are
+		expected:
+
+			int up_alarm_tick_cancel(FAR clock_t *ticks);
+			int up_alarm_tick_start(clock_t ticks);
+
+		Otherwise, these additional interfaces are expected:
+
+			int up_timer_tick_cancel(FAR clock_t *ticks);
+			int up_timer_tick_start(FAR clock_t ticks);
+
 config SCHED_TICKLESS_ALARM
 	bool "Tickless alarm"
 	default n
@@ -165,7 +185,7 @@ config ARCH_HAVE_TIMEKEEPING
 config CLOCK_TIMEKEEPING
 	bool "Support timekeeping algorithms"
 	default n
-	depends on EXPERIMENTAL && ARCH_HAVE_TIMEKEEPING
+	depends on ARCH_HAVE_TIMEKEEPING
 	---help---
 		CLOCK_TIMEKEEPING enables experimental time management algorithms.
 
@@ -197,6 +217,7 @@ config PREALLOC_TIMERS
 	int "Number of pre-allocated POSIX timers"
 	default 4 if DEFAULT_SMALL
 	default 8 if !DEFAULT_SMALL
+	depends on !DISABLE_POSIX_TIMERS
 	---help---
 		The number of pre-allocated POSIX timer structures.  The system manages a
 		pool of preallocated timer structures to minimize dynamic allocations.  Set to
@@ -821,7 +842,7 @@ config SCHED_CPULOAD_EXTCLK
 		achieved.  This option enables use of such an "external" clock.  The
 		implementation of the clock must be provided by platform-specific
 		logic; that platform-specific logic must call the system function
-		nxsched_process_cpuload() at each timer expiration with interrupts
+		nxsched_process_cpuload_ticks() at each timer expiration with interrupts
 		disabled.
 
 if SCHED_CPULOAD_EXTCLK
@@ -1171,16 +1192,6 @@ config SEM_PREALLOCHOLDERS
 		are only using semaphores as mutexes (only one holder) OR if no more
 		than two threads participate using a counting semaphore.
 
-config SEM_NNESTPRIO
-	int "Maximum number of higher priority threads"
-	default 16
-	---help---
-		If priority inheritance is enabled, then this setting is the
-		maximum number of higher priority threads (minus 1) than can be
-		waiting for another thread to release a count on a semaphore.
-		This value may be set to zero if no more than one thread is
-		expected to wait for a semaphore.
-
 endif # PRIORITY_INHERITANCE
 
 menu "RTOS hooks"
@@ -1310,45 +1321,6 @@ config SCHED_STARTHOOK
 		startup before that actual task entry point is called.  The
 		starthook is useful, for example, for setting up automatic
 		configuration of C++ constructors.
-
-config SCHED_ATEXIT
-	bool "Enable atexit() API"
-	default n
-	---help---
-		Enables the atexit() API
-
-config SCHED_ATEXIT_MAX
-	int "Max number of atexit() functions"
-	default 1
-	depends on SCHED_ATEXIT && !SCHED_ONEXIT
-	---help---
-		By default if SCHED_ATEXIT is selected, only a single atexit() function
-		is supported. That number can be increased by defined this setting to
-		the number that you require.
-
-		If both SCHED_ONEXIT and SCHED_ATEXIT are selected, then atexit() is built
-		on top of the on_exit() implementation.  In that case, SCHED_ONEXIT_MAX
-		determines the size of the combined number of atexit(0) and on_exit calls
-		and SCHED_ATEXIT_MAX is not used.
-
-config SCHED_ONEXIT
-	bool "Enable on_exit() API"
-	default n
-	---help---
-		Enables the on_exit() API
-
-config SCHED_ONEXIT_MAX
-	int "Max number of on_exit() functions"
-	default 1
-	depends on SCHED_ONEXIT
-	---help---
-		By default if SCHED_ONEXIT is selected, only a single on_exit() function
-		is supported. That number can be increased by defined this setting to the
-		number that you require.
-
-		If both SCHED_ONEXIT and SCHED_ATEXIT are selected, then atexit() is built
-		on top of the on_exit() implementation.  In that case, SCHED_ONEXIT_MAX
-		determines the size of the combined number of atexit(0) and on_exit calls.
 
 endmenu # RTOS hooks
 
@@ -1557,6 +1529,26 @@ config SIG_PIPE
 		This signal is generated when write on a pipe with no one to read it.
 		SIGPIPE may be ignored.
 
+config SIG_HUP
+	int "SIGHUP"
+	default 14
+	---help---
+		The SIGHUP would be sent to programs when the serial line was dropped,
+		often because the connected user terminated the connection by hanging up
+		the modem. The system would detect the line was dropped via the lost
+		Data Carrier Detect (DCD) signal.
+
+config SIG_TTIN
+	int "SIGTTIN"
+	default 15
+	---help---
+		A process cannot read from the user’s terminal while it is running as a
+		background job. When any process in a background job tries to read from
+		the terminal, all of the processes in the job are sent a SIGTTIN signal.
+		The default action for this signal is to stop the process. For more
+		information about how this interacts with the terminal driver, see Access
+		to the Controlling Terminal.
+
 comment "Non-standard Signal Numbers"
 
 config SIG_SIGCONDTIMEDOUT
@@ -1603,6 +1595,12 @@ config MQ_MAXMSGSIZE
 	---help---
 		Message structures are allocated with a fixed payload size given by this
 		setting (does not include other message structure overhead.
+
+config DISABLE_MQUEUE_NOTIFICATION
+	bool "Disable POSIX message queue notification"
+	default DEFAULT_SMALL
+	---help---
+		Disable POSIX message queue notification
 
 endmenu # POSIX Message Queue Options
 

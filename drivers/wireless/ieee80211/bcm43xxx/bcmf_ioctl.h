@@ -224,9 +224,12 @@ typedef struct wl_uint32_list
   uint32_t element[1];
 } wl_uint32_list_t;
 
+/* scan params for extended join */
+
 typedef struct wl_join_scan_params
 {
   uint8_t scan_type;    /* 0 use default, active or passive scan */
+  uint8_t pad[3];
   int32_t nprobes;      /* -1 use default, number of probes per channel */
   int32_t active_time;  /* -1 use default, dwell time per channel for
                          * active scanning */
@@ -235,6 +238,40 @@ typedef struct wl_join_scan_params
   int32_t home_time;    /* -1 use default, dwell time for the home channel
                          * between channel scans */
 } wl_join_scan_params_t;
+
+/** used for association with a specific BSSID and chanspec list */
+
+typedef struct wl_assoc_params
+{
+  struct ether_addr bssid;            /* 00:00:00:00:00:00: broadcast scan */
+  uint16_t          bssid_cnt;        /* 0: use chanspec_num, and the single bssid,
+                                       * otherwise count of chanspecs in chanspec_list
+                                       * AND paired bssids following chanspec_list
+                                       * also, chanspec_num has to be set to zero
+                                       * for bssid list to be used
+                                       */
+  int32_t           chanspec_num;     /* 0: all available channels,
+                                       * otherwise count of chanspecs in chanspec_list */
+  chanspec_t        chanspec_list[1]; /* list of chanspecs */
+} wl_assoc_params_t;
+
+/** used for association to a specific BSSID and channel */
+
+typedef wl_assoc_params_t wl_join_assoc_params_t;
+
+/** extended join params */
+
+typedef struct wl_extjoin_params
+{
+  wlc_ssid_t             ssid;  /* {0, ""}: wildcard scan */
+  wl_join_scan_params_t  scan;
+  wl_join_assoc_params_t assoc; /* optional field, but it must include the fixed portion
+                                 * of the wl_join_assoc_params_t struct when it does
+                                 * present. */
+} wl_extjoin_params_t;
+
+#define WL_EXTJOIN_PARAMS_FIXED_SIZE \
+  (offset(wl_extjoin_params_t, assoc) + WL_JOIN_ASSOC_PARAMS_FIXED_SIZE)
 
 #define NRATE_MCS_INUSE            (0x00000080)
 #define NRATE_RATE_MASK         (0x0000007f)
@@ -544,6 +581,7 @@ typedef struct
 {
   uint32_t val;
   struct ether_addr ea;
+  uint16_t pad;
 } scb_val_t;
 
 #define BCM_MAC_STATUS_INDICATION    (0x40010200L)
@@ -724,6 +762,13 @@ typedef struct wlc_iov_trx_s
 #define IOVAR_STR_AMPDU_RX_FACTOR        "ampdu_rx_factor"
 #define IOVAR_STR_MIMO_BW_CAP            "mimo_bw_cap"
 #define IOVAR_STR_CLMLOAD                "clmload"
+#define IOVAR_STR_CLVER                  "clmver"
+#define IOVAR_STR_JOIN                   "join"
+#define IOVAR_STR_GPIOOUT                "gpioout"
+#define IOVAR_STR_CCGPIOCTRL             "ccgpioctrl"
+#define IOVAR_STR_CCGPIOIN               "ccgpioin"
+#define IOVAR_STR_CCGPIOOUT              "ccgpioout"
+#define IOVAR_STR_CCGPIOPUTEN            "ccgpioputen"
 
 #define WLC_IOCTL_MAGIC                    ( 0x14e46c77 )
 #define WLC_IOCTL_VERSION                  (          1 )
@@ -2673,6 +2718,13 @@ typedef struct wl_rssi_event
   uint8_t num_rssi_levels;
   int8_t rssi_levels[MAX_RSSI_LEVELS];
 } wl_rssi_event_t;
+
+typedef struct wl_sta_rssi
+{
+  uint32_t          rssi;
+  struct ether_addr sta_addr;
+  uint16_t          foo;
+} wl_sta_rssi_t;
 
 #define WLFEATURE_DISABLE_11N          0x00000001
 #define WLFEATURE_DISABLE_11N_STBC_TX  0x00000002

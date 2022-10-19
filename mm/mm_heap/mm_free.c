@@ -84,20 +84,18 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
       return;
     }
 
-  kasan_poison(mem, mm_malloc_size(mem));
-
-  if (mm_takesemaphore(heap) == false)
+  if (mm_lock(heap) == false)
     {
-      kasan_unpoison(mem, mm_malloc_size(mem));
-
       /* Meet -ESRCH return, which means we are in situations
-       * during context switching(See mm_takesemaphore() & getpid()).
+       * during context switching(See mm_lock() & getpid()).
        * Then add to the delay list.
        */
 
       mm_add_delaylist(heap, mem);
       return;
     }
+
+  kasan_poison(mem, mm_malloc_size(mem));
 
   DEBUGASSERT(mm_heapmember(heap, mem));
 
@@ -141,8 +139,8 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
       /* Then merge the two chunks */
 
       node->size          += next->size;
-      andbeyond->preceding =  node->size |
-                              (andbeyond->preceding & MM_ALLOC_BIT);
+      andbeyond->preceding = node->size |
+                             (andbeyond->preceding & MM_ALLOC_BIT);
       next                 = (FAR struct mm_freenode_s *)andbeyond;
     }
 
@@ -175,5 +173,5 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
   /* Add the merged node to the nodelist */
 
   mm_addfreechunk(heap, node);
-  mm_givesemaphore(heap);
+  mm_unlock(heap);
 }
