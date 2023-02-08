@@ -953,6 +953,7 @@ static int imxrt_setup(struct qe_lowerhalf_s *lower)
 
   if (((config->init_flags >> XIE_SHIFT) & 1) != 0)
     {
+      snerr("enable irq of %x, should be %x\n", config->base, IMXRT_ENC1_BASE);
       ret = irq_attach(config->irq, imxrt_enc_index, priv);
       if (ret < 0)
         {
@@ -972,7 +973,10 @@ static int imxrt_setup(struct qe_lowerhalf_s *lower)
   regval |= ((config->init_flags >> XIP_SHIFT) & 1) ? ENC_CTRL_XIP : 0;
   regval |= ((config->init_flags >> XIE_SHIFT) & 1) ? ENC_CTRL_XIE : 0;
   regval |= ((config->init_flags >> XNE_SHIFT) & 1) ? ENC_CTRL_XNE : 0;
+  snerr("IMXRT_ENC_CTRL: 0x%x\n", regval);
   imxrt_enc_putreg16(priv, IMXRT_ENC_CTRL_OFFSET, regval);
+
+  snerr("IMXRT_ENC_CTRL: 0x%x\n", imxrt_enc_getreg16(priv, IMXRT_ENC_CTRL_OFFSET));
 
   regval = ((config->init_flags >> MOD_SHIFT) & 1) ? ENC_CTRL2_MOD : 0;
   imxrt_enc_putreg16(priv, IMXRT_ENC_CTRL2_OFFSET, regval);

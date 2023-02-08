@@ -120,12 +120,26 @@
 
 /* GPIO pins used by the GPIO subsystem */
 
-#define BOARD_NGPIOIN   1   /* Amount of GPIO input pins */
-#define BOARD_NGPIOOUT  1   /* Amount of GPIO output pins */
+#define BOARD_NGPIOIN   3   /* Amount of GPIO input pins */
+#define BOARD_NGPIOOUT  4   /* Amount of GPIO output pins */
 
-#define GPIO_IN1       (GPIO_INPUT | GPIO_PORT4 | GPIO_PIN4)    /* EMC_04 */
 #define GPIO_OUT1      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
-                        GPIO_PORT4 | GPIO_PIN5)                 /* EMC_05 */
+                        GPIO_PORT3 | GPIO_PIN18)                 /* EMC_32 */
+#define GPIO_OUT2      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
+                        GPIO_PORT2 | GPIO_PIN11)                 /* B0_11 */
+#define GPIO_OUT3      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
+                        GPIO_PORT2 | GPIO_PIN17)                 /* B1_01 */
+#define GPIO_OUT4      (GPIO_OUTPUT | GPIO_OUTPUT_ZERO | IOMUX_GOUT_DEFAULT | \
+                        GPIO_PORT4 | GPIO_PIN5)                  /* EMC_05 */
+
+#define GPIO_IN1       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN19 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B1_03 */
+#define GPIO_IN2       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN18 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B1_02 */
+#define GPIO_IN3       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN0 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_00 */
+#define GPIO_IN4       (GPIO_INPUT| GPIO_PORT2 | GPIO_PIN2 | IOMUX_PULL_UP_100K | \
+                        _IOMUX_PULL_ENABLE)                        /* B0_0 */
 
 /****************************************************************************
  * Public Types

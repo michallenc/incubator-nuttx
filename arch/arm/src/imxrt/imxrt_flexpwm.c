@@ -605,7 +605,7 @@ static struct imxrt_flexpwm_module_s g_pwm4_modules[] =
     .complementary = false,
 #endif
     .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD3_SYNC_SRC,
-    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC3_SEL_OFFSET,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC2_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM4_MOD4
@@ -633,7 +633,7 @@ static struct imxrt_flexpwm_module_s g_pwm4_modules[] =
     .complementary = false,
 #endif
     .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD4_SYNC_SRC,
-    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC4_SEL_OFFSET,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC3_SEL_OFFSET,
   },
 #endif
 };
@@ -963,7 +963,15 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
 
           regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                        + MODULE_OFFSET * shift);
-          regval |= SMT_OUT_TRIG_EN_VAL1;
+          if (priv->base == IMXRT_FLEXPWM1_BASE)
+            {
+              regval |= SMT_OUT_TRIG_EN_VAL1;
+            }
+          if (priv->base == IMXRT_FLEXPWM4_BASE)
+            {
+              regval |= SMT_OUT_TRIG_EN_VAL3;
+            }
+          //regval |= SMT_OUT_TRIG_EN_VAL1;
           putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
                                       + MODULE_OFFSET * shift);
         }

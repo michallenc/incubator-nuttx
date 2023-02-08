@@ -48,6 +48,13 @@
 #include "imxrt_periphclks.h"
 #include "imxrt_xbar.h"
 
+#include "hardware/imxrt_flexpwm.h"
+
+#define HISTO_SIZE 32768
+
+int ADC_histo[HISTO_SIZE];
+int total_meas = 0;
+
 #ifdef CONFIG_IMXRT_ADC
 
 /* Some ADC peripheral must be enabled */
@@ -396,9 +403,9 @@ static void adc_reset(struct adc_dev_s *dev)
 
   /* Configure ADC */
 
-  uint32_t adc_cfg = ADC_CFG_AVGS_4SMPL | ADC_CFG_ADTRG_SW |
-      ADC_CFG_REFSEL_VREF | ADC_CFG_ADSTS_7_21 | ADC_CFG_ADIV_DIV8 | \
-      ADC_CFG_ADLSMP | ADC_CFG_MODE_10BIT | ADC_CFG_ADICLK_IPGDIV2;
+  uint32_t adc_cfg = ADC_CFG_ADTRG_SW | ADC_CFG_ADHSC |
+      ADC_CFG_REFSEL_VREF | ADC_CFG_ADSTS_3_13 | ADC_CFG_ADIV_DIV2 | \
+      ADC_CFG_MODE_10BIT | ADC_CFG_ADICLK_IPGDIV2; //ADC_CFG_AVGS_4SMPL | ADC_CFG_ADLSMP
   adc_putreg(priv, IMXRT_ADC_CFG_OFFSET, adc_cfg);
 
   uint32_t adc_gc = 0;
@@ -604,10 +611,32 @@ static void adc_shutdown(struct adc_dev_s *dev)
   /* Then detach the ADC interrupt handler. */
 
   irq_detach(priv->irq);
+/*
+  printf("idx = [");
+  for (int i = 0; i < HISTO_SIZE;i++)
+    {
+      if (ADC_histo[i] != 0)
+        {
+          printf("%d,", i);
+        }
+    }
+  printf("]\n");
+  printf("isr = [");
+  for (int i = 0; i < HISTO_SIZE;i++)
+    {
+      if (ADC_histo[i] != 0)
+        {
+          printf("%d,", ADC_histo[i]);
+          ADC_histo[i] = 0;
+        }
+    }
+  printf("]\n");
+  printf("total_meas = %d\n", total_meas);
+  total_meas = 0;*/
 }
 
 /****************************************************************************
- * Name: adc_rxint
+ * Name: adc_rxin t
  *
  * Description:
  *   Call to enable or disable RX interrupts
@@ -685,40 +714,43 @@ static int adc_interrupt(int irq, void *context, void *arg)
   struct imxrt_dev_s *priv = (struct imxrt_dev_s *)dev->ad_priv;
   int32_t data;
 
-  if ((adc_getreg(priv, IMXRT_ADC_HS_OFFSET) & ADC_HS_COCO0) != 0)
-    {
-      /* Read data. This also clears the COCO bit. */
+  // if ((adc_getreg(priv, IMXRT_ADC_HS_OFFSET) & ADC_HS_COCO0) != 0)
+  //   {
+  //     /* Read data. This also clears the COCO bit. */
 
-      data = (int32_t)adc_getreg(priv, IMXRT_ADC_R0_OFFSET);
+  //     data = (int32_t)adc_getreg(priv, IMXRT_ADC_R0_OFFSET);
 
-      if (priv->cb != NULL)
-        {
-          DEBUGASSERT(priv->cb->au_receive != NULL);
-          priv->cb->au_receive(dev, priv->chanlist[priv->current], data);
-        }
+  //     if (priv->cb != NULL)
+  //       {
+  //         DEBUGASSERT(priv->cb->au_receive != NULL);
+  //         priv->cb->au_receive(dev, priv->chanlist[priv->current], data);
+  //       }
 
-      /* Set the channel number of the next channel that will complete
-       * conversion.
-       */
+  //     /* Set the channel number of the next channel that will complete
+  //      * conversion.
+  //      */
 
-      priv->current++;
+  //     priv->current++;
 
-      if (priv->current >= priv->nchannels)
-        {
-          /* Restart the conversion sequence from the beginning */
+  //     if (priv->current >= priv->nchannels)
+  //       {
+  //         /* Restart the conversion sequence from the beginning */
 
-          priv->current = 0;
-        }
+  //         priv->current = 0;
+  //       }
 
-      /* Start the next conversion */
+  //     /* Start the next conversion */
 
-      adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET, ADC_HC_ADCH_MASK,
-                    ADC_HC_ADCH(priv->chanlist[priv->current]));
-    }
-  else if ((getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET)
+  //     adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET, ADC_HC_ADCH_MASK,
+  //                   ADC_HC_ADCH(priv->chanlist[priv->current]));
+  //   }
+  // else
+  if ((getreg32(IMXRT_ADCETC_BASE + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET)
                      & priv->trig_clear) != 0)
     {
       /* Read data */
+
+      //imxrt_gpio_write(GPIO_OUT4_SRC, 1);
 
       for (int i = 0; i < priv->nchannels; i++)
         {
@@ -726,24 +758,35 @@ static int adc_interrupt(int irq, void *context, void *arg)
           if (priv->cb != NULL)
             {
               DEBUGASSERT(priv->cb->au_receive != NULL);
-              priv->cb->au_receive(dev, priv->chanlist[priv->current], data);
+              priv->cb->au_receive(dev, priv->chanlist[i], data);
             }
 
           /* Set the channel number of the next channel that will complete
            * conversion.
-           */
+           *
 
           priv->current++;
           if (priv->current >= priv->nchannels)
             {
-              /* Restart the conversion sequence from the beginning */
+              Restart the conversion sequence from the 
 
               priv->current = 0;
-            }
+            }*/
 
           adc_modifyreg(priv, IMXRT_ADC_HC0_OFFSET + 4 * i,
                         ADC_HC_ADCH_MASK, ADC_HC_ADCH_EXT_ADC_ETC);
         }
+/*
+        uint16_t regval = getreg16(IMXRT_FLEXPWM4_BASE + IMXRT_FLEXPWM_SM0CNT_OFFSET + 0x60 * 2) - getreg16(IMXRT_FLEXPWM4_BASE + IMXRT_FLEXPWM_SM0VAL3_OFFSET
+                              + 0x60 * 2);
+        if (regval > 0)
+          {
+            if (regval < HISTO_SIZE)
+              {
+                ADC_histo[regval] += 1;
+                total_meas += 1;
+              }
+            }*/
 
       /* Clear the interrpt bit. The interrupt access is a little bit
        * unfortunate here. We need to access ADC_ETC_DONE01_IRQ_TRIG0_DONE0
@@ -754,6 +797,8 @@ static int adc_interrupt(int irq, void *context, void *arg)
       putreg32(priv->trig_clear, IMXRT_ADCETC_BASE
                + IMXRT_ADC_ETC_DONE01_IRQ_OFFSET);
     }
+
+    //imxrt_gpio_write(GPIO_OUT4_SRC, 0);
 
   /* There are no interrupt flags left to clear */
 
