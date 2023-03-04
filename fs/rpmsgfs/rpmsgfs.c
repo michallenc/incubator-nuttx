@@ -37,6 +37,7 @@
 #include <limits.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
 
@@ -77,7 +78,7 @@ struct rpmsgfs_ofile_s
 
 struct rpmsgfs_mountpt_s
 {
-  sem_t                      fs_sem;   /* Assure thread-safe access */
+  mutex_t                    fs_lock;  /* Assure thread-safe access */
   FAR struct rpmsgfs_ofile_s *fs_head; /* Singly-linked list of open files */
   char                       fs_root[PATH_MAX];
   void                       *handle;
@@ -108,7 +109,7 @@ static int     rpmsgfs_fstat(FAR const struct file *filep,
                              FAR struct stat *buf);
 static int     rpmsgfs_fchstat(FAR const struct file *filep,
                                FAR const struct stat *buf, int flags);
-static int     rpmsgfs_ftruncate(FAR struct file *filep,
+static int     rpmsgfs_truncate(FAR struct file *filep,
                                  off_t length);
 
 static int     rpmsgfs_opendir(FAR struct inode *mountpt,
@@ -160,12 +161,13 @@ const struct mountpt_operations rpmsgfs_operations =
   rpmsgfs_write,         /* write */
   rpmsgfs_seek,          /* seek */
   rpmsgfs_ioctl,         /* ioctl */
+  NULL,                  /* mmap */
+  rpmsgfs_truncate,      /* truncate */
 
   rpmsgfs_sync,          /* sync */
   rpmsgfs_dup,           /* dup */
   rpmsgfs_fstat,         /* fstat */
   rpmsgfs_fchstat,       /* fchstat */
-  rpmsgfs_ftruncate,     /* ftruncate */
 
   rpmsgfs_opendir,       /* opendir */
   rpmsgfs_closedir,      /* closedir */
@@ -187,24 +189,6 @@ const struct mountpt_operations rpmsgfs_operations =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: rpmsgfs_semtake
- ****************************************************************************/
-
-static int rpmsgfs_semtake(FAR struct rpmsgfs_mountpt_s *fs)
-{
-  return nxsem_wait_uninterruptible(&fs->fs_sem);
-}
-
-/****************************************************************************
- * Name: rpmsgfs_semgive
- ****************************************************************************/
-
-static void rpmsgfs_semgive(FAR struct rpmsgfs_mountpt_s *fs)
-{
-  nxsem_post(&fs->fs_sem);
-}
 
 /****************************************************************************
  * Name: rpmsgfs_mkpath
@@ -308,9 +292,9 @@ static int rpmsgfs_open(FAR struct file *filep, FAR const char *relpath,
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -322,7 +306,7 @@ static int rpmsgfs_open(FAR struct file *filep, FAR const char *relpath,
   if (hf == NULL)
     {
       ret = -ENOMEM;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Append to the host's root directory */
@@ -373,13 +357,13 @@ static int rpmsgfs_open(FAR struct file *filep, FAR const char *relpath,
   fs->fs_head = hf;
 
   ret = OK;
-  goto errout_with_semaphore;
+  goto errout_with_lock;
 
 errout_with_buffer:
   kmm_free(hf);
 
-errout_with_semaphore:
-  rpmsgfs_semgive(fs);
+errout_with_lock:
+  nxmutex_unlock(&fs->fs_lock);
   if (ret == -EINVAL)
     {
       ret = -EIO;
@@ -411,9 +395,9 @@ static int rpmsgfs_close(FAR struct file *filep)
   fs    = inode->i_private;
   hf    = filep->f_priv;
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -473,7 +457,7 @@ static int rpmsgfs_close(FAR struct file *filep)
   kmm_free(hf);
 
 okout:
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return OK;
 }
 
@@ -501,9 +485,9 @@ static ssize_t rpmsgfs_read(FAR struct file *filep, FAR char *buffer,
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -517,7 +501,7 @@ static ssize_t rpmsgfs_read(FAR struct file *filep, FAR char *buffer,
       filep->f_pos += ret;
     }
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -543,9 +527,9 @@ static ssize_t rpmsgfs_write(FAR struct file *filep, const char *buffer,
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -558,7 +542,7 @@ static ssize_t rpmsgfs_write(FAR struct file *filep, const char *buffer,
   if ((hf->oflags & O_WROK) == 0)
     {
       ret = -EACCES;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Call the host to perform the write */
@@ -569,8 +553,8 @@ static ssize_t rpmsgfs_write(FAR struct file *filep, const char *buffer,
       filep->f_pos += ret;
     }
 
-errout_with_semaphore:
-  rpmsgfs_semgive(fs);
+errout_with_lock:
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -597,9 +581,9 @@ static off_t rpmsgfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -613,7 +597,7 @@ static off_t rpmsgfs_seek(FAR struct file *filep, off_t offset, int whence)
       filep->f_pos = ret;
     }
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -640,9 +624,9 @@ static int rpmsgfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -651,8 +635,12 @@ static int rpmsgfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   /* Call our internal routine to perform the ioctl */
 
   ret = rpmsgfs_client_ioctl(fs->handle, hf->fd, cmd, arg);
+  if (ret == 0 && (cmd == FIONBIO || cmd == FIOCLEX || cmd == FIONCLEX))
+    {
+      ret = -ENOTTY;
+    }
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -683,9 +671,9 @@ static int rpmsgfs_sync(FAR struct file *filep)
 
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -693,7 +681,7 @@ static int rpmsgfs_sync(FAR struct file *filep)
 
   rpmsgfs_client_sync(fs->handle, hf->fd);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return OK;
 }
 
@@ -757,9 +745,9 @@ static int rpmsgfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
   fs    = inode->i_private;
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -769,7 +757,7 @@ static int rpmsgfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   ret = rpmsgfs_client_fstat(fs->handle, hf->fd, buf);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -803,9 +791,9 @@ static int rpmsgfs_fchstat(FAR const struct file *filep,
   fs    = inode->i_private;
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -815,12 +803,12 @@ static int rpmsgfs_fchstat(FAR const struct file *filep,
 
   ret = rpmsgfs_client_fchstat(fs->handle, hf->fd, buf, flags);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
 /****************************************************************************
- * Name: rpmsgfs_ftruncate
+ * Name: rpmsgfs_truncate
  *
  * Description:
  *   Set the length of the open, regular file associated with the file
@@ -828,7 +816,7 @@ static int rpmsgfs_fchstat(FAR const struct file *filep,
  *
  ****************************************************************************/
 
-static int rpmsgfs_ftruncate(FAR struct file *filep, off_t length)
+static int rpmsgfs_truncate(FAR struct file *filep, off_t length)
 {
   FAR struct inode *inode;
   FAR struct rpmsgfs_mountpt_s *fs;
@@ -848,9 +836,9 @@ static int rpmsgfs_ftruncate(FAR struct file *filep, off_t length)
   fs    = inode->i_private;
   DEBUGASSERT(fs != NULL);
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -860,7 +848,7 @@ static int rpmsgfs_ftruncate(FAR struct file *filep, off_t length)
 
   ret = rpmsgfs_client_ftruncate(fs->handle, hf->fd, length);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -893,9 +881,9 @@ static int rpmsgfs_opendir(FAR struct inode *mountpt,
       return -ENOMEM;
     }
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       goto errout_with_rdir;
@@ -911,15 +899,15 @@ static int rpmsgfs_opendir(FAR struct inode *mountpt,
   if (rdir->dir == NULL)
     {
       ret = -ENOENT;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   *dir = (FAR struct fs_dirent_s *)rdir;
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return OK;
 
-errout_with_semaphore:
-  rpmsgfs_semgive(fs);
+errout_with_lock:
+  nxmutex_unlock(&fs->fs_lock);
 
 errout_with_rdir:
   kmm_free(rdir);
@@ -949,9 +937,9 @@ static int rpmsgfs_closedir(FAR struct inode *mountpt,
   fs = mountpt->i_private;
   rdir = (FAR struct rpmsgfs_dir_s *)dir;
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -961,7 +949,7 @@ static int rpmsgfs_closedir(FAR struct inode *mountpt,
 
   rpmsgfs_client_closedir(fs->handle, rdir->dir);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   kmm_free(rdir);
   return OK;
 }
@@ -990,9 +978,9 @@ static int rpmsgfs_readdir(FAR struct inode *mountpt,
   fs = mountpt->i_private;
   rdir = (FAR struct rpmsgfs_dir_s *)dir;
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1002,7 +990,7 @@ static int rpmsgfs_readdir(FAR struct inode *mountpt,
 
   ret = rpmsgfs_client_readdir(fs->handle, rdir->dir, entry);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1029,9 +1017,9 @@ static int rpmsgfs_rewinddir(FAR struct inode *mountpt,
   fs = mountpt->i_private;
   rdir = (FAR struct rpmsgfs_dir_s *)dir;
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1041,7 +1029,7 @@ static int rpmsgfs_rewinddir(FAR struct inode *mountpt,
 
   rpmsgfs_client_rewinddir(fs->handle, rdir->dir);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return OK;
 }
 
@@ -1127,13 +1115,9 @@ static int rpmsgfs_bind(FAR struct inode *blkdriver, FAR const void *data,
       return ret;
     }
 
-  /* If the global semaphore hasn't been initialized, then
-   * initialized it now.
-   */
+  /* Initialize the mutex that controls access */
 
-  /* Initialize the semaphore that controls access */
-
-  nxsem_init(&fs->fs_sem, 0, 1);
+  nxmutex_init(&fs->fs_lock);
 
   /* Initialize the allocated mountpt state structure.  The filesystem is
    * responsible for one reference ont the blkdriver inode and does not
@@ -1184,7 +1168,7 @@ static int rpmsgfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   /* Check if there are sill any files opened on the filesystem. */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1194,7 +1178,7 @@ static int rpmsgfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
     {
       /* We cannot unmount now.. there are open files */
 
-      rpmsgfs_semgive(fs);
+      nxmutex_unlock(&fs->fs_lock);
 
       /* This implementation currently only supports unmounting if there are
        * no open file references.
@@ -1204,13 +1188,13 @@ static int rpmsgfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
     }
 
   ret = rpmsgfs_client_unbind(fs->handle);
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
     }
 
-  nxsem_destroy(&fs->fs_sem);
+  nxmutex_destroy(&fs->fs_lock);
   kmm_free(fs);
   return 0;
 }
@@ -1235,7 +1219,7 @@ static int rpmsgfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1244,7 +1228,7 @@ static int rpmsgfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
   if (fs->statfs.f_type == RPMSGFS_MAGIC)
     {
       memcpy(buf, &fs->statfs, sizeof(struct statfs));
-      rpmsgfs_semgive(fs);
+      nxmutex_unlock(&fs->fs_lock);
       return 0;
     }
 
@@ -1256,7 +1240,7 @@ static int rpmsgfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   memcpy(&fs->statfs, buf, sizeof(struct statfs));
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1281,7 +1265,7 @@ static int rpmsgfs_unlink(FAR struct inode *mountpt, FAR const char *relpath)
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1295,7 +1279,7 @@ static int rpmsgfs_unlink(FAR struct inode *mountpt, FAR const char *relpath)
 
   ret = rpmsgfs_client_unlink(fs->handle, path);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1321,7 +1305,7 @@ static int rpmsgfs_mkdir(FAR struct inode *mountpt, FAR const char *relpath,
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1335,7 +1319,7 @@ static int rpmsgfs_mkdir(FAR struct inode *mountpt, FAR const char *relpath,
 
   ret = rpmsgfs_client_mkdir(fs->handle, path, mode);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1360,9 +1344,9 @@ int rpmsgfs_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
 
   fs = mountpt->i_private;
 
-  /* Take the semaphore */
+  /* Take the lock */
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1376,7 +1360,7 @@ int rpmsgfs_rmdir(FAR struct inode *mountpt, FAR const char *relpath)
 
   ret = rpmsgfs_client_rmdir(fs->handle, path);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1403,7 +1387,7 @@ int rpmsgfs_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1420,7 +1404,7 @@ int rpmsgfs_rename(FAR struct inode *mountpt, FAR const char *oldrelpath,
 
   ret = rpmsgfs_client_rename(fs->handle, oldpath, newpath);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1446,7 +1430,7 @@ static int rpmsgfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1460,7 +1444,7 @@ static int rpmsgfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
 
   ret = rpmsgfs_client_stat(fs->handle, path, buf);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }
 
@@ -1486,7 +1470,7 @@ static int rpmsgfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
 
   fs = mountpt->i_private;
 
-  ret = rpmsgfs_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       return ret;
@@ -1500,6 +1484,6 @@ static int rpmsgfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
 
   ret = rpmsgfs_client_chstat(fs->handle, path, buf, flags);
 
-  rpmsgfs_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   return ret;
 }

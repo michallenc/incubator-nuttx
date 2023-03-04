@@ -29,10 +29,10 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <sched.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/queue.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/spinlock.h>
 
@@ -56,6 +56,8 @@
 #  define this_task()            (current_task(this_cpu()))
 #endif
 
+#define is_idle_task(t)          ((t)->pid < CONFIG_SMP_NCPUS)
+
 /* This macro returns the running task which may different from this_task()
  * during interrupt level context switches.
  */
@@ -68,22 +70,25 @@
 #define TLIST_ATTR_PRIORITIZED   (1 << 0) /* Bit 0: List is prioritized */
 #define TLIST_ATTR_INDEXED       (1 << 1) /* Bit 1: List is indexed by CPU */
 #define TLIST_ATTR_RUNNABLE      (1 << 2) /* Bit 2: List includes running tasks */
+#define TLIST_ATTR_OFFSET        (1 << 3) /* Bit 3: Pointer of task list is offset */
 
 #define __TLIST_ATTR(s)          g_tasklisttable[s].attr
 #define TLIST_ISPRIORITIZED(s)   ((__TLIST_ATTR(s) & TLIST_ATTR_PRIORITIZED) != 0)
 #define TLIST_ISINDEXED(s)       ((__TLIST_ATTR(s) & TLIST_ATTR_INDEXED) != 0)
 #define TLIST_ISRUNNABLE(s)      ((__TLIST_ATTR(s) & TLIST_ATTR_RUNNABLE) != 0)
+#define TLIST_ISOFFSET(s)        ((__TLIST_ATTR(s) & TLIST_ATTR_OFFSET) != 0)
 
-#define __TLIST_HEAD(s)          g_tasklisttable[s].list
-#define __TLIST_HEADINDEXED(s,c) (&(__TLIST_HEAD(s))[c])
+#define __TLIST_HEAD(t) \
+  (TLIST_ISOFFSET((t)->task_state) ? (FAR dq_queue_t *)((FAR uint8_t *)((t)->waitobj) + \
+  (uintptr_t)g_tasklisttable[(t)->task_state].list) : g_tasklisttable[(t)->task_state].list)
 
 #ifdef CONFIG_SMP
-#  define TLIST_HEAD(s,c) \
-  ((TLIST_ISINDEXED(s)) ? __TLIST_HEADINDEXED(s,c) : __TLIST_HEAD(s))
-#  define TLIST_BLOCKED(s)       __TLIST_HEAD(s)
+#  define TLIST_HEAD(t,c) \
+    ((TLIST_ISINDEXED((t)->task_state)) ? (&(__TLIST_HEAD(t))[c]) : __TLIST_HEAD(t))
+#  define TLIST_BLOCKED(t)       __TLIST_HEAD(t)
 #else
-#  define TLIST_HEAD(s)          __TLIST_HEAD(s)
-#  define TLIST_BLOCKED(s)       __TLIST_HEAD(s)
+#  define TLIST_HEAD(t)          __TLIST_HEAD(t)
+#  define TLIST_BLOCKED(t)       __TLIST_HEAD(t)
 #endif
 
 /****************************************************************************
@@ -171,34 +176,22 @@ extern FAR struct tcb_s *g_running_tasks[CONFIG_SMP_NCPUS];
 
 extern dq_queue_t g_pendingtasks;
 
-/* This is the list of all tasks that are blocked waiting for a semaphore */
-
-extern dq_queue_t g_waitingforsemaphore;
-
 /* This is the list of all tasks that are blocked waiting for a signal */
 
 extern dq_queue_t g_waitingforsignal;
-
-/* This is the list of all tasks that are blocked waiting for a message
- * queue to become non-empty.
- */
-
-#ifndef CONFIG_DISABLE_MQUEUE
-extern dq_queue_t g_waitingformqnotempty;
-#endif
-
-/* This is the list of all tasks that are blocked waiting for a message
- * queue to become non-full.
- */
-
-#ifndef CONFIG_DISABLE_MQUEUE
-extern dq_queue_t g_waitingformqnotfull;
-#endif
 
 /* This is the list of all tasks that are blocking waiting for a page fill */
 
 #ifdef CONFIG_PAGING
 extern dq_queue_t g_waitingforfill;
+#endif
+
+/* This is the list of all tasks that have been stopped
+ * via SIGSTOP or SIGTSTP
+ */
+
+#ifdef CONFIG_SIG_SIGSTOP_ACTION
+extern dq_queue_t g_stoppedtasks;
 #endif
 
 /* This the list of all tasks that have been initialized, but not yet
@@ -314,10 +307,14 @@ extern volatile spinlock_t g_cpu_tasklistlock;
  * Public Function Prototypes
  ****************************************************************************/
 
+int nxthread_create(FAR const char *name, uint8_t ttype, int priority,
+                    FAR void *stack_addr, int stack_size, main_t entry,
+                    FAR char * const argv[], FAR char * const envp[]);
+
 /* Task list manipulation functions */
 
 bool nxsched_add_readytorun(FAR struct tcb_s *rtrtcb);
-bool nxsched_remove_readytorun(FAR struct tcb_s *rtrtcb);
+bool nxsched_remove_readytorun(FAR struct tcb_s *rtrtcb, bool merge);
 bool nxsched_add_prioritized(FAR struct tcb_s *tcb, DSEG dq_queue_t *list);
 void nxsched_merge_prioritized(FAR dq_queue_t *list1, FAR dq_queue_t *list2,
                                uint8_t task_state);
@@ -325,6 +322,7 @@ bool nxsched_merge_pending(void);
 void nxsched_add_blocked(FAR struct tcb_s *btcb, tstate_t task_state);
 void nxsched_remove_blocked(FAR struct tcb_s *btcb);
 int  nxsched_set_priority(FAR struct tcb_s *tcb, int sched_priority);
+bool nxsched_reprioritize_rtr(FAR struct tcb_s *tcb, int priority);
 
 /* Priority inheritance support */
 
@@ -368,7 +366,6 @@ void nxsched_sporadic_lowpriority(FAR struct tcb_s *tcb);
 
 #ifdef CONFIG_SIG_SIGSTOP_ACTION
 void nxsched_suspend(FAR struct tcb_s *tcb);
-void nxsched_continue(FAR struct tcb_s *tcb);
 #endif
 
 #ifdef CONFIG_SMP

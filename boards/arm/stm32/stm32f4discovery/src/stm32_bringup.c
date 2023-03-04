@@ -351,6 +351,16 @@ int stm32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_TIMER
+  /* Initialize TIMER and register the TIMER device. */
+
+  ret = stm32_timer_driver_setup("/dev/timer0", CONFIG_STM32F4DISCO_TIMER);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_timer_driver_setup() failed: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_CAPTURE
   /* Initialize Capture and register the Capture driver. */
 
@@ -512,6 +522,17 @@ int stm32_bringup(void)
     {
       serr("ERROR: Failed to mount procfs at %s: %d\n",
            STM32_PROCFS_MOUNTPOINT, ret);
+    }
+#endif
+
+#ifdef CONFIG_FS_TMPFS
+  /* Mount the tmpfs file system */
+
+  ret = nx_mount(NULL, CONFIG_LIBC_TMPDIR, "tmpfs", 0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to mount tmpfs at %s: %d\n",
+             CONFIG_LIBC_TMPDIR, ret);
     }
 #endif
 

@@ -99,12 +99,6 @@ static const struct file_operations smbus_sbd_fops =
 #endif
   smbus_sbd_read,  /* read */
   smbus_sbd_write, /* write */
-  NULL,            /* seek */
-  NULL,            /* ioctl */
-  NULL,            /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  NULL,            /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -219,6 +213,7 @@ static ssize_t smbus_sbd_read(struct file *filep, char *buffer,
        * nothing was read.
        */
 
+      leave_critical_section(flags);
       return 0;
     }
 
@@ -316,6 +311,7 @@ static ssize_t smbus_sbd_write(struct file *filep, const char *buffer,
        * nothing was written.
        */
 
+      leave_critical_section(flags);
       return 0;
     }
 

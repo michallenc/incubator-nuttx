@@ -13,7 +13,27 @@ having a piece of embedded hardware.
 This guide assumes you're on Linux. It works on Windows and Mac too— if you know how,
 submit a PR to improve this guide!
 
-.. todo:: Add Mac and Windows instructions
+.. todo:: Windows instructions
+
+Prerequisites For macOS
+-----------------------
+
+We need ``genromfs`` to build simulators(NON GUI).
+
+   .. code-block:: console
+
+      $ git clone https://github.com/chexum/genromfs.git
+      $ cd genromfs
+      $ make 
+      $ make install
+   Now Copy the built `genromfs` `exec` to /opt/local/bin
+
+For GUI Applications we need X11 Libraries, libx11 can also be built using Homebrew or by Installing XQuartz.
+
+   .. code-block:: console
+   
+      $ sudo port install xorg-libX11
+      $ sudo port install xorg-server
 
 Compiling
 ---------
@@ -169,6 +189,12 @@ Accessing the Network
        PING 8.8.8.8 56 bytes of data
        56 bytes from 8.8.8.8: icmp_seq=0 time=10 ms
        1 packets transmitted, 1 received, 0% packet loss, time 1010 ms
+
+    If it doesn't work, then you need to enable the IP forward on your computer:
+
+    .. code-block:: console
+
+       sudo sysctl -w net.ipv4.ip_forward=1
 
    Success!
 

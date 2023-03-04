@@ -176,7 +176,7 @@
 struct adccmn_data_s
 {
   uint8_t refcount; /* How many ADC instances are currently in use */
-  sem_t   lock;     /* Exclusive access to common ADC data */
+  mutex_t lock;     /* Exclusive access to common ADC data */
 };
 
 /* This structure describes the state of one ADC block */
@@ -284,8 +284,6 @@ static void tim_modifyreg(struct stm32_dev_s *priv, int offset,
 static void tim_dumpregs(struct stm32_dev_s *priv, const char *msg);
 #endif
 
-static int  adccmn_lock(struct stm32_dev_s *priv, bool lock);
-
 static void adc_rccreset(struct stm32_dev_s *priv, bool reset);
 
 /* ADC Interrupt Handler */
@@ -309,7 +307,7 @@ static void adc_enable(struct stm32_dev_s *priv, bool enable);
 static uint32_t adc_sqrbits(struct stm32_dev_s *priv, int first,
                             int last, int offset);
 static int  adc_set_ch(struct adc_dev_s *dev, uint8_t ch);
-static bool adc_internal(struct stm32_dev_s * priv);
+static bool adc_internal(struct stm32_dev_s *priv);
 
 static int  adc_resolution_set(struct adc_dev_s *dev, uint8_t res);
 
@@ -378,6 +376,8 @@ static void adc_sampletime_set(struct stm32_adc_dev_s *dev,
 static void adc_sampletime_write(struct stm32_adc_dev_s *dev);
 #  endif
 static void adc_llops_dumpregs(struct stm32_adc_dev_s *dev);
+static int  adc_llops_multicfg(struct stm32_adc_dev_s *dev, uint8_t mode);
+static void adc_llops_enable(struct stm32_adc_dev_s *dev, bool enable);
 #endif
 
 /****************************************************************************
@@ -427,7 +427,9 @@ static const struct stm32_adc_ops_s g_adc_llops =
   .stime_set     = adc_sampletime_set,
   .stime_write   = adc_sampletime_write,
 #  endif
-  .dump_regs     = adc_llops_dumpregs
+  .dump_regs     = adc_llops_dumpregs,
+  .multi_cfg     = adc_llops_multicfg,
+  .enable        = adc_llops_enable
 };
 #endif
 
@@ -441,7 +443,8 @@ static const struct stm32_adc_ops_s g_adc_llops =
 
 struct adccmn_data_s g_adc123_cmn =
 {
-  .refcount = 0
+  .refcount = 0,
+  .lock = NXMUTEX_INITIALIZER,
 };
 
 /* ADC1 state */
@@ -931,7 +934,7 @@ static int adc_timinit(struct stm32_dev_s *priv)
    *   0 <= prescaler  <= 65536
    *   1 <= reload <= 65535
    *
-   * So ( prescaler = pclck / 65535 / freq ) would be optimal.
+   * So (prescaler = pclck / 65535 / freq) would be optimal.
    */
 
   prescaler = (priv->pclck / priv->freq + 65534) / 65535;
@@ -1300,26 +1303,6 @@ static void adc_inj_startconv(struct stm32_dev_s *priv, bool enable)
 }
 
 #endif /* ADC_HAVE_INJECTED */
-
-/****************************************************************************
- * Name: adccmn_lock
- ****************************************************************************/
-
-static int adccmn_lock(struct stm32_dev_s *priv, bool lock)
-{
-  int ret;
-
-  if (lock)
-    {
-      ret = nxsem_wait_uninterruptible(&priv->cmn->lock);
-    }
-  else
-    {
-      ret = nxsem_post(&priv->cmn->lock);
-    }
-
-  return ret;
-}
 
 /****************************************************************************
  * Name: adc_rccreset
@@ -1769,7 +1752,7 @@ static void adc_reset(struct adc_dev_s *dev)
 
   /* Only if this is the first initialzied ADC instance in the ADC block */
 
-  if (adccmn_lock(priv, true) < 0)
+  if (nxmutex_lock(&priv->cmn->lock) < 0)
     {
       goto out;
     }
@@ -1785,7 +1768,7 @@ static void adc_reset(struct adc_dev_s *dev)
       adc_rccreset(priv, false);
     }
 
-  adccmn_lock(priv, false);
+  nxmutex_unlock(&priv->cmn->lock);
 
 out:
   leave_critical_section(flags);
@@ -1866,7 +1849,7 @@ static int adc_setup(struct adc_dev_s *dev)
 
   /* Increase instances counter */
 
-  ret = adccmn_lock(priv, true);
+  ret = nxmutex_lock(&priv->cmn->lock);
   if (ret < 0)
     {
       return ret;
@@ -1883,7 +1866,7 @@ static int adc_setup(struct adc_dev_s *dev)
     }
 
   priv->cmn->refcount += 1;
-  adccmn_lock(priv, false);
+  nxmutex_unlock(&priv->cmn->lock);
 
   /* The ADC device is ready */
 
@@ -1927,7 +1910,7 @@ static void adc_shutdown(struct adc_dev_s *dev)
 
   adc_enable(priv, false);
 
-  if (adccmn_lock(priv, true) < 0)
+  if (nxmutex_lock(&priv->cmn->lock) < 0)
     {
       return;
     }
@@ -1969,7 +1952,7 @@ static void adc_shutdown(struct adc_dev_s *dev)
       priv->cmn->refcount -= 1;
     }
 
-  adccmn_lock(priv, false);
+  nxmutex_unlock(&priv->cmn->lock);
 }
 
 /****************************************************************************
@@ -2179,7 +2162,7 @@ static uint32_t adc_sqrbits(struct stm32_dev_s *priv, int first,
  * Name: adc_internal
  ****************************************************************************/
 
-static bool adc_internal(struct stm32_dev_s * priv)
+static bool adc_internal(struct stm32_dev_s *priv)
 {
   int i;
 
@@ -2891,6 +2874,99 @@ static void adc_llops_dumpregs(struct stm32_adc_dev_s *dev)
   adc_dumpregs(priv);
 }
 
+/****************************************************************************
+ * Name: adc_llops_multicfg
+ *
+ * IMPORTANT: this interface is allowed only when the ADCs are disabled!
+ *
+ ****************************************************************************/
+
+static int adc_llops_multicfg(struct stm32_adc_dev_s *dev, uint8_t mode)
+{
+  struct stm32_dev_s *priv    = (struct stm32_dev_s *)dev;
+  int                 ret     = OK;
+  uint32_t            setbits = 0;
+  uint32_t            clrbits = 0;
+
+  switch (mode)
+    {
+      case ADC_MULTIMODE_INDEP:
+        setbits = ADC_CCR_MULTI_NONE;
+        break;
+
+      case ADC_MULTIMODE_RSISM2:
+        setbits = ADC_CCR_MULTI_RSISM2;
+        break;
+
+      case ADC_MULTIMODE_RSATM2:
+        setbits = ADC_CCR_MULTI_RSATM2;
+        break;
+
+      case ADC_MULTIMODE_ISM2:
+        setbits = ADC_CCR_MULTI_ISM2;
+        break;
+
+      case ADC_MULTIMODE_RSM2:
+        setbits = ADC_CCR_MULTI_ISM2;
+        break;
+
+      case ADC_MULTIMODE_IM2:
+        setbits = ADC_CCR_MULTI_IM2;
+        break;
+
+      case ADC_MULTIMODE_ATM2:
+        setbits = ADC_CCR_MULTI_ATM2;
+        break;
+
+      case ADC_MULTIMODE_RSISM3:
+        setbits = ADC_CCR_MULTI_RSISM3;
+        break;
+
+      case ADC_MULTIMODE_RSATM3:
+        setbits = ADC_CCR_MULTI_RSATM3;
+        break;
+
+      case ADC_MULTIMODE_ISM3:
+        setbits = ADC_CCR_MULTI_ISM3;
+        break;
+
+      case ADC_MULTIMODE_RSM3:
+        setbits = ADC_CCR_MULTI_ISM3;
+        break;
+
+      case ADC_MULTIMODE_IM3:
+        setbits = ADC_CCR_MULTI_IM3;
+        break;
+
+      case ADC_MULTIMODE_ATM3:
+        setbits = ADC_CCR_MULTI_ATM3;
+        break;
+
+      case ADC_MULTIMODE_IMIS2:
+      case ADC_MULTIMODE_IMIS3:
+      default:
+        ret = -EINVAL;
+        goto errout;
+    }
+
+  clrbits = ADC_CCR_MULTI_MASK;
+  adccmn_modifyreg(priv, STM32_ADC_CCR_OFFSET, clrbits, setbits);
+
+errout:
+  return ret;
+}
+
+/****************************************************************************
+ * Name: adc_llops_enable
+ ****************************************************************************/
+
+static void adc_llops_enable(struct stm32_adc_dev_s *dev, bool enable)
+{
+  struct stm32_dev_s *priv = (struct stm32_dev_s *)dev;
+
+  adc_enable(priv, enable);
+}
+
 #endif /* CONFIG_STM32F7_ADC_LL_OPS */
 
 /****************************************************************************
@@ -3053,10 +3129,6 @@ struct adc_dev_s *stm32_adc_initialize(int intf,
   priv->adc_channels = ADC_CHANNELS_NUMBER;
 #endif
 
-#ifdef ADC_HAVE_CB
-  priv->cb        = NULL;
-#endif
-
 #ifdef CONFIG_STM32F7_ADC_LL_OPS
   /* Store reference to the upper-half ADC device */
 
@@ -3069,14 +3141,6 @@ struct adc_dev_s *stm32_adc_initialize(int intf,
 #else
   ainfo("intf: %d cr_channels: %d\n", intf, priv->cr_channels);
 #endif
-
-  /* Initialize the ADC common data semaphore.
-   *
-   * REVISIT: This will be done several times for each initialzied ADC in
-   *          the ADC block.
-   */
-
-  nxsem_init(&priv->cmn->lock, 0, 1);
 
   return dev;
 }

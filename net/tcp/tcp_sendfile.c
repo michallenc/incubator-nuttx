@@ -40,11 +40,11 @@
 #include <debug.h>
 
 #include <arch/irq.h>
+#include <nuttx/sched.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/net/tcp.h>
 
 #include "netdev/netdev.h"
@@ -59,13 +59,6 @@
     defined(NET_TCP_HAVE_STACK)
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define TCPIPv4BUF ((FAR struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv4_HDRLEN])
-#define TCPIPv6BUF ((FAR struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN])
-
-/****************************************************************************
  * Private Types
  ****************************************************************************/
 
@@ -75,7 +68,7 @@
 
 struct sendfile_s
 {
-  FAR struct socket *snd_sock;             /* Points to the parent socket structure */
+  FAR struct tcp_conn_s *snd_conn;         /* Connection associated with the socket */
   FAR struct devif_callback_s *snd_cb;     /* Reference to callback instance */
   FAR struct file   *snd_file;             /* File structure of the input file */
   sem_t              snd_sem;              /* Used to wake up the waiting thread */
@@ -125,20 +118,16 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
                                       FAR void *pvpriv, uint16_t flags)
 {
   FAR struct sendfile_s *pstate = pvpriv;
-  FAR struct socket *psock;
   FAR struct tcp_conn_s *conn;
   int ret;
 
   DEBUGASSERT(pstate != NULL);
 
-  psock = pstate->snd_sock;
-  DEBUGASSERT(psock != NULL);
-
   /* Get the TCP connection pointer reliably from
    * the corresponding TCP socket.
    */
 
-  conn = psock->s_conn;
+  conn = pstate->snd_conn;
   DEBUGASSERT(conn != NULL);
 
   /* The TCP socket is connected and, hence, should be bound to a device.
@@ -181,7 +170,6 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
       if (IFF_IS_IPv6(dev->d_flags))
 #endif
         {
-          DEBUGASSERT(pstate->snd_sock->s_domain == PF_INET6);
           tcp = TCPIPv6BUF;
         }
 #endif /* CONFIG_NET_IPv6 */
@@ -191,7 +179,6 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
       else
 #endif
         {
-          DEBUGASSERT(pstate->snd_sock->s_domain == PF_INET);
           tcp = TCPIPv4BUF;
         }
 #endif /* CONFIG_NET_IPv4 */
@@ -280,16 +267,9 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
        * happen until the polling cycle completes).
        */
 
-      ret = file_seek(pstate->snd_file,
-                      pstate->snd_foffset + pstate->snd_acked, SEEK_SET);
-      if (ret < 0)
-        {
-          nerr("ERROR: Failed to lseek: %d\n", ret);
-          pstate->snd_sent = ret;
-          goto end_wait;
-        }
-
-      ret = file_read(pstate->snd_file, dev->d_appdata, sndlen);
+      ret = devif_file_send(dev, pstate->snd_file, sndlen,
+                            pstate->snd_foffset + pstate->snd_acked,
+                            tcpip_hdrsize(conn));
       if (ret < 0)
         {
           nerr("ERROR: Failed to read from input file: %d\n", (int)ret);
@@ -358,16 +338,9 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
            * happen until the polling cycle completes).
            */
 
-          ret = file_seek(pstate->snd_file,
-                          pstate->snd_foffset + pstate->snd_sent, SEEK_SET);
-          if (ret < 0)
-            {
-              nerr("ERROR: Failed to lseek: %d\n", ret);
-              pstate->snd_sent = ret;
-              goto end_wait;
-            }
-
-          ret = file_read(pstate->snd_file, dev->d_appdata, sndlen);
+          ret = devif_file_send(dev, pstate->snd_file, sndlen,
+                                pstate->snd_foffset + pstate->snd_sent,
+                                tcpip_hdrsize(conn));
           if (ret < 0)
             {
               nerr("ERROR: Failed to read from input file: %d\n", (int)ret);
@@ -381,7 +354,7 @@ static uint16_t sendfile_eventhandler(FAR struct net_driver_s *dev,
 
           pstate->snd_sent += sndlen;
           ninfo("pid: %d SEND: acked=%" PRId32 " sent=%zd flen=%zu\n",
-                getpid(),
+                nxsched_getpid(),
                 pstate->snd_acked, pstate->snd_sent, pstate->snd_flen);
         }
       else
@@ -508,15 +481,9 @@ ssize_t tcp_sendfile(FAR struct socket *psock, FAR struct file *infile,
   conn->sendfile = true;
 #endif
   memset(&state, 0, sizeof(struct sendfile_s));
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0);                /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
-  state.snd_sock    = psock;                       /* Socket descriptor to use */
+  state.snd_conn    = conn;                        /* Tcp conn to use */
   state.snd_foffset = offset ? *offset : startpos; /* Input file offset */
   state.snd_flen    = count;                       /* Number of bytes to send */
   state.snd_file    = infile;                      /* File to read from */
@@ -557,7 +524,7 @@ ssize_t tcp_sendfile(FAR struct socket *psock, FAR struct file *infile,
     {
       uint32_t acked = state.snd_acked;
 
-      ret = net_timedwait_uninterruptible(
+      ret = net_sem_timedwait_uninterruptible(
               &state.snd_sem, _SO_TIMEOUT(conn->sconn.s_sndtimeo));
       if (ret != -ETIMEDOUT || acked == state.snd_acked)
         {

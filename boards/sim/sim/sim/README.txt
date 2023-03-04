@@ -1073,12 +1073,12 @@ rpserver
 
   4.Rpmsg Net
     Source:
-      $(CONFIG_APPS_DIR)/system/usrsock_rpmsg/usrsock_rpmsg.h
-      $(CONFIG_APPS_DIR)/system/usrsock_rpmsg/usrsock_rpmsg_server.c
-      $(CONFIG_APPS_DIR)/system/usrsock_rpmsg/usrsock_rpmsg_client.c
       include/nuttx/net/rpmsg.h
       include/nuttx/net/rpmsgdrv.h
       drivers/net/rpmsgdrv.c
+      drivers/usrsock/usrsock_rpmsg.h
+      drivers/usrsock/usrsock_rpmsg.c
+      drivers/usrsock/usrsock_rpmsg_server.c
     Describe:
       1)Rpmsg UsrSock client
       2)Rpmsg UsrSock server
@@ -1134,7 +1134,6 @@ rpserver
           0     0   0 FIFO     Kthread N-- Ready              00000000 000000 Idle Task
           1     1 224 FIFO     Kthread --- Waiting  Signal    00000000 002032 hpwork
           3     3 100 FIFO     Task    --- Running            00000000 004080 init
-          4     4 224 FIFO     Kthread --- Waiting  Signal    00000002 002000 rptun server 0x5671e900
 
     3>RpmsgFS:
       Mount the remote file system via RPMSGFS, cu to proxy first:
@@ -1157,33 +1156,18 @@ rpserver
         821.72
 
     4>Rpmsg UsrSock:
-      Start the usrsock server on rpserver:
+      "rptun proxy" kernel thread is running:
 
-      server> usrsock &
-        usrsock [12:80]
       server> ps
         PID GROUP PRI POLICY   TYPE    NPX STATE    EVENT     SIGMASK   STACK COMMAND
           0     0   0 FIFO     Kthread N-- Ready              00000000 000000 Idle Task
           1     1 224 FIFO     Kthread --- Waiting  Signal    00000000 002032 hpwork
           2     1 100 FIFO     Task    --- Running            00000000 004080 init
           3     3 224 FIFO     Kthread --- Waiting  Signal    00000002 002000 rptun proxy 0x56634fa0
-         12     3  80 FIFO     Task    --- Waiting  Semaphore 00000000 002032 usrsock
-
-      cu to proxy and start the rpmsg usrsock client:
-
-      server> cu
-      proxy> usrsock server &
-        usrsock [5:80]
-      proxy> ps
-        PID GROUP PRI POLICY   TYPE    NPX STATE    EVENT     SIGMASK   STACK COMMAND
-          0     0   0 FIFO     Kthread N-- Ready              00000000 000000 Idle Task
-          1     1 224 FIFO     Kthread --- Waiting  Signal    00000000 002032 hpwork
-          3     3 100 FIFO     Task    --- Running            00000000 004080 init
-          4     4 224 FIFO     Kthread --- Waiting  Signal    00000002 002000 rptun server 0x5671e900
-          5     4  80 FIFO     Task    --- Waiting  Semaphore 00000000 002016 usrsock server
 
       send ICMP ping to network server via rpmsg usrsock:
 
+      server> cu
       proxy> ping 127.0.0.1
       PING 127.0.0.1 56 bytes of data
       56 bytes from 127.0.0.1: icmp_seq=0 time=20 ms
@@ -1383,8 +1367,211 @@ vncserver
 
   This a simple vnc server test configuration, Remmina is tested and recommended since
   there are some compatibility issues. By default SIM will be blocked at startup to
-  wait client connection, if a client connected, then the fb example will launch. 
+  wait client connection, if a client connected, then the fb example will launch.
 
 vpnkit
 
   This is a configuration with VPNKit support.  See NETWORK-VPNKIT.txt.
+
+wamr
+
+  This is a configuration for WebAssembly sample.
+
+  1. Compile Toolchain
+
+   1> Download WASI sdk and export the WASI_SDK_PATH path:
+
+  $ wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-19/wasi-sdk-19.0-linux.tar.gz
+  $ tar xf wasi-sdk-19.0-linux.tar.gz
+  Put wasi-sdk-19.0 to your host WASI_SDK_PATH environment variable, like:
+  $ export WASI_SDK_PATH=`pwd`/wasi-sdk-19.0
+
+   2> Download Wamr "wamrc" AOT compiler and export to the PATH:
+
+  $ mkdir wamrc
+  $ wget https://github.com/bytecodealliance/wasm-micro-runtime/releases/download/WAMR-1.1.2/wamrc-1.1.2-x86_64-ubuntu-20.04.tar.gz
+  $ tar xf wamrc-1.1.2-x86_64-ubuntu-20.04.tar.gz
+  $ export PATH=$PATH:$PWD
+
+  2. Configuring and running
+
+   1> Configuring sim/wamr and compile:
+
+  nuttx$ ./tools/configure.sh  sim/wamr
+  nuttx$ make
+  ...
+  Wamrc Generate AoT: /home/archer/code/nuttx/n5/apps/wasm/hello.aot
+  Wamrc Generate AoT: /home/archer/code/nuttx/n5/apps/wasm/coremark.aot
+  LD:  nuttx
+
+   2> Copy the generated wasm file(Interpreter/AoT)
+
+  nuttx$ cp ../apps/wasm/hello.aot .
+  nuttx$ cp ../apps/wasm/hello.wasm .
+  nuttx$ cp ../apps/wasm/coremark.wasm .
+
+   3> Run iwasm
+
+  nuttx$ ./nuttx
+  NuttShell (NSH) NuttX-10.4.0
+  nsh> iwasm /data/hello.wasm
+  Hello, World!!
+  nsh> iwasm /data/hello.aot
+  Hello, World!!
+  nsh> iwasm /data/coremark.wasm
+  2K performance run parameters for coremark.
+  CoreMark Size    : 666
+  Total ticks      : 12000
+  Total time (secs): 12.000000
+  Iterations/Sec   : 5.000000
+  Iterations       : 60
+  Compiler version : Clang 15.0.7
+  Compiler flags   : Using NuttX compilation options
+  Memory location  : Defined by the NuttX configuration
+  seedcrc          : 0xe9f5
+  [0]crclist       : 0xe714
+  [0]crcmatrix     : 0x1fd7
+  [0]crcstate      : 0x8e3a
+  [0]crcfinal      : 0xa14c
+  Correct operation validated. See README.md for run and reporting rules.
+  CoreMark 1.0 : 5.000000 / Clang 15.0.7 Using NuttX compilation options / Defined by the NuttX configuration
+
+usbdev
+
+  This is a configuration with sim usbdev support.
+
+  1. Raw Gadget setup
+
+  Get Raw Gadget:
+  Get Raw Gadget code at https://github.com/xairy/raw-gadget.
+
+  Make Raw Gadget:
+  Run make in the raw_gadget and dummy_hcd directory. If raw_gadget build
+  fail, you need to check which register interface meets your kenel version,
+  usb_gadget_probe_driver or usb_gadget_register_driver.
+
+  Install Raw Gadget:
+  Run ./insmod.sh in the raw_gadget and dummy_hcd directory.
+
+  2. Configuration
+
+  sim:usbdev contains two different sets of composite devices:
+  conn0: adb & rndis
+  conn1: cdcacm & cdcecm
+
+  You can use the sim:usbdev configuration:
+  ./tools/configure.sh sim:usbdev
+
+  3. How to run
+
+  Run nuttx with root mode, then you can use it as the following:
+
+    1> Run ADB:
+
+  NuttX enter command:
+  $ conn 0
+  $ adbd &
+
+  Host PC enter the ADB command:
+  $ adb kill-server
+  $ adb devices
+  List of devices attached
+  * daemon not running; starting now at tcp:5037
+  * daemon started successfully
+  0101        device
+
+  If ADB connection fails, make sure the udev rule is added correctly.
+  Edit /etc/udev/rules.d/51-android.rules file and add the following to it:
+  SUBSYSTEM=="usb", ATTR{idVendor}=="1630", ATTR{idProduct}=="0042", MODE="0666", GROUP="plugdev"
+
+  Then you can use commands such as adb shell, adb push, adb pull as normal.
+
+    2> Run RNDIS:
+  
+  NuttX enter command:
+  $ conn 0
+  $ ifconfig
+  eth0    Link encap:Ethernet HWaddr 00:00:00:00:00:00 at UP
+          inet addr:0.0.0.0 DRaddr:0.0.0.0 Mask:0.0.0.0
+  $ dhcpd_start eth0
+  eth0    Link encap:Ethernet HWaddr 00:00:00:00:00:00 at UP
+        inet addr:10.0.0.1 DRaddr:10.0.0.1 Mask:255.255.255.0
+
+  Host PC, you can see the network device named usb0:
+  $ ifconfig
+  usb0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 602
+          inet 10.0.0.4  netmask 255.255.255.0  broadcast 10.0.0.255
+          ether 36:50:3d:62:b5:80  txqueuelen 1000  (以太网)
+          RX packets 0  bytes 0 (0.0 B)
+          RX errors 0  dropped 0  overruns 0  frame 0
+          TX packets 43  bytes 8544 (8.5 KB)
+          TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+  Then you can test the network connection using the ping command or telnet.
+
+    3> Run CDCACM:
+
+  NuttX enter command:
+  $ conn 1
+
+  If the connection is successful, you can see /dev/ttyACM devices on both NuttX
+  and host PC.
+
+  Then you can use echo and cat command to test:
+
+  NuttX:
+  nsh> echo hello > /dev/ttyACM0
+
+  Host PC:
+  $ cat /dev/ttyACM0
+  hello
+
+    3> Run CDCECM:
+
+  NuttX enter command:
+  $ conn 1
+  $ ifconfig
+  eth0    Link encap:Ethernet HWaddr 00:e0:de:ad:be:ef at UP
+          inet addr:0.0.0.0 DRaddr:0.0.0.0 Mask:0.0.0.0
+  $ dhcpd_start eth0
+  $ ifconfig
+  eth0    Link encap:Ethernet HWaddr 00:e0:de:ad:be:ef at UP
+          inet addr:10.0.0.1 DRaddr:10.0.0.1 Mask:255.255.255.0
+
+  Host PC, you can see the network device named enx020000112233:
+  $ ifconfig
+  enx020000112233: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 576
+          inet 10.0.0.4  netmask 255.255.255.0  broadcast 10.0.0.255
+          ether 02:00:00:11:22:33  txqueuelen 1000  (以太网)
+          RX packets 0  bytes 0 (0.0 B)
+          RX errors 0  dropped 0  overruns 0  frame 0
+          TX packets 58  bytes 9143 (9.1 KB)
+          TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+  Then you can test the network connection using the ping command or telnet.
+
+usbhost
+
+  This is a configuration with sim usbhost support.
+
+  1. Libusb1.0 setup
+
+  $ sudo apt-get -y install libusb-1.0-0-dev
+  $ sudo apt-get -y install libusb-1.0-0-dev:i386
+
+  2. Configuration
+
+  sim:usbhost support cdcacm.
+
+  You can use the sim:usbdev configuration:
+  $ ./tools/configure.sh sim:usbhost
+
+  Configure the device you want to connet:
+
+  CONFIG_SIM_USB_PID=0x0042
+  CONFIG_SIM_USB_VID=0x1630
+
+  3. How to run
+
+  Run sim usbhost with root mode, run sim usbdev or plug-in cdcacm usb device.
+  Then you can use /dev/ttyACM to transfer data.

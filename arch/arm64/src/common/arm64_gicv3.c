@@ -36,6 +36,8 @@
 #include "arm64_gic.h"
 #include "arm64_fatal.h"
 
+#if CONFIG_ARM_GIC_VERSION == 3 || CONFIG_ARM_GIC_VERSION == 4
+
 /***************************************************************************
  * Pre-processor Definitions
  ***************************************************************************/
@@ -59,13 +61,43 @@
 
 #define IGROUPR_VAL  0xFFFFFFFFU
 
+/***************************************************************************
+ * Private Data
+ ***************************************************************************/
+
 /* Redistributor base addresses for each core */
 
-unsigned long gic_rdists[CONFIG_SMP_NCPUS];
+static unsigned long gic_rdists[CONFIG_SMP_NCPUS];
 
 /***************************************************************************
  * Private Functions
  ***************************************************************************/
+
+static inline void sys_set_bit(unsigned long addr, unsigned int bit)
+{
+  uint32_t temp;
+
+  temp = getreg32(addr);
+  temp = temp | (BIT(bit));
+  putreg32(temp, addr);
+}
+
+static inline void sys_clear_bit(unsigned long addr, unsigned int bit)
+{
+  uint32_t temp;
+
+  temp = getreg32(addr);
+  temp = temp & ~(BIT(bit));
+  putreg32(temp, addr);
+}
+
+static inline int sys_test_bit(unsigned long addr, unsigned int bit)
+{
+  uint32_t temp;
+
+  temp = getreg32(addr);
+  return (temp & BIT(bit));
+}
 
 static inline unsigned long gic_get_rdist(void)
 {
@@ -111,6 +143,13 @@ static int gic_wait_rwp(uint32_t intid)
     }
 
   return 0;
+}
+
+static inline void arm64_gic_write_irouter(uint64_t val, unsigned int intid)
+{
+  unsigned long addr = IROUTER(GET_DIST_BASE(intid), intid);
+
+  putreg64(val, addr);
 }
 
 void arm64_gic_irq_set_priority(unsigned int intid, unsigned int prio,
@@ -163,8 +202,7 @@ void arm64_gic_irq_enable(unsigned int intid)
 
   if (GIC_IS_SPI(intid))
     {
-      putreg64(MPIDR_TO_CORE(GET_MPIDR()),
-               IROUTER(GET_DIST_BASE(intid), intid));
+      arm64_gic_write_irouter(up_cpu_index(), intid);
     }
 }
 
@@ -256,16 +294,12 @@ int arm64_gic_raise_sgi(unsigned int sgi_id, uint64_t target_aff,
 
 static void gicv3_rdist_enable(unsigned long rdist)
 {
-  uint32_t temp;
-
   if (!(getreg32(rdist + GICR_WAKER) & BIT(GICR_WAKER_CA)))
     {
       return;
     }
 
-  temp = getreg32(rdist + GICR_WAKER);
-  temp = temp & ~(BIT(GICR_WAKER_PS));
-  putreg32(temp, rdist + GICR_WAKER);
+  sys_clear_bit(rdist + GICR_WAKER, GICR_WAKER_PS);
 
   while (getreg32(rdist + GICR_WAKER) & BIT(GICR_WAKER_CA))
     {
@@ -355,17 +389,19 @@ static void gicv3_dist_init(void)
   putreg32(0, GICD_CTLR);
   gic_wait_rwp(GIC_SPI_INT_BASE);
 
-#if 0
+#ifdef CONFIG_ARCH_SINGLE_SECURITY_STATE
 
   /* Before configuration, we need to check whether
    * the GIC single security state mode is supported.
    * Make sure GICD_CTRL_NS is 1.
    */
 
-  sys_set_bit(GICD_CTLR, GICD_CTRL_NS);
-  __ASSERT(sys_test_bit(GICD_CTLR,
-                        GICD_CTRL_NS),
-           "Current GIC does not support single security state");
+  sys_set_bit(GICD_CTLR, GICD_CTRL_DS);
+  if (!sys_test_bit(GICD_CTLR, GICD_CTRL_DS))
+    {
+      sinfo("Current GIC does not support single security state\n");
+      PANIC();
+    }
 #endif
 
   /* Default configuration of all SPIs */
@@ -410,15 +446,12 @@ static void gicv3_dist_init(void)
       putreg32(0, ICFGR(base, idx));
     }
 
-  /* Enable distributor with ARE */
+  /* TODO: Some arrch64 Cortex-A core maybe without security state
+   * it has different GIC configure with standard arrch64 A or R core
+   */
 
-  putreg32(BIT(GICD_CTRL_ARE_NS) | BIT(GICD_CTLR_ENABLE_G1NS),
-           GICD_CTLR);
-#if 0
-
-  /* TODO: ARMv8-R support
-   *
-   * For GIC single security state(ARMv8-R), the config means
+#ifdef CONFIG_ARCH_SINGLE_SECURITY_STATE
+  /* For GIC single security state(ARMv8-R), the config means
    * the GIC is under single security state which has
    * only two groups:
    *  group 0 and group 1.
@@ -431,11 +464,20 @@ static void gicv3_dist_init(void)
 
   putreg32(BIT(GICD_CTRL_ARE_S) | BIT(GICD_CTLR_ENABLE_G1NS),
                  GICD_CTLR);
+
+#else
+  /* Enable distributor with ARE */
+
+  putreg32(BIT(GICD_CTRL_ARE_NS) | BIT(GICD_CTLR_ENABLE_G1NS),
+           GICD_CTLR);
 #endif
 }
 
 void up_enable_irq(int irq)
 {
+  /* TODO: add common interface to set IRQ type for NuttX */
+
+  arm64_gic_irq_set_priority(irq, IRQ_DEFAULT_PRIORITY, IRQ_TYPE_LEVEL);
   arm64_gic_irq_enable(irq);
 }
 
@@ -557,7 +599,7 @@ static int gic_validate_redist_version(void)
       ppi_nr = 0;
     }
 
-  sinfo("GICD_TYPER = 0x%"PRIx64"\n", typer);
+  sinfo("GICR_TYPER = 0x%"PRIx64"\n", typer);
   sinfo("%d PPIs implemented\n", ppi_nr);
   sinfo("%sVLPI support, %sdirect LPI support\n", !has_vlpis ? "no " : "",
         !has_direct_lpi ? "no " : "");
@@ -572,7 +614,7 @@ static void arm64_gic_init(void)
 
   cpu               = this_cpu();
   gic_rdists[cpu]   = CONFIG_GICR_BASE +
-                     MPIDR_TO_CORE(GET_MPIDR()) * 0x20000;
+                     up_cpu_index() * CONFIG_GICR_OFFSET;
 
   err = gic_validate_redist_version();
   if (err)
@@ -611,3 +653,5 @@ void arm64_gic_secondary_init(void)
 }
 
 #endif
+
+#endif /* CONFIG_ARM_GIC_VERSION == 3 || CONFIG_ARM_GIC_VERSION == 4 */

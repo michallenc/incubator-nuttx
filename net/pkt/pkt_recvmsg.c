@@ -115,6 +115,7 @@ static inline void pkt_add_recvlen(FAR struct pkt_recvfrom_s *pstate,
 static void pkt_recvfrom_newdata(FAR struct net_driver_s *dev,
                                  FAR struct pkt_recvfrom_s *pstate)
 {
+  unsigned int offset;
   size_t recvlen;
 
   if (dev->d_len > pstate->pr_buflen)
@@ -128,7 +129,10 @@ static void pkt_recvfrom_newdata(FAR struct net_driver_s *dev,
 
   /* Copy the new packet data into the user buffer */
 
-  memcpy(pstate->pr_buffer, dev->d_buf, recvlen);
+  offset = (dev->d_appdata - dev->d_iob->io_data) - dev->d_iob->io_offset;
+
+  recvlen = iob_copyout(pstate->pr_buffer, dev->d_iob, recvlen, offset);
+
   ninfo("Received %d bytes (of %d)\n", (int)recvlen, (int)dev->d_len);
 
   /* Update the accumulated size of the data read */
@@ -242,13 +246,7 @@ static void pkt_recvfrom_initialize(FAR struct socket *psock, FAR void *buf,
   /* Initialize the state structure. */
 
   memset(pstate, 0, sizeof(struct pkt_recvfrom_s));
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&pstate->pr_sem, 0, 0); /* Doesn't really fail */
-  nxsem_set_protocol(&pstate->pr_sem, SEM_PRIO_NONE);
 
   pstate->pr_buflen = len;
   pstate->pr_buffer = buf;
@@ -267,7 +265,7 @@ static void pkt_recvfrom_initialize(FAR struct socket *psock, FAR void *buf,
  *   Evaluate the result of the recv operations
  *
  * Input Parameters:
- *   result   The result of the net_lockedwait operation (may indicate EINTR)
+ *   result   The result of the net_sem_wait operation (may indicate EINTR)
  *   pstate   A pointer to the state structure to be initialized
  *
  * Returned Value:
@@ -293,8 +291,8 @@ static ssize_t pkt_recvfrom_result(int result,
       return pstate->pr_result;
     }
 
-  /* If net_lockedwait failed, then we were probably reawakened by a signal.
-   * In this case, net_lockedwait will have returned negated errno
+  /* If net_sem_wait failed, then we were probably reawakened by a signal.
+   * In this case, net_sem_wait will have returned negated errno
    * appropriately.
    */
 
@@ -405,12 +403,12 @@ ssize_t pkt_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       state.pr_cb->event  = pkt_recvfrom_eventhandler;
 
       /* Wait for either the receive to complete or for an error/timeout to
-       * occur. NOTES:  (1) net_lockedwait will also terminate if a signal
+       * occur. NOTES:  (1) net_sem_wait will also terminate if a signal
        * is received, (2) the network is locked!  It will be un-locked while
        * the task sleeps and automatically re-locked when the task restarts.
        */
 
-      ret = net_lockedwait(&state.pr_sem);
+      ret = net_sem_wait(&state.pr_sem);
 
       /* Make sure that no further events are processed */
 

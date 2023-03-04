@@ -29,10 +29,10 @@
 #include <debug.h>
 #include <syscall.h>
 
+#include <nuttx/addrenv.h>
 #include <nuttx/arch.h>
 
 #include "arm_internal.h"
-#include "group/group.h"
 
 /****************************************************************************
  * Public Functions
@@ -73,6 +73,26 @@ uint32_t *arm_syscall(uint32_t *regs)
 
   switch (cmd)
     {
+      /* R0=SYS_save_context:  This is a save context command:
+       *
+       *   int up_saveusercontext(void *saveregs);
+       *
+       * At this point, the following values are saved in context:
+       *
+       *   R0 = SYS_save_context
+       *   R1 = saveregs
+       *
+       * In this case, we simply need to copy the current registers to the
+       * save register space references in the saved R1 and return.
+       */
+
+      case SYS_save_context:
+        {
+          DEBUGASSERT(regs[REG_R1] != 0);
+          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
+        }
+        break;
+
       /* R0=SYS_restore_context:  Restore task context
        *
        * void arm_fullcontextrestore(uint32_t *restoreregs)
@@ -145,15 +165,22 @@ uint32_t *arm_syscall(uint32_t *regs)
        * thread at the head of the ready-to-run list.
        */
 
-      group_addrenv(NULL);
+      addrenv_switch(NULL);
     }
 #endif
+
+  /* Restore the cpu lock */
+
+  if (regs != CURRENT_REGS)
+    {
+      restore_critical_section();
+      regs = (uint32_t *)CURRENT_REGS;
+    }
 
   /* Set CURRENT_REGS to NULL to indicate that we are no longer in an
    * interrupt handler.
    */
 
-  regs = (uint32_t *)CURRENT_REGS;
   CURRENT_REGS = NULL;
 
   /* Return the last value of curent_regs.  This supports context switches

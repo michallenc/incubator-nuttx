@@ -202,10 +202,10 @@
  */
 
 #ifdef USE_DMA0
-static sem_t g_dma0_sem;
+static sem_t g_dma0_sem = SEM_INITIALIZER(1);
 #endif
 #ifdef USE_DMA1
-static sem_t g_dma1_sem;
+static sem_t g_dma1_sem = SEM_INITIALIZER(1);
 #endif
 
 /* UART DMA RX/TX descriptors */
@@ -244,7 +244,7 @@ struct esp32_config_s
 #endif
 #ifdef CONFIG_SERIAL_TXDMA
   uint8_t  dma_chan;            /* DMA instance 0-1 */
-  sem_t *  dma_sem;             /* DMA semaphore */
+  sem_t   *dma_sem;             /* DMA semaphore */
 #endif
 #ifdef HAVE_RS485
   uint8_t  rs485_dir_gpio;      /* UART RS-485 DIR GPIO pin cfg */
@@ -1336,10 +1336,11 @@ static void dma_config(uint8_t dma_chan)
  * Name: esp32_interrupt
  *
  * Description:
- *   This is the common UART interrupt handler.  It will be invoked
- *   when an interrupt received on the device.  It should call
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the common UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -1471,8 +1472,8 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 #ifdef CONFIG_SERIAL_TERMIOS
     case TCGETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
-        struct esp32_dev_s *priv  = (struct esp32_dev_s *)dev->priv;
+        struct termios *termiosp = (struct termios *)arg;
+        struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
 
         if (!termiosp)
           {
@@ -1531,8 +1532,8 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 
     case TCSETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
-        struct esp32_dev_s *priv  = (struct esp32_dev_s *)dev->priv;
+        struct termios *termiosp = (struct termios *)arg;
+        struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
         uint32_t baud;
         uint32_t intena;
         uint8_t parity;
@@ -2018,7 +2019,7 @@ void esp32_lowsetup(void)
  * Description:
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.
+ *   before xtensa_serialinit.
  *
  ****************************************************************************/
 
@@ -2053,7 +2054,7 @@ void xtensa_earlyserialinit(void)
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that xtensa_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
@@ -2079,12 +2080,10 @@ void xtensa_serialinit(void)
 
 #ifdef CONFIG_SERIAL_TXDMA
 #ifdef USE_DMA0
-  nxsem_init(&g_dma0_sem, 0, 1);
   dma_config(0);
   dma_attach(0);
 #endif
 #ifdef USE_DMA1
-  nxsem_init(&g_dma1_sem, 0, 1);
   dma_config(1);
   dma_attach(1);
 #endif

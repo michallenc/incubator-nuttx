@@ -34,6 +34,91 @@
  * Public Functions
  ****************************************************************************/
 
+#ifdef CONFIG_ARCH_ICACHE
+
+/****************************************************************************
+ * Name: up_invalidate_icache_all
+ *
+ * Description:
+ *   Invalidate all instruction caches to PoU, also flushes branch target
+ *   cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_invalidate_icache_all(void)
+{
+  cp15_invalidate_icache_all();
+}
+
+/****************************************************************************
+ * Name: up_invalidate_icache
+ *
+ * Description:
+ *   Validate the specified range instruction cache as PoU,
+ *   and flush the branch target cache
+ *
+ * Input Parameters:
+ *   start - virtual start address of region
+ *   end   - virtual end address of region + 1
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_invalidate_icache(uintptr_t start, uintptr_t end)
+{
+  cp15_invalidate_icache(start, end);
+}
+
+/****************************************************************************
+ * Name: up_enable_icache
+ *
+ * Description:
+ *   Enable the I-Cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_enable_icache(void)
+{
+  cp15_enable_icache();
+}
+
+/****************************************************************************
+ * Name: up_disable_icache
+ *
+ * Description:
+ *   Disable the I-Cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_disable_icache(void)
+{
+  cp15_disable_icache();
+}
+
+#endif /* CONFIG_ARCH_ICACHE */
+
+#ifdef CONFIG_ARCH_DCACHE
+
 /****************************************************************************
  * Name: up_invalidate_dcache
  *
@@ -92,26 +177,6 @@ void up_invalidate_dcache_all(void)
 }
 
 /****************************************************************************
- * Name: up_invalidate_icache_all
- *
- * Description:
- *   Invalidate all instruction caches to PoU, also flushes branch target
- *   cache
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void up_invalidate_icache_all(void)
-{
-  cp15_invalidate_icache();
-}
-
-/****************************************************************************
  * Name: up_clean_dcache
  *
  * Description:
@@ -134,7 +199,7 @@ void up_invalidate_icache_all(void)
 
 void up_clean_dcache(uintptr_t start, uintptr_t end)
 {
-  if (cp15_cache_size() < (end - start))
+  if ((end - start) < cp15_cache_size())
     {
       cp15_clean_dcache(start, end);
     }
@@ -198,7 +263,7 @@ void up_clean_dcache_all(void)
 
 void up_flush_dcache(uintptr_t start, uintptr_t end)
 {
-  if (cp15_cache_size() < (end - start))
+  if ((end - start) < cp15_cache_size())
     {
       cp15_flush_dcache(start, end);
     }
@@ -236,44 +301,6 @@ void up_flush_dcache_all(void)
 {
   cp15_flush_dcache_all();
   l2cc_flush_all();
-}
-
-/****************************************************************************
- * Name: up_enable_icache
- *
- * Description:
- *   Enable the I-Cache
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void up_enable_icache(void)
-{
-  cp15_enable_icache();
-}
-
-/****************************************************************************
- * Name: up_disable_icache
- *
- * Description:
- *   Disable the I-Cache
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void up_disable_icache(void)
-{
-  cp15_disable_icache();
 }
 
 /****************************************************************************
@@ -349,3 +376,5 @@ void up_coherent_dcache(uintptr_t addr, size_t len)
 #endif
     }
 }
+
+#endif /* CONFIG_ARCH_DCACHE */

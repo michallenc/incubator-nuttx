@@ -199,7 +199,7 @@ config TTY_LAUNCH_PRIORITY
 	default INIT_PRIORITY
 
 config TTY_LAUNCH_STACKSIZE
-	hex "TTY launch program stack size"
+	int "TTY launch program stack size"
 	default INIT_STACKSIZE
 
 choice
@@ -714,7 +714,6 @@ endif # PSEUDOTERM
 menuconfig UART_BTH4
 	bool "BT H4 uart pseudo device"
 	default n
-	select MM_CIRCBUF
 	---help---
 		Enable support for Bluetooth H4 UART Pseudo Device(eg. /dev/ttyHCI).
 		This instantiates a serial-like interface over an existing bluetooth
@@ -725,15 +724,15 @@ if UART_BTH4
 
 config UART_BTH4_TXBUFSIZE
 	int "BT H4 uart TX buffer size"
-	default 1024
+	default 2048
 	---help---
-		H4 UART TX buffer size.  Default: 1024
+		H4 UART TX buffer size.  Default: 2048
 
 config UART_BTH4_RXBUFSIZE
 	int "BT H4 uart RX buffer size"
-	default 1024
+	default 8096
 	---help---
-		H4 UART RX buffer size.  Default: 1024
+		H4 UART RX buffer size.  Default: 8096
 
 config UART_BTH4_NPOLLWAITERS
 	int "Number of poll threads"

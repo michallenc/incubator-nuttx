@@ -22,7 +22,7 @@
  * Address Environment Interfaces
  *
  * Low-level interfaces used in binfmt/ to instantiate tasks with address
- * environments.  These interfaces all operate on type group_addrenv_t which
+ * environments.  These interfaces all operate on type arch_addrenv_t which
  * is an abstract representation of a task group's address environment and
  * must be defined in arch/arch.h if CONFIG_ARCH_ADDRENV is defined.
  *
@@ -34,7 +34,6 @@
  *                         address environment
  *   up_addrenv_heapsize - Returns the size of the initial heap allocation.
  *   up_addrenv_select   - Instantiate an address environment
- *   up_addrenv_restore  - Restore an address environment
  *   up_addrenv_clone    - Copy an address environment from one location to
  *                        another.
  *
@@ -63,6 +62,7 @@
 
 #include <nuttx/addrenv.h>
 #include <nuttx/arch.h>
+#include <nuttx/compiler.h>
 #include <nuttx/irq.h>
 #include <nuttx/pgalloc.h>
 
@@ -87,7 +87,16 @@
 
 /* Base address for address environment */
 
-#define ADDRENV_VBASE       (CONFIG_ARCH_DATA_VBASE)
+#if CONFIG_ARCH_TEXT_VBASE != 0
+#  define ADDRENV_VBASE       (CONFIG_ARCH_TEXT_VBASE)
+#else
+#  define ADDRENV_VBASE       (CONFIG_ARCH_DATA_VBASE)
+#endif
+
+/* Make sure the address environment virtual address boundary is valid */
+
+static_assert((ADDRENV_VBASE & RV_MMU_SECTION_ALIGN) == 0,
+              "Addrenv start address is not aligned to section boundary");
 
 /****************************************************************************
  * Public Data
@@ -110,7 +119,7 @@ extern uintptr_t            g_kernel_mappings;
  *
  ****************************************************************************/
 
-static void map_spgtables(group_addrenv_t *addrenv, uintptr_t vaddr)
+static void map_spgtables(arch_addrenv_t *addrenv, uintptr_t vaddr)
 {
   int       i;
   uintptr_t prev;
@@ -151,7 +160,7 @@ static void map_spgtables(group_addrenv_t *addrenv, uintptr_t vaddr)
  *
  ****************************************************************************/
 
-static int create_spgtables(group_addrenv_t *addrenv)
+static int create_spgtables(arch_addrenv_t *addrenv)
 {
   int       i;
   uintptr_t paddr;
@@ -193,7 +202,7 @@ static int create_spgtables(group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-static int copy_kernel_mappings(group_addrenv_t *addrenv)
+static int copy_kernel_mappings(arch_addrenv_t *addrenv)
 {
   uintptr_t user_mappings = riscv_pgvaddr(addrenv->spgtables[0]);
 
@@ -228,7 +237,7 @@ static int copy_kernel_mappings(group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-static int create_region(group_addrenv_t *addrenv, uintptr_t vaddr,
+static int create_region(arch_addrenv_t *addrenv, uintptr_t vaddr,
                          size_t size, uint32_t mmuflags)
 {
   uintptr_t ptlast;
@@ -308,6 +317,30 @@ static int create_region(group_addrenv_t *addrenv, uintptr_t vaddr,
 }
 
 /****************************************************************************
+ * Name: vaddr_is_shm
+ *
+ * Description:
+ *   Check if a vaddr is part of the SHM area
+ *
+ * Input Parameters:
+ *   vaddr - Virtual address to check
+ *
+ * Returned value:
+ *   true if it is; false if not
+ *
+ ****************************************************************************/
+
+static inline bool vaddr_is_shm(uintptr_t vaddr)
+{
+#if defined (CONFIG_ARCH_SHM_VBASE) && defined(ARCH_SHM_VEND)
+  return vaddr >= CONFIG_ARCH_SHM_VBASE && vaddr < ARCH_SHM_VEND;
+#else
+  UNUSED(vaddr);
+  return false;
+#endif
+}
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -339,7 +372,7 @@ static int create_region(group_addrenv_t *addrenv, uintptr_t vaddr,
  ****************************************************************************/
 
 int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
-                      group_addrenv_t *addrenv)
+                      arch_addrenv_t *addrenv)
 {
   int       ret;
   uintptr_t resvbase;
@@ -353,7 +386,7 @@ int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
 
   /* Make sure the address environment is wiped before doing anything */
 
-  memset(addrenv, 0, sizeof(group_addrenv_t));
+  memset(addrenv, 0, sizeof(arch_addrenv_t));
 
   /* Create the static page tables */
 
@@ -478,13 +511,15 @@ errout:
  *
  ****************************************************************************/
 
-int up_addrenv_destroy(group_addrenv_t *addrenv)
+int up_addrenv_destroy(arch_addrenv_t *addrenv)
 {
   /* Recursively destroy it all, need to table walk */
 
   uintptr_t *ptprev;
   uintptr_t *ptlast;
   uintptr_t  paddr;
+  uintptr_t  vaddr;
+  size_t     pgsize;
   int        i;
   int        j;
 
@@ -495,13 +530,25 @@ int up_addrenv_destroy(group_addrenv_t *addrenv)
   __ISB();
   __DMB();
 
+  /* Things start from the beginning of the user virtual memory */
+
+  vaddr  = ADDRENV_VBASE;
+  pgsize = mmu_get_region_size(ARCH_SPGTS);
+
   /* First destroy the allocated memory and the final level page table */
 
   ptprev = (uintptr_t *)riscv_pgvaddr(addrenv->spgtables[ARCH_SPGTS - 1]);
   if (ptprev)
     {
-      for (i = 0; i < ENTRIES_PER_PGT; i++)
+      for (i = 0; i < ENTRIES_PER_PGT; i++, vaddr += pgsize)
         {
+          if (vaddr_is_shm(vaddr))
+            {
+              /* Do not free memory from SHM area */
+
+              continue;
+            }
+
           ptlast = (uintptr_t *)riscv_pgvaddr(mmu_pte_to_paddr(ptprev[i]));
           if (ptlast)
             {
@@ -539,7 +586,7 @@ int up_addrenv_destroy(group_addrenv_t *addrenv)
   __ISB();
   __DMB();
 
-  memset(addrenv, 0, sizeof(group_addrenv_t));
+  memset(addrenv, 0, sizeof(arch_addrenv_t));
   return OK;
 }
 
@@ -561,7 +608,7 @@ int up_addrenv_destroy(group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-int up_addrenv_vtext(group_addrenv_t *addrenv, void **vtext)
+int up_addrenv_vtext(arch_addrenv_t *addrenv, void **vtext)
 {
   DEBUGASSERT(addrenv && vtext);
   *vtext = (void *)addrenv->textvbase;
@@ -590,7 +637,7 @@ int up_addrenv_vtext(group_addrenv_t *addrenv, void **vtext)
  *
  ****************************************************************************/
 
-int up_addrenv_vdata(group_addrenv_t *addrenv, uintptr_t textsize,
+int up_addrenv_vdata(arch_addrenv_t *addrenv, uintptr_t textsize,
                      void **vdata)
 {
   DEBUGASSERT(addrenv && vdata);
@@ -617,7 +664,7 @@ int up_addrenv_vdata(group_addrenv_t *addrenv, uintptr_t textsize,
  ****************************************************************************/
 
 #ifdef CONFIG_BUILD_KERNEL
-int up_addrenv_vheap(const group_addrenv_t *addrenv, void **vheap)
+int up_addrenv_vheap(const arch_addrenv_t *addrenv, void **vheap)
 {
   DEBUGASSERT(addrenv && vheap);
   *vheap = (void *)addrenv->heapvbase;
@@ -645,7 +692,7 @@ int up_addrenv_vheap(const group_addrenv_t *addrenv, void **vheap)
  ****************************************************************************/
 
 #ifdef CONFIG_BUILD_KERNEL
-ssize_t up_addrenv_heapsize(const group_addrenv_t *addrenv)
+ssize_t up_addrenv_heapsize(const arch_addrenv_t *addrenv)
 {
   DEBUGASSERT(addrenv);
   return (ssize_t)addrenv->heapsize;
@@ -665,55 +712,16 @@ ssize_t up_addrenv_heapsize(const group_addrenv_t *addrenv)
  * Input Parameters:
  *   addrenv - The representation of the task address environment previously
  *     returned by up_addrenv_create.
- *   oldenv
- *     The address environment that was in place before up_addrenv_select().
- *     This may be used with up_addrenv_restore() to restore the original
- *     address environment that was in place before up_addrenv_select() was
- *     called.  Note that this may be a task agnostic, hardware
- *     representation that is different from group_addrenv_t.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
  *
  ****************************************************************************/
 
-int up_addrenv_select(const group_addrenv_t *addrenv,
-                      save_addrenv_t *oldenv)
+int up_addrenv_select(const arch_addrenv_t *addrenv)
 {
-  DEBUGASSERT(addrenv);
-  if (oldenv)
-    {
-      /* Save the old environment */
-
-      uintptr_t satp_reg = mmu_read_satp();
-      *oldenv = (save_addrenv_t)satp_reg;
-    }
-
+  DEBUGASSERT(addrenv && addrenv->satp);
   mmu_write_satp(addrenv->satp);
-  return OK;
-}
-
-/****************************************************************************
- * Name: up_addrenv_restore
- *
- * Description:
- *   After an address environment has been temporarily instantiated by
- *   up_addrenv_select, this function may be called to restore the
- *   original address environment.
- *
- * Input Parameters:
- *   oldenv - The hardware representation of the address environment
- *     previously returned by up_addrenv_select.
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-int up_addrenv_restore(const save_addrenv_t *oldenv)
-{
-  DEBUGASSERT(oldenv);
-  mmu_write_satp((uintptr_t)*oldenv);
   return OK;
 }
 
@@ -733,7 +741,7 @@ int up_addrenv_restore(const save_addrenv_t *oldenv)
  *
  ****************************************************************************/
 
-int up_addrenv_coherent(const group_addrenv_t *addrenv)
+int up_addrenv_coherent(const arch_addrenv_t *addrenv)
 {
   /* Flush the instruction and data caches */
 
@@ -759,11 +767,11 @@ int up_addrenv_coherent(const group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-int up_addrenv_clone(const group_addrenv_t *src,
-                     group_addrenv_t *dest)
+int up_addrenv_clone(const arch_addrenv_t *src,
+                     arch_addrenv_t *dest)
 {
   DEBUGASSERT(src && dest);
-  memcpy(dest, src, sizeof(group_addrenv_t));
+  memcpy(dest, src, sizeof(arch_addrenv_t));
   return OK;
 }
 
@@ -776,7 +784,7 @@ int up_addrenv_clone(const group_addrenv_t *src,
  *   group.
  *
  * Input Parameters:
- *   group - The task group to which the new thread belongs.
+ *   ptcb  - The tcb of the parent task.
  *   tcb   - The tcb of the thread needing the address environment.
  *
  * Returned Value:
@@ -784,7 +792,7 @@ int up_addrenv_clone(const group_addrenv_t *src,
  *
  ****************************************************************************/
 
-int up_addrenv_attach(struct task_group_s *group, struct tcb_s *tcb)
+int up_addrenv_attach(struct tcb_s *ptcb, struct tcb_s *tcb)
 {
   /* There is nothing that needs to be done */
 
@@ -801,12 +809,7 @@ int up_addrenv_attach(struct task_group_s *group, struct tcb_s *tcb)
  *   task group is itself destroyed.  Any resources unique to this thread
  *   may be destroyed now.
  *
- *   NOTE: In some platforms, nothing will need to be done in this case.
- *   Simply being a member of the group that has the address environment
- *   may be sufficient.
- *
  * Input Parameters:
- *   group - The group to which the thread belonged.
  *   tcb - The TCB of the task or thread whose the address environment will
  *     be released.
  *
@@ -815,7 +818,7 @@ int up_addrenv_attach(struct task_group_s *group, struct tcb_s *tcb)
  *
  ****************************************************************************/
 
-int up_addrenv_detach(struct task_group_s *group, struct tcb_s *tcb)
+int up_addrenv_detach(struct tcb_s *tcb)
 {
   /* There is nothing that needs to be done */
 

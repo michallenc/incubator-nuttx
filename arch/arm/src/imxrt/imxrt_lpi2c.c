@@ -37,6 +37,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/clock.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/i2c/i2c_master.h>
 
@@ -192,7 +193,7 @@ struct imxrt_lpi2c_priv_s
   const struct imxrt_lpi2c_config_s *config;
 
   int refs;                    /* Reference count */
-  sem_t sem_excl;              /* Mutual exclusion semaphore */
+  mutex_t lock;                /* Mutual exclusion mutex */
 #ifndef CONFIG_I2C_POLLED
   sem_t sem_isr;               /* Interrupt wait semaphore */
 #endif
@@ -235,11 +236,6 @@ static inline void imxrt_lpi2c_putreg(struct imxrt_lpi2c_priv_s *priv,
 static inline void imxrt_lpi2c_modifyreg(struct imxrt_lpi2c_priv_s *priv,
                                          uint16_t offset, uint32_t clearbits,
                                          uint32_t setbits);
-static inline int imxrt_lpi2c_sem_wait(struct imxrt_lpi2c_priv_s *priv);
-#ifdef CONFIG_I2C_RESET
-static int
-imxrt_lpi2c_sem_wait_noncancelable(struct imxrt_lpi2c_priv_s *priv);
-#endif
 
 #ifdef CONFIG_IMXRT_LPI2C_DYNTIMEO
 static uint32_t imxrt_lpi2c_toticks(int msgc, struct i2c_msg_s *msgs);
@@ -247,14 +243,6 @@ static uint32_t imxrt_lpi2c_toticks(int msgc, struct i2c_msg_s *msgs);
 
 static inline int
 imxrt_lpi2c_sem_waitdone(struct imxrt_lpi2c_priv_s *priv);
-static inline void
-imxrt_lpi2c_sem_waitstop(struct imxrt_lpi2c_priv_s *priv);
-static inline void
-imxrt_lpi2c_sem_post(struct imxrt_lpi2c_priv_s *priv);
-static inline void
-imxrt_lpi2c_sem_init(struct imxrt_lpi2c_priv_s *priv);
-static inline void
-imxrt_lpi2c_sem_destroy(struct imxrt_lpi2c_priv_s *priv);
 
 #ifdef CONFIG_I2C_TRACE
 static void imxrt_lpi2c_tracereset(struct imxrt_lpi2c_priv_s *priv);
@@ -273,7 +261,7 @@ static inline void imxrt_lpi2c_sendstop(struct imxrt_lpi2c_priv_s *priv);
 static inline uint32_t
 imxrt_lpi2c_getstatus(struct imxrt_lpi2c_priv_s *priv);
 
-static int imxrt_lpi2c_isr_process(struct imxrt_lpi2c_priv_s * priv);
+static int imxrt_lpi2c_isr_process(struct imxrt_lpi2c_priv_s *priv);
 
 #ifndef CONFIG_I2C_POLLED
 static int imxrt_lpi2c_isr(int irq, void *context, void *arg);
@@ -363,6 +351,10 @@ static struct imxrt_lpi2c_priv_s imxrt_lpi2c1_priv =
   .ops           = &imxrt_lpi2c_ops,
   .config        = &imxrt_lpi2c1_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -404,6 +396,10 @@ static struct imxrt_lpi2c_priv_s imxrt_lpi2c2_priv =
   .ops           = &imxrt_lpi2c_ops,
   .config        = &imxrt_lpi2c2_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -445,6 +441,10 @@ static struct imxrt_lpi2c_priv_s imxrt_lpi2c3_priv =
   .ops           = &imxrt_lpi2c_ops,
   .config        = &imxrt_lpi2c3_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -486,6 +486,10 @@ static struct imxrt_lpi2c_priv_s imxrt_lpi2c4_priv =
   .ops           = &imxrt_lpi2c_ops,
   .config        = &imxrt_lpi2c4_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -542,36 +546,6 @@ static inline void imxrt_lpi2c_modifyreg(struct imxrt_lpi2c_priv_s *priv,
 {
   modifyreg32(priv->config->base + offset, clearbits, setbits);
 }
-
-/****************************************************************************
- * Name: imxrt_lpi2c_sem_wait
- *
- * Description:
- *   Take the exclusive access, waiting as necessary.  May be interrupted by
- *   a signal.
- *
- ****************************************************************************/
-
-static inline int imxrt_lpi2c_sem_wait(struct imxrt_lpi2c_priv_s *priv)
-{
-  return nxsem_wait(&priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: imxrt_lpi2c_sem_wait_noncancelable
- *
- * Description:
- *   Take the exclusive access, waiting as necessary.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_I2C_RESET
-static int
-imxrt_lpi2c_sem_wait_noncancelable(struct imxrt_lpi2c_priv_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->sem_excl);
-}
-#endif
 
 /****************************************************************************
  * Name: imxrt_lpi2c_toticks
@@ -768,153 +742,13 @@ imxrt_lpi2c_sem_waitdone(struct imxrt_lpi2c_priv_s *priv)
 #endif
 
 /****************************************************************************
- * Name: imxrt_lpi2c_sem_waitstop
- *
- * Description:
- *   Wait for a STOP to complete
- *
- ****************************************************************************/
-
-static inline void
-imxrt_lpi2c_sem_waitstop(struct imxrt_lpi2c_priv_s *priv)
-{
-  clock_t start;
-  clock_t elapsed;
-  clock_t timeout;
-  uint32_t regval;
-
-  /* Select a timeout */
-
-#ifdef CONFIG_IMXRT_LPI2C_DYNTIMEO
-  timeout = USEC2TICK(CONFIG_IMXRT_LPI2C_DYNTIMEO_STARTSTOP);
-#else
-  timeout = CONFIG_IMXRT_LPI2C_TIMEOTICKS;
-#endif
-
-  /* Wait as stop might still be in progress; but stop might also
-   * be set because of a timeout error: "The [STOP] bit is set and
-   * cleared by software, cleared by hardware when a Stop condition is
-   * detected, set by hardware when a timeout error is detected."
-   */
-
-  start = clock_systime_ticks();
-  do
-    {
-      /* Calculate the elapsed time */
-
-      elapsed = clock_systime_ticks() - start;
-
-      /* Check for STOP condition */
-
-      if (priv->config->mode == LPI2C_MASTER)
-        {
-          regval = imxrt_lpi2c_getreg(priv, IMXRT_LPI2C_MSR_OFFSET);
-          if ((regval & LPI2C_MSR_SDF) == LPI2C_MSR_SDF)
-            {
-              return;
-            }
-        }
-
-      /* Enable Interrupts when slave mode */
-
-      else
-        {
-          regval = imxrt_lpi2c_getreg(priv, IMXRT_LPI2C_SSR_OFFSET);
-          if ((regval & LPI2C_SSR_SDF) == LPI2C_SSR_SDF)
-            {
-              return;
-            }
-        }
-
-      /* Check for NACK error */
-
-      if (priv->config->mode == LPI2C_MASTER)
-        {
-          regval = imxrt_lpi2c_getreg(priv, IMXRT_LPI2C_MSR_OFFSET);
-          if ((regval & LPI2C_MSR_NDF) == LPI2C_MSR_NDF)
-            {
-              return;
-            }
-        }
-
-      /* Enable Interrupts when slave mode */
-
-      else
-        {
-#warning Missing logic for I2C Slave
-        }
-    }
-
-  /* Loop until the stop is complete or a timeout occurs. */
-
-  while (elapsed < timeout);
-
-  /* If we get here then a timeout occurred with the STOP condition
-   * still pending.
-   */
-
-  i2cinfo("Timeout with Status Register: %" PRIx32 "\n", regval);
-}
-
-/****************************************************************************
- * Name: imxrt_lpi2c_sem_post
- *
- * Description:
- *   Release the mutual exclusion semaphore
- *
- ****************************************************************************/
-
-static inline void imxrt_lpi2c_sem_post(struct imxrt_lpi2c_priv_s *priv)
-{
-  nxsem_post(&priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: imxrt_lpi2c_sem_init
- *
- * Description:
- *   Initialize semaphores
- *
- ****************************************************************************/
-
-static inline void imxrt_lpi2c_sem_init(struct imxrt_lpi2c_priv_s *priv)
-{
-  nxsem_init(&priv->sem_excl, 0, 1);
-
-#ifndef CONFIG_I2C_POLLED
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_init(&priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&priv->sem_isr, SEM_PRIO_NONE);
-#endif
-}
-
-/****************************************************************************
- * Name: imxrt_lpi2c_sem_destroy
- *
- * Description:
- *   Destroy semaphores.
- *
- ****************************************************************************/
-
-static inline void
-imxrt_lpi2c_sem_destroy(struct imxrt_lpi2c_priv_s *priv)
-{
-  nxsem_destroy(&priv->sem_excl);
-#ifndef CONFIG_I2C_POLLED
-  nxsem_destroy(&priv->sem_isr);
-#endif
-}
-
-/****************************************************************************
  * Name: imxrt_dma_callback
  *
  * Description:
  *   This function performs the next I2C operation
  *
  ****************************************************************************/
+
 #ifdef CONFIG_IMXRT_LPI2C_DMA
 static void imxrt_dma_callback(DMACH_HANDLE handle, void *arg, bool done,
                               int result)
@@ -1145,7 +979,7 @@ static void imxrt_lpi2c_setclock(struct imxrt_lpi2c_priv_s *priv,
                               CCM_CSCDR2_LPI2C_CLK_PODF_SHIFT;
               lpi2c_clk_div = lpi2c_clk_div + 1;
               src_freq      = (BOARD_XTAL_FREQUENCY * pll3_div) /
-                              (8  * lpi2c_clk_div) ;
+                              (8 * lpi2c_clk_div);
             }
 
           /* LPI2C output frequency = (Source Clock (Hz)/ 2^prescale) /
@@ -1325,11 +1159,13 @@ imxrt_lpi2c_getstatus(struct imxrt_lpi2c_priv_s *priv)
  *
  ****************************************************************************/
 
+#ifdef CONFIG_IMXRT_LPI2C_DMA
 static inline uint32_t
-imxrt_lpi2c_getenabledints(FAR struct imxrt_lpi2c_priv_s *priv)
+imxrt_lpi2c_getenabledints(struct imxrt_lpi2c_priv_s *priv)
 {
   return imxrt_lpi2c_getreg(priv, IMXRT_LPI2C_MIER_OFFSET);
 }
+#endif
 
 /****************************************************************************
  * Name: imxrt_lpi2c_isr_process
@@ -1818,8 +1654,7 @@ static int imxrt_lpi2c_deinit(struct imxrt_lpi2c_priv_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
-static int imxrt_lpi2c_dma_configure_mder(FAR struct imxrt_lpi2c_priv_s *
-                                          priv)
+static int imxrt_lpi2c_dma_configure_mder(struct imxrt_lpi2c_priv_s *priv)
 {
   struct imxrt_edma_xfrconfig_s config;
   memset(&config, 0, sizeof(config));
@@ -1850,9 +1685,8 @@ static int imxrt_lpi2c_dma_configure_mder(FAR struct imxrt_lpi2c_priv_s *
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
-static int imxrt_lpi2c_dma_command_configure(FAR struct imxrt_lpi2c_priv_s
-                                              *priv, uint16_t *ccmd,
-                                              uint32_t ncmd)
+static int imxrt_lpi2c_dma_command_configure(struct imxrt_lpi2c_priv_s *priv,
+                                             uint16_t *ccmd, uint32_t ncmd)
 {
   struct imxrt_edma_xfrconfig_s config;
   memset(&config, 0, sizeof(config));
@@ -1883,9 +1717,8 @@ static int imxrt_lpi2c_dma_command_configure(FAR struct imxrt_lpi2c_priv_s
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
-static int imxrt_lpi2c_dma_data_configure(FAR struct imxrt_lpi2c_priv_s
-                                              *priv,
-                                              struct i2c_msg_s *msg)
+static int imxrt_lpi2c_dma_data_configure(struct imxrt_lpi2c_priv_s *priv,
+                                          struct i2c_msg_s *msg)
 {
   struct imxrt_edma_xfrconfig_s config;
   memset(&config, 0, sizeof(config));
@@ -1928,9 +1761,8 @@ static int imxrt_lpi2c_dma_data_configure(FAR struct imxrt_lpi2c_priv_s
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
-static int imxrt_lpi2c_form_command_list(FAR struct imxrt_lpi2c_priv_s
-                                              *priv, struct i2c_msg_s *msg,
-                                              int ncmds)
+static int imxrt_lpi2c_form_command_list(struct imxrt_lpi2c_priv_s *priv,
+                                         struct i2c_msg_s *msg, int ncmds)
 {
   ssize_t length = 0;
 
@@ -1989,7 +1821,7 @@ static int imxrt_lpi2c_form_command_list(FAR struct imxrt_lpi2c_priv_s
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
-static int imxrt_lpi2c_dma_transfer(FAR struct imxrt_lpi2c_priv_s *priv)
+static int imxrt_lpi2c_dma_transfer(struct imxrt_lpi2c_priv_s *priv)
 {
   int m;
   int ntotcmds = 0;
@@ -2055,7 +1887,7 @@ static int imxrt_lpi2c_dma_transfer(FAR struct imxrt_lpi2c_priv_s *priv)
                      LPI2C_MIER_NDIE | LPI2C_MIER_ALIE |
                      LPI2C_MIER_PLTIE | LPI2C_MIER_FEIE);
 
-  imxrt_dmach_start(priv->dma, imxrt_dma_callback, (void *)priv);
+  imxrt_dmach_start(priv->dma, imxrt_dma_callback, priv);
 
   imxrt_lpi2c_modifyreg(priv, IMXRT_LPI2C_MDER_OFFSET, 0,
                           LPI2C_MDER_TDDE | LPI2C_MDER_RDDE);
@@ -2081,7 +1913,7 @@ static int imxrt_lpi2c_transfer(struct i2c_master_s *dev,
 
   /* Ensure that address or flags don't change meanwhile */
 
-  ret = imxrt_lpi2c_sem_wait(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2182,7 +2014,7 @@ static int imxrt_lpi2c_transfer(struct i2c_master_s *dev,
   priv->dcnt = 0;
   priv->ptr = NULL;
 
-  imxrt_lpi2c_sem_post(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2219,7 +2051,7 @@ static int imxrt_lpi2c_reset(struct i2c_master_s *dev)
 
   /* Lock out other clients */
 
-  ret = imxrt_lpi2c_sem_wait_noncancelable(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2317,7 +2149,7 @@ out:
 
   /* Release the port for re-use by other clients */
 
-  imxrt_lpi2c_sem_post(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif /* CONFIG_I2C_RESET */
@@ -2336,8 +2168,7 @@ out:
 
 struct i2c_master_s *imxrt_i2cbus_initialize(int port)
 {
-  struct imxrt_lpi2c_priv_s * priv = NULL;
-  irqstate_t flags;
+  struct imxrt_lpi2c_priv_s *priv = NULL;
 
   /* Get I2C private structure */
 
@@ -2371,11 +2202,9 @@ struct i2c_master_s *imxrt_i2cbus_initialize(int port)
    * power-up hardware and configure GPIOs.
    */
 
-  flags = enter_critical_section();
-
-  if ((volatile int)priv->refs++ == 0)
+  nxmutex_lock(&priv->lock);
+  if (priv->refs++ == 0)
     {
-      imxrt_lpi2c_sem_init(priv);
       imxrt_lpi2c_init(priv);
 
 #ifdef CONFIG_IMXRT_LPI2C_DMA
@@ -2388,8 +2217,7 @@ struct i2c_master_s *imxrt_i2cbus_initialize(int port)
 #endif
     }
 
-  leave_critical_section(flags);
-
+  nxmutex_unlock(&priv->lock);
   return (struct i2c_master_s *)priv;
 }
 
@@ -2404,7 +2232,6 @@ struct i2c_master_s *imxrt_i2cbus_initialize(int port)
 int imxrt_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
   struct imxrt_lpi2c_priv_s *priv = (struct imxrt_lpi2c_priv_s *)dev;
-  irqstate_t flags;
 
   DEBUGASSERT(dev);
 
@@ -2415,15 +2242,12 @@ int imxrt_i2cbus_uninitialize(struct i2c_master_s *dev)
       return ERROR;
     }
 
-  flags = enter_critical_section();
-
+  nxmutex_lock(&priv->lock);
   if (--priv->refs > 0)
     {
-      leave_critical_section(flags);
+      nxmutex_unlock(&priv->lock);
       return OK;
     }
-
-  leave_critical_section(flags);
 
   /* Disable power and other HW resource (GPIO's) */
 
@@ -2437,10 +2261,8 @@ int imxrt_i2cbus_uninitialize(struct i2c_master_s *dev)
 #endif
 
   imxrt_lpi2c_deinit(priv);
+  nxmutex_unlock(&priv->lock);
 
-  /* Release unused resources */
-
-  imxrt_lpi2c_sem_destroy(priv);
   return OK;
 }
 

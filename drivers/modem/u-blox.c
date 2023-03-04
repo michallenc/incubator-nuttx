@@ -114,10 +114,9 @@ static const struct file_operations ubxmdm_fops =
   ubxmdm_write, /* write */
   NULL,         /* seek */
   ubxmdm_ioctl, /* ioctl */
+  NULL,         /* mmap */
+  NULL,         /* truncate */
   ubxmdm_poll   /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL        /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -260,11 +259,7 @@ static int ubxmdm_poll(FAR struct file * filep,
 {
   if (setup)
     {
-      fds->revents |= (fds->events & (POLLIN | POLLOUT));
-      if (fds->revents != 0)
-        {
-          nxsem_post(fds->sem);
-        }
+      poll_notify(&fds, 1, POLLIN | POLLOUT);
     }
 
   return OK;

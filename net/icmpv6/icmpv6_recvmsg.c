@@ -43,10 +43,6 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define IPv6_BUF \
-  ((FAR struct ipv6_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define ICMPv6_BUF \
-  ((FAR struct icmpv6_echo_reply_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN])
 #define ICMPv6_SIZE \
   ((dev)->d_len - IPv6_HDRLEN)
 
@@ -139,7 +135,7 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
            * REVISIT:  What if there are IPv6 extension headers present?
            */
 
-          icmpv6 = ICMPv6_BUF;
+          icmpv6 = IPBUF(IPv6_HDRLEN);
           if (conn->id != icmpv6->id)
             {
               ninfo("Wrong ID: %u vs %u\n", icmpv6->id, conn->id);
@@ -163,7 +159,7 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
            * REVISIT:  What if there are IPv6 extension headers present?
            */
 
-          memcpy(pstate->recv_buf, ICMPv6_BUF, recvsize);
+          memcpy(pstate->recv_buf, IPBUF(IPv6_HDRLEN), recvsize);
 
           /* Return the size of the returned data */
 
@@ -172,7 +168,7 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
 
           /* Return the IPv6 address of the sender from the IPv6 header */
 
-          ipv6 = IPv6_BUF;
+          ipv6 = IPBUF(0);
           net_ipv6addr_hdrcopy(&pstate->recv_from, ipv6->srcipaddr);
 
           /* Decrement the count of outstanding requests.  I suppose this
@@ -236,10 +232,8 @@ static inline ssize_t icmpv6_readahead(FAR struct icmpv6_conn_s *conn,
                                      FAR struct sockaddr_in6 *from,
                                      FAR socklen_t *fromlen)
 {
-  FAR struct sockaddr_in6 bitbucket;
   FAR struct iob_s *iob;
   ssize_t ret = -ENODATA;
-  int recvlen;
 
   /* Check there is any ICMPv6 replies already buffered in a read-ahead
    * buffer.
@@ -247,68 +241,26 @@ static inline ssize_t icmpv6_readahead(FAR struct icmpv6_conn_s *conn,
 
   if ((iob = iob_peek_queue(&conn->readahead)) != NULL)
     {
-      FAR struct iob_s *tmp;
-      uint16_t offset;
-      uint8_t addrsize;
-
       DEBUGASSERT(iob->io_pktlen > 0);
-
-      /* Transfer that buffered data from the I/O buffer chain into
-       * the user buffer.
-       */
-
-      /* First get the size of the address */
-
-      recvlen = iob_copyout(&addrsize, iob, sizeof(uint8_t), 0);
-      if (recvlen != sizeof(uint8_t))
-        {
-          ret = -EIO;
-          goto out;
-        }
-
-      offset = sizeof(uint8_t);
-
-      if (addrsize > sizeof(struct sockaddr_in6))
-        {
-          ret = -EINVAL;
-          goto out;
-        }
 
       /* Then get address */
 
-      if (from == NULL)
+      if (from != NULL)
         {
-          from = &bitbucket;
+          memcpy(from, iob->io_data, sizeof(struct sockaddr_in6));
         }
 
-      recvlen = iob_copyout((FAR uint8_t *)from, iob, addrsize, offset);
-      if (recvlen != addrsize)
-        {
-          ret = -EIO;
-          goto out;
-        }
+      /* Copy to user */
 
-      if (fromlen != NULL)
-        {
-          *fromlen = addrsize;
-        }
-
-      offset += addrsize;
-
-      /* And finally, get the buffered data */
-
-      ret = (ssize_t)iob_copyout(buf, iob, buflen, offset);
+      ret = iob_copyout(buf, iob, buflen, 0);
 
       ninfo("Received %ld bytes (of %u)\n", (long)ret, iob->io_pktlen);
 
-out:
       /* Remove the I/O buffer chain from the head of the read-ahead
        * buffer queue.
        */
 
-      tmp = iob_remove_queue(&conn->readahead);
-      DEBUGASSERT(tmp == iob);
-      UNUSED(tmp);
+      iob_remove_queue(&conn->readahead);
 
       /* And free the I/O buffer chain */
 
@@ -427,13 +379,7 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       /* Initialize the state structure */
 
       memset(&state, 0, sizeof(struct icmpv6_recvfrom_s));
-
-      /* This semaphore is used for signaling and, hence, should not have
-       * priority inheritance enabled.
-       */
-
       nxsem_init(&state.recv_sem, 0, 0);
-      nxsem_set_protocol(&state.recv_sem, SEM_PRIO_NONE);
 
       state.recv_sock   = psock;    /* The IPPROTO_ICMP6 socket instance */
       state.recv_result = -ENOMEM;  /* Assume allocation failure */
@@ -450,13 +396,13 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
           state.recv_cb->event = recvfrom_eventhandler;
 
           /* Wait for either the response to be received or for timeout to
-           * occur. (1) net_timedwait will also terminate if a signal is
+           * occur. (1) net_sem_timedwait will also terminate if a signal is
            * received, (2) interrupts may be disabled!  They will be
            * re-enabled while the task sleeps and automatically re-enabled
            * when the task restarts.
            */
 
-          ret = net_timedwait(&state.recv_sem,
+          ret = net_sem_timedwait(&state.recv_sem,
                               _SO_TIMEOUT(conn->sconn.s_rcvtimeo));
           if (ret < 0)
             {
@@ -465,6 +411,8 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
           icmpv6_callback_free(dev, conn, state.recv_cb);
         }
+
+      nxsem_destroy(&state.recv_sem);
 
       /* Return the negated error number in the event of a failure, or the
        * number of bytes received on success.

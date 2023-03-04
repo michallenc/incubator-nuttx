@@ -228,6 +228,10 @@ ifeq ($(CONFIG_SENSORS_T67XX),y)
   CSRCS += t67xx.c
 endif
 
+ifeq ($(CONFIG_SENSORS_LTR308),y)
+  CSRCS += ltr308.c
+endif
+
 endif # CONFIG_I2C
 
 # These drivers depend on SPI support
@@ -344,6 +348,6 @@ endif
 
 DEPPATH += --dep-path sensors
 VPATH += :sensors
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)drivers$(DELIM)sensors}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)drivers$(DELIM)sensors
 
 endif # CONFIG_SENSORS

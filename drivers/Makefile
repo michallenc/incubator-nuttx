@@ -63,12 +63,14 @@ include usbhost/Make.defs
 include usbmisc/Make.defs
 include usbmonitor/Make.defs
 include video/Make.defs
+include virtio/Make.defs
 include wireless/Make.defs
 include contactless/Make.defs
 include 1wire/Make.defs
 include rf/Make.defs
 include rc/Make.defs
 include segger/Make.defs
+include usrsock/Make.defs
 
 ifeq ($(CONFIG_SPECIFIC_DRIVERS),y)
 -include platform/Make.defs

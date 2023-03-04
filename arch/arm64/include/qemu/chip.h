@@ -33,10 +33,23 @@
 #define MB(x)           (KB(x) << 10)
 #define GB(x)           (MB(UINT64_C(x)) << 10)
 
-#if defined(CONFIG_ARCH_CHIP_QEMU_A53)
+#if defined(CONFIG_ARCH_CHIP_QEMU)
+
+#if CONFIG_ARM_GIC_VERSION == 2
+
+#define CONFIG_GICD_BASE          0x8000000
+#define CONFIG_GICR_BASE          0x8010000
+
+#elif CONFIG_ARM_GIC_VERSION == 3 || CONFIG_ARM_GIC_VERSION == 4
 
 #define CONFIG_GICD_BASE          0x8000000
 #define CONFIG_GICR_BASE          0x80a0000
+#define CONFIG_GICR_OFFSET        0x20000
+#else
+
+#error CONFIG_ARM_GIC_VERSION should be 2, 3 or 4
+
+#endif /* CONFIG_ARM_GIC_VERSION */
 
 #define CONFIG_RAMBANK1_ADDR      0x40000000
 #define CONFIG_RAMBANK1_SIZE      MB(128)

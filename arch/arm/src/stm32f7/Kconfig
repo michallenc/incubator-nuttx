@@ -1469,6 +1469,21 @@ config STM32F7_QUADSPI
 	bool "QuadSPI"
 	default n
 
+config STM32F7_USBDEV_REGDEBUG
+	bool "OTG USBDEV REGDEBUG"
+	default n
+	depends on USBDEV
+
+config STM32F7_USBHOST_REGDEBUG
+	bool "OTG USBHOST REGDEBUG"
+	default n
+	depends on USBHOST
+
+config STM32F7_USBHOST_PKTDUMP
+	bool "OTG USBHOST PKTDUMP"
+	default n
+	depends on USBHOST
+
 config STM32F7_RTC
 	bool "RTC"
 	default n
@@ -2070,9 +2085,10 @@ config STM32F7_SERIALBRK_BSDCOMPAT
 	---help---
 		Enable using GPIO on the TX pin to send a BSD compatible break:
 		TIOCSBRK will start the break and TIOCCBRK will end the break.
-		The current STM32 U[S]ARTS have no way to leave the break (TX=LOW)
-		on because the SW starts the break and then the HW automatically clears
-		the break. This makes it is difficult to sent a long break.
+		The current STM32F7 U[S]ARTS have no way to leave the break on
+		(TX=LOW) because software starts the break and then the hardware
+		automatically clears the break. This makes it difficult to send
+		a long break.
 
 config STM32F7_USART_SINGLEWIRE
 	bool "Single Wire Support"
@@ -2673,7 +2689,7 @@ config STM32F7_DMACAPABLE_ASSUME_CACHE_ALIGNED
 		This option configures the stm32_dmacapable to not disqualify
 		DMA operations on memory that is not dcache aligned based solely
 		on the starting address and byte count.
-		
+
 		Use this when ALL buffer extents are known to be aligned, but the
 		the count does not use the complete buffer.
 
@@ -6047,6 +6063,21 @@ endmenu # Timer Configuration
 menu "CAN driver configuration"
 	depends on STM32F7_CAN
 
+choice
+	prompt "CAN character driver or SocketCAN support"
+	default STM32F7_CAN_CHARDRIVER
+
+config STM32F7_CAN_CHARDRIVER
+	bool "STM32F7 CAN character driver support"
+	select ARCH_HAVE_CAN_ERRORS
+	select CAN
+
+config STM32F7_CAN_SOCKET
+	bool "STM32F7 CAN SocketCAN support"
+	select NET_CAN_HAVE_ERRORS
+
+endchoice # CAN character driver or SocketCAN support
+
 config STM32F7_CAN1_BAUD
 	int "CAN1 BAUD"
 	default 250000
@@ -6340,7 +6371,7 @@ config STM32F7_PHYINIT
 		one time before it first uses the PHY.
 
 config STM32F7_PHY_POLLING
-	bool "Support network monitoring by poling the PHY"
+	bool "Support network monitoring by polling the PHY"
 	default n
 	depends on STM32F7_HAVE_PHY_POLLED
 	select ARCH_PHY_POLLED

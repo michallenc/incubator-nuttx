@@ -117,7 +117,7 @@
 
 /* Default priority */
 
-#define PTHREAD_DEFAULT_PRIORITY      100
+#define PTHREAD_DEFAULT_PRIORITY      SCHED_PRIORITY_DEFAULT
 
 /* Cancellation states used by pthread_setcancelstate() */
 
@@ -199,12 +199,12 @@ extern "C"
 
 #ifndef __PTHREAD_KEY_T_DEFINED
 typedef int pthread_key_t;
-#define __PTHREAD_KEY_T_DEFINED 1
+#  define __PTHREAD_KEY_T_DEFINED 1
 #endif
 
 #ifndef __PTHREAD_ADDR_T_DEFINED
 typedef FAR void *pthread_addr_t;
-#define __PTHREAD_ADDR_T_DEFINED 1
+#  define __PTHREAD_ADDR_T_DEFINED 1
 #endif
 
 typedef CODE pthread_addr_t (*pthread_startroutine_t)(pthread_addr_t);
@@ -238,22 +238,23 @@ struct pthread_attr_s
 
 #ifndef __PTHREAD_ATTR_T_DEFINED
 typedef struct pthread_attr_s pthread_attr_t;
-#define __PTHREAD_ATTR_T_DEFINED 1
+#  define __PTHREAD_ATTR_T_DEFINED 1
 #endif
 
 #ifndef __PTHREAD_T_DEFINED
 typedef pid_t pthread_t;
-#define __PTHREAD_T_DEFINED 1
+#  define __PTHREAD_T_DEFINED 1
 #endif
 
 struct pthread_condattr_s
 {
+  int pshared;
   clockid_t clockid;
 };
 
 #ifndef __PTHREAD_CONDATTR_T_DEFINED
 typedef struct pthread_condattr_s pthread_condattr_t;
-#define __PTHREAD_CONDATTR_T_DEFINED 1
+#  define __PTHREAD_CONDATTR_T_DEFINED 1
 #endif
 
 struct pthread_cond_s
@@ -264,7 +265,7 @@ struct pthread_cond_s
 
 #ifndef __PTHREAD_COND_T_DEFINED
 typedef struct pthread_cond_s pthread_cond_t;
-#define __PTHREAD_COND_T_DEFINED 1
+#  define __PTHREAD_COND_T_DEFINED 1
 #endif
 
 #define PTHREAD_COND_INITIALIZER {SEM_INITIALIZER(0), CLOCK_REALTIME }
@@ -285,7 +286,7 @@ struct pthread_mutexattr_s
 
 #ifndef __PTHREAD_MUTEXATTR_T_DEFINED
 typedef struct pthread_mutexattr_s pthread_mutexattr_t;
-#define __PTHREAD_MUTEXATTR_T_DEFINED 1
+#  define __PTHREAD_MUTEXATTR_T_DEFINED 1
 #endif
 
 struct pthread_mutex_s
@@ -311,7 +312,7 @@ struct pthread_mutex_s
 
 #ifndef __PTHREAD_MUTEX_T_DEFINED
 typedef struct pthread_mutex_s pthread_mutex_t;
-#define __PTHREAD_MUTEX_T_DEFINED 1
+#  define __PTHREAD_MUTEX_T_DEFINED 1
 #endif
 
 #ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
@@ -350,7 +351,7 @@ struct pthread_barrierattr_s
 
 #ifndef __PTHREAD_BARRIERATTR_T_DEFINED
 typedef struct pthread_barrierattr_s pthread_barrierattr_t;
-#define __PTHREAD_BARRIERATTR_T_DEFINED 1
+#  define __PTHREAD_BARRIERATTR_T_DEFINED 1
 #endif
 
 struct pthread_barrier_s
@@ -361,12 +362,22 @@ struct pthread_barrier_s
 
 #ifndef __PTHREAD_BARRIER_T_DEFINED
 typedef struct pthread_barrier_s pthread_barrier_t;
-#define __PTHREAD_BARRIER_T_DEFINED 1
+#  define __PTHREAD_BARRIER_T_DEFINED 1
 #endif
 
 #ifndef __PTHREAD_ONCE_T_DEFINED
 typedef bool pthread_once_t;
-#define __PTHREAD_ONCE_T_DEFINED 1
+#  define __PTHREAD_ONCE_T_DEFINED 1
+#endif
+
+struct pthread_rwlockattr_s
+{
+  int pshared;
+};
+
+#ifndef __PTHREAD_RWLOCKATTR_T_DEFINED
+typedef struct pthread_rwlockattr_s pthread_rwlockattr_t;
+#  define __PTHREAD_RWLOCKATTR_T_DEFINED 1
 #endif
 
 struct pthread_rwlock_s
@@ -378,9 +389,10 @@ struct pthread_rwlock_s
   bool write_in_progress;
 };
 
+#ifndef __PTHREAD_RWLOCK_T_DEFINED
 typedef struct pthread_rwlock_s pthread_rwlock_t;
-
-typedef int pthread_rwlockattr_t;
+#  define __PTHREAD_RWLOCK_T_DEFINED 1
+#endif
 
 #define PTHREAD_RWLOCK_INITIALIZER  {PTHREAD_MUTEX_INITIALIZER, \
                                      PTHREAD_COND_INITIALIZER, \
@@ -396,12 +408,12 @@ struct pthread_spinlock_s
                                  * SP_UNLOCKED. */
   pthread_t sp_holder;          /* ID of the thread that holds the spinlock */
 };
-#ifndef __PTHREAD_SPINLOCK_T_DEFINED
+#  ifndef __PTHREAD_SPINLOCK_T_DEFINED
 /* It is referenced via this standard type */
 
 typedef FAR struct pthread_spinlock_s pthread_spinlock_t;
-#define __PTHREAD_SPINLOCK_T_DEFINED 1
-#endif
+#    define __PTHREAD_SPINLOCK_T_DEFINED 1
+#  endif
 #endif /* CONFIG_PTHREAD_SPINLOCKS */
 
 #ifdef CONFIG_PTHREAD_CLEANUP
@@ -457,16 +469,22 @@ int pthread_attr_getaffinity_np(FAR const pthread_attr_t *attr,
 
 /* Set or obtain the default stack size */
 
+int pthread_attr_setstackaddr(FAR pthread_attr_t *attr, FAR void *stackaddr);
+int pthread_attr_getstackaddr(FAR const pthread_attr_t *attr,
+                              FAR void **stackaddr);
+
+/* Set or obtain the default stack size */
+
 int pthread_attr_setstacksize(FAR pthread_attr_t *attr, size_t stacksize);
 int pthread_attr_getstacksize(FAR const pthread_attr_t *attr,
-                              FAR size_t *stackaddr);
+                              FAR size_t *stacksize);
 
 /* Set or obtain stack address and size attributes */
 
 int pthread_attr_setstack(FAR pthread_attr_t *attr,
-                          FAR void *stackaddr, long stacksize);
-int pthread_attr_getstack(FAR pthread_attr_t *attr,
-                          FAR void **stackaddr, FAR long *stacksize);
+                          FAR void *stackaddr, size_t stacksize);
+int pthread_attr_getstack(FAR const pthread_attr_t *attr,
+                          FAR void **stackaddr, FAR size_t *stacksize);
 
 /* Set or get the name of a thread */
 
@@ -525,7 +543,8 @@ void pthread_yield(void);
 
 /* A thread may obtain a copy of its own thread handle. */
 
-#define pthread_self() ((pthread_t)getpid())
+#define pthread_self()            ((pthread_t)gettid())
+#define pthread_gettid_np(thread) ((pid_t)(thread))
 
 /* Compare two thread IDs. */
 
@@ -597,6 +616,9 @@ int pthread_mutex_consistent(FAR pthread_mutex_t *mutex);
 
 int pthread_condattr_init(FAR pthread_condattr_t *attr);
 int pthread_condattr_destroy(FAR pthread_condattr_t *attr);
+int pthread_condattr_getpshared(FAR const pthread_condattr_t *attr,
+                                FAR int *pshared);
+int pthread_condattr_setpshared(FAR pthread_condattr_t *attr, int pshared);
 int pthread_condattr_getclock(FAR const pthread_condattr_t *attr,
                               clockid_t *clock_id);
 int pthread_condattr_setclock(FAR pthread_condattr_t *attr,
@@ -649,6 +671,15 @@ int pthread_barrier_wait(FAR pthread_barrier_t *barrier);
 
 int pthread_once(FAR pthread_once_t *once_control,
                  CODE void (*init_routine)(void));
+
+/* Pthread rwlock attributes */
+
+int pthread_rwlockattr_init(FAR pthread_rwlockattr_t *attr);
+int pthread_rwlockattr_destroy(FAR pthread_rwlockattr_t *attr);
+int pthread_rwlockattr_getpshared(FAR const pthread_rwlockattr_t *attr,
+                                  FAR int *pshared);
+int pthread_rwlockattr_setpshared(FAR pthread_rwlockattr_t *attr,
+                                  int pshared);
 
 /* Pthread rwlock */
 
@@ -771,12 +802,24 @@ typedef struct pthread_barrier_s pthread_barrier_t;
 #  define __PTHREAD_BARRIER_T_DEFINED 1
 #endif
 
+#ifndef __PTHREAD_RWLOCKATTR_T_DEFINED
+struct pthread_rwlockattr_s;
+typedef struct pthread_rwlockattr_s pthread_rwlockattr_t;
+#  define __PTHREAD_RWLOCKATTR_T_DEFINED 1
+#endif
+
+#ifndef __PTHREAD_RWLOCK_T_DEFINED
+struct pthread_rwlock_s;
+typedef struct pthread_rwlock_s pthread_rwlock_t;
+#  define __PTHREAD_RWLOCK_T_DEFINED 1
+#endif
+
 #ifdef CONFIG_PTHREAD_SPINLOCKS
-#ifndef __PTHREAD_SPINLOCK_T_DEFINED
+#  ifndef __PTHREAD_SPINLOCK_T_DEFINED
 struct pthread_spinlock_s;
 typedef FAR struct pthread_spinlock_s pthread_spinlock_t;
-#define __PTHREAD_SPINLOCK_T_DEFINED 1
-#endif
+#    define __PTHREAD_SPINLOCK_T_DEFINED 1
+#  endif
 #endif /* CONFIG_PTHREAD_SPINLOCKS */
 
 #ifndef __PTHREAD_ONCE_T_DEFINED

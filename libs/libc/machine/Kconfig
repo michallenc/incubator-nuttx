@@ -72,7 +72,15 @@ config LIBC_ARCH_STRCHR
 	bool
 	default n
 
+config LIBC_ARCH_STRCHRNUL
+	bool
+	default n
+
 config LIBC_ARCH_STRCMP
+	bool
+	default n
+
+config LIBC_ARCH_STRNCMP
 	bool
 	default n
 
@@ -100,6 +108,10 @@ config LIBC_ARCH_STRNLEN
 	bool
 	default n
 
+config LIBC_ARCH_STRRCHR
+	bool
+	default n
+
 config LIBC_ARCH_ELF
 	bool
 	default n
@@ -109,70 +121,13 @@ config LIBC_ARCH_ELF_64BIT
 	default n
 	depends on LIBC_ARCH_ELF
 
-config LIBM_ARCH_CEIL
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_FLOOR
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_NEARBYINT
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_RINT
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_ROUND
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_TRUNC
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_CEILF
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_FLOORF
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_NEARBYINTF
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_RINTF
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_ROUNDF
-	bool
-	default n
-	depends on LIBM
-
-config LIBM_ARCH_TRUNCF
-	bool
-	default n
-	depends on LIBM
-
 # One or more the of above may be selected by architecture specific logic
 
 if ARCH_ARM
 source "libs/libc/machine/arm/Kconfig"
+endif
+if ARCH_ARM64
+source "libs/libc/machine/arm64/Kconfig"
 endif
 if ARCH_RISCV
 source "libs/libc/machine/risc-v/Kconfig"
@@ -191,7 +146,7 @@ source "libs/libc/machine/renesas/Kconfig"
 endif
 
 if ARCH_SPARC
-source libs/libc/machine/sparc/Kconfig
+source "libs/libc/machine/sparc/Kconfig"
 endif
 
 endmenu # Architecture-Specific Support

@@ -89,7 +89,7 @@ static int lib_numeric_address(FAR const char *name,
   FAR struct hostent_info_s *info;
   FAR char *ptr;
   socklen_t addrlen;
-  int namelen;
+  size_t namelen;
   int ret;
 
   /* Verify that we have a buffer big enough to get started (it still may not
@@ -320,7 +320,7 @@ static int lib_find_answer(FAR const char *name, FAR struct hostent_s *host,
   socklen_t addrlen;
   int naddr;
   int addrtype;
-  int namelen;
+  size_t namelen;
   int ret;
   int i;
 
@@ -466,7 +466,7 @@ static int lib_dns_lookup(FAR const char *name, FAR struct hostent_s *host,
   socklen_t addrlen;
   int naddr;
   int addrtype;
-  int namelen;
+  size_t namelen;
   int ret;
   int i;
 
@@ -716,7 +716,7 @@ errorout_with_herrnocode:
 
 int gethostentbyname_r(FAR const char *name,
                        FAR struct hostent_s *host, FAR char *buf,
-                       size_t buflen, FAR int *h_errnop)
+                       size_t buflen, FAR int *h_errnop, int flags)
 {
   DEBUGASSERT(name != NULL && host != NULL && buf != NULL);
 
@@ -734,6 +734,15 @@ int gethostentbyname_r(FAR const char *name,
       /* Yes.. we are done */
 
       return OK;
+    }
+  else if ((flags & AI_NUMERICHOST) != 0)
+    {
+      if (h_errnop)
+        {
+          *h_errnop = EAI_NONAME;
+        }
+
+      return ERROR;
     }
 
 #ifdef CONFIG_NET_LOOPBACK

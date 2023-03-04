@@ -53,6 +53,7 @@
 #define O_DIRECT    (1 << 9)        /* Avoid caching, write directly to hardware */
 #define O_CLOEXEC   (1 << 10)       /* Close on execute */
 #define O_DIRECTORY (1 << 11)       /* Must be a directory */
+#define O_NOFOLLOW  (1 << 12)       /* Don't follow links */
 
 /* Unsupported, but required open flags */
 
@@ -81,24 +82,25 @@
 
 /* fcntl() commands */
 
-#define F_DUPFD     0  /* Duplicate a file descriptor */
-#define F_GETFD     1  /* Read the file descriptor flags */
-#define F_GETFL     2  /* Read the file status flags */
-#define F_GETLEASE  3  /* Indicates what type of lease is held on fd (linux) */
-#define F_GETLK     4  /* Check if we could place a lock */
-#define F_GETOWN    5  /* Get the pid receiving  SIGIO and SIGURG signals for fd */
-#define F_GETSIG    6  /* Get the signal sent */
-#define F_NOTIFY    7  /* Provide notification when directory referred to by fd changes (linux)*/
-#define F_SETFD     8  /* Set the file descriptor flags to value */
-#define F_SETFL     9  /* Set the file status flags to the value */
-#define F_SETLEASE  10 /* Set or remove file lease (linux) */
-#define F_SETLK     11 /* Acquire or release a lock on range of bytes */
-#define F_SETLKW    12 /* Like F_SETLK, but wait for lock to become available */
-#define F_SETOWN    13 /* Set pid that will receive SIGIO and SIGURG signals for fd */
-#define F_SETSIG    14 /* Set the signal to be sent */
-#define F_GETPATH   15 /* Get the path of the file descriptor(BSD/macOS) */
-#define F_ADD_SEALS 16 /* Add the bit-mask argument arg to the set of seals of the inode */
-#define F_GET_SEALS 17 /* Get (as the function result) the current set of seals of the inode */
+#define F_DUPFD         0  /* Duplicate a file descriptor */
+#define F_GETFD         1  /* Read the file descriptor flags */
+#define F_GETFL         2  /* Read the file status flags */
+#define F_GETLEASE      3  /* Indicates what type of lease is held on fd (linux) */
+#define F_GETLK         4  /* Check if we could place a lock */
+#define F_GETOWN        5  /* Get the pid receiving  SIGIO and SIGURG signals for fd */
+#define F_GETSIG        6  /* Get the signal sent */
+#define F_NOTIFY        7  /* Provide notification when directory referred to by fd changes (linux)*/
+#define F_SETFD         8  /* Set the file descriptor flags to value */
+#define F_SETFL         9  /* Set the file status flags to the value */
+#define F_SETLEASE      10 /* Set or remove file lease (linux) */
+#define F_SETLK         11 /* Acquire or release a lock on range of bytes */
+#define F_SETLKW        12 /* Like F_SETLK, but wait for lock to become available */
+#define F_SETOWN        13 /* Set pid that will receive SIGIO and SIGURG signals for fd */
+#define F_SETSIG        14 /* Set the signal to be sent */
+#define F_GETPATH       15 /* Get the path of the file descriptor(BSD/macOS) */
+#define F_ADD_SEALS     16 /* Add the bit-mask argument arg to the set of seals of the inode */
+#define F_GET_SEALS     17 /* Get (as the function result) the current set of seals of the inode */
+#define F_DUPFD_CLOEXEC 18 /* Duplicate file descriptor with close-on-exit set.  */
 
 /* For posix fcntl() and lockf() */
 
@@ -109,6 +111,18 @@
 /* close-on-exec flag for F_GETFD and F_SETFD */
 
 #define FD_CLOEXEC  1
+
+/* The flag for openat, faccessat, ... */
+
+#define AT_FDCWD              -100   /* Special value used to indicate openat should use the current
+                                      * working directory.
+                                      */
+#define AT_SYMLINK_NOFOLLOW   0x0100 /* Do not follow symbolic links. */
+#define AT_EACCESS            0x0200 /* Test access permitted for effective IDs, not real IDs. */
+#define AT_REMOVEDIR          0x0200 /* Remove directory instead of unlinking file. */
+#define AT_SYMLINK_FOLLOW     0x0400 /* Follow symbolic links. */
+#define AT_NO_AUTOMOUNT       0x0800 /* Suppress terminal automount traversal */
+#define AT_EMPTY_PATH         0x1000 /* Allow empty relative pathname */
 
 /* These are the notifications that can be received from F_NOTIFY (linux) */
 
@@ -134,7 +148,7 @@
 
 #define creat(path, mode) open(path, O_WRONLY|O_CREAT|O_TRUNC, mode)
 
-#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+#if defined(CONFIG_FS_LARGEFILE)
 #  define F_GETLK64         F_GETLK
 #  define F_SETLK64         F_SETLK
 #  define F_SETLKW64        F_SETLKW
@@ -183,6 +197,7 @@ extern "C"
 /* POSIX-like File System Interfaces */
 
 int open(FAR const char *path, int oflag, ...);
+int openat(int dirfd, FAR const char *path, int oflag, ...);
 int fcntl(int fd, int cmd, ...);
 
 int posix_fallocate(int fd, off_t offset, off_t len);

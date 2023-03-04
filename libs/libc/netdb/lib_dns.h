@@ -132,24 +132,44 @@ EXTERN uint8_t g_dns_nservers;
  ****************************************************************************/
 
 /****************************************************************************
- * Name: dns_semtake
+ * Name: dns_lock
  *
  * Description:
- *   Take the DNS semaphore, ignoring errors due to the receipt of signals.
+ *   Take the DNS mutex, ignoring errors due to the receipt of signals.
  *
  ****************************************************************************/
 
-void dns_semtake(void);
+void dns_lock(void);
 
 /****************************************************************************
- * Name: dns_semgive
+ * Name: dns_unlock
  *
  * Description:
- *   Release the DNS semaphore
+ *   Release the DNS mutex
  *
  ****************************************************************************/
 
-void dns_semgive(void);
+void dns_unlock(void);
+
+/****************************************************************************
+ * Name: dns_breaklock
+ *
+ * Description:
+ *   Break the DNS lock
+ *
+ ****************************************************************************/
+
+void dns_breaklock(FAR unsigned int *count);
+
+/****************************************************************************
+ * Name: dns_restorelock
+ *
+ * Description:
+ *   Restore the DNS lock
+ *
+ ****************************************************************************/
+
+void dns_restorelock(unsigned int count);
 
 /****************************************************************************
  * Name: dns_bind
@@ -202,6 +222,7 @@ int dns_query(FAR const char *hostname, FAR union dns_addr_u *addr,
  *   hostname - The hostname string to be cached.
  *   addr     - The IP addresses associated with the hostname.
  *   naddr    - The count of the IP addresses.
+ *   ttl      - The TTL of the IP addresses.
  *
  * Returned Value:
  *   None
@@ -210,7 +231,8 @@ int dns_query(FAR const char *hostname, FAR union dns_addr_u *addr,
 
 #if CONFIG_NETDB_DNSCLIENT_ENTRIES > 0
 void dns_save_answer(FAR const char *hostname,
-                     FAR const union dns_addr_u *addr, int naddr);
+                     FAR const union dns_addr_u *addr, int naddr,
+                     uint32_t ttl);
 #endif
 
 /****************************************************************************

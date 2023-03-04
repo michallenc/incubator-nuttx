@@ -125,6 +125,13 @@ static uint16_t icmpv6_router_eventhandler(FAR struct net_driver_s *dev,
           return flags;
         }
 
+      /* Prepare device buffer */
+
+      if (netdev_iob_prepare(dev, false, 0) != OK)
+        {
+          return flags;
+        }
+
       /* It looks like we are good to send the data.
        *
        * Copy the packet data into the device packet buffer and send it.
@@ -177,15 +184,9 @@ static int icmpv6_send_message(FAR struct net_driver_s *dev, bool advertise)
   struct icmpv6_router_s state;
   int ret;
 
-  /* Initialize the state structure with the network locked.
-   *
-   *
-   * This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
+  /* Initialize the state structure with the network locked. */
 
   nxsem_init(&state.snd_sem, 0, 0); /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
   /* Remember the routing device name */
 
@@ -221,12 +222,12 @@ static int icmpv6_send_message(FAR struct net_driver_s *dev, bool advertise)
   netdev_txnotify_dev(dev);
 
   /* Wait for the send to complete or an error to occur
-   * net_lockedwait will also terminate if a signal is received.
+   * net_sem_wait will also terminate if a signal is received.
    */
 
   do
     {
-      net_lockedwait(&state.snd_sem);
+      net_sem_wait(&state.snd_sem);
     }
   while (!state.snd_sent);
 

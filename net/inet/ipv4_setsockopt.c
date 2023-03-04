@@ -34,6 +34,7 @@
 #include <netinet/in.h>
 
 #include "netdev/netdev.h"
+#include "netfilter/iptables.h"
 #include "igmp/igmp.h"
 #include "inet/inet.h"
 #include "udp/udp.h"
@@ -71,7 +72,6 @@
 int ipv4_setsockopt(FAR struct socket *psock, int option,
                     FAR const void *value, socklen_t value_len)
 {
-#ifdef CONFIG_NET_IGMP
   int ret;
 
   ninfo("option: %d\n", option);
@@ -86,6 +86,7 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
   net_lock();
   switch (option)
     {
+#ifdef CONFIG_NET_IGMP
       case IP_MSFILTER:    /* Access advanced, full-state filtering API */
         {
 #if 0 /* REVISIT:  This is not a proper implementation of IP_MSGFILTER */
@@ -174,6 +175,7 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
         }
         break;
 
+#if defined(CONFIG_NET_UDP) && !defined(CONFIG_NET_UDP_NO_STACK)
       case IP_MULTICAST_TTL:          /* Set/read the time-to-live value of
                                        * outgoing multicast packets */
         {
@@ -202,6 +204,7 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
             }
         }
         break;
+#endif
 
       /* The following IPv4 socket options are defined, but not implemented */
 
@@ -227,6 +230,63 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
         nwarn("WARNING: Unimplemented IPv4 option: %d\n", option);
         ret = -ENOSYS;
         break;
+#endif /* CONFIG_NET_IGMP */
+
+#if defined(CONFIG_NET_UDP) && !defined(CONFIG_NET_UDP_NO_STACK)
+      case IP_PKTINFO:
+        {
+          FAR struct udp_conn_s *conn;
+          int enable;
+
+          if (psock->s_type != SOCK_DGRAM ||
+              value == NULL || value_len == 0)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          enable = (value_len >= sizeof(int)) ?
+            *(FAR int *)value : (int)*(FAR unsigned char *)value;
+          conn = (FAR struct udp_conn_s *)psock->s_conn;
+          if (enable)
+            {
+              conn->flags |= _UDP_FLAG_PKTINFO;
+            }
+          else
+            {
+              conn->flags &= ~_UDP_FLAG_PKTINFO;
+            }
+
+          ret = OK;
+        }
+        break;
+#endif
+      case IP_TOS:
+        {
+          FAR struct socket_conn_s *conn =
+                           (FAR struct socket_conn_s *)psock->s_conn;
+          int tos;
+
+          tos = (value_len >= sizeof(int)) ?
+                *(FAR int *)value : (int)*(FAR unsigned char *)value;
+          if (tos < 0 || tos > 0xff)
+            {
+              nerr("ERROR: invalid tos:%d\n", tos);
+              ret = -EINVAL;
+            }
+          else
+            {
+              conn->s_tos = tos;
+              ret = OK;
+            }
+        }
+        break;
+
+#ifdef CONFIG_NET_IPTABLES
+      case IPT_SO_SET_REPLACE:
+        ret = ipt_setsockopt(psock, option, value, value_len);
+        break;
+#endif
 
       default:
         nerr("ERROR: Unrecognized IPv4 option: %d\n", option);
@@ -236,9 +296,6 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
 
   net_unlock();
   return ret;
-#else
-  return -ENOPROTOOPT;
-#endif
 }
 
 #endif /* CONFIG_NET_IPv4 */

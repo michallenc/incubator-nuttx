@@ -48,7 +48,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  can_setup(FAR struct socket *psock, int protocol);
+static int  can_setup(FAR struct socket *psock);
 static sockcaps_t can_sockcaps(FAR struct socket *psock);
 static void can_addref(FAR struct socket *psock);
 static int  can_bind(FAR struct socket *psock,
@@ -84,7 +84,14 @@ const struct sock_intf_s g_can_sockif =
   can_poll_local,   /* si_poll */
   can_sendmsg,      /* si_sendmsg */
   can_recvmsg,      /* si_recvmsg */
-  can_close         /* si_close */
+  can_close,        /* si_close */
+  NULL,             /* si_ioctl */
+  NULL,             /* si_socketpair */
+  NULL              /* si_shutdown */
+#if defined(CONFIG_NET_SOCKOPTS) && defined(CONFIG_NET_CANPROTO_OPTIONS)
+  , can_getsockopt  /* si_getsockopt */
+  , can_setsockopt  /* si_setsockopt */
+#endif
 };
 
 /****************************************************************************
@@ -128,7 +135,7 @@ static uint16_t can_poll_eventhandler(FAR struct net_driver_s *dev,
 
       if ((flags & CAN_NEWDATA) != 0)
         {
-          eventset |= (POLLIN & info->fds->events);
+          eventset |= POLLIN;
         }
 
       /* Check for loss of connection events. */
@@ -143,16 +150,12 @@ static uint16_t can_poll_eventhandler(FAR struct net_driver_s *dev,
       else if ((flags & CAN_POLL) != 0 &&
                  psock_can_cansend(info->psock) >= 0)
         {
-          eventset |= (POLLOUT & info->fds->events);
+          eventset |= POLLOUT;
         }
 
       /* Awaken the caller of poll() is requested event occurred. */
 
-      if (eventset)
-        {
-          info->fds->revents |= eventset;
-          nxsem_post(info->fds->sem);
-        }
+      poll_notify(&info->fds, 1, eventset);
     }
 
   return flags;
@@ -169,7 +172,6 @@ static uint16_t can_poll_eventhandler(FAR struct net_driver_s *dev,
  * Input Parameters:
  *   psock    - A pointer to a user allocated socket structure to be
  *              initialized.
- *   protocol - CAN socket protocol (see sys/socket.h)
  *
  * Returned Value:
  *   Zero (OK) is returned on success.  Otherwise, a negated errno value is
@@ -177,16 +179,17 @@ static uint16_t can_poll_eventhandler(FAR struct net_driver_s *dev,
  *
  ****************************************************************************/
 
-static int can_setup(FAR struct socket *psock, int protocol)
+static int can_setup(FAR struct socket *psock)
 {
   int domain = psock->s_domain;
   int type = psock->s_type;
+  int proto = psock->s_proto;
 
   /* Verify that the protocol is supported */
 
-  DEBUGASSERT((unsigned int)protocol <= UINT8_MAX);
+  DEBUGASSERT((unsigned int)proto <= UINT8_MAX);
 
-  switch (protocol)
+  switch (proto)
     {
       case 0:            /* INET subsystem for netlib_ifup */
       case CAN_RAW:      /* RAW sockets */
@@ -204,7 +207,8 @@ static int can_setup(FAR struct socket *psock, int protocol)
 
   /* Verify the socket type (domain should always be PF_CAN here) */
 
-  if (domain == PF_CAN && (type == SOCK_RAW || type == SOCK_DGRAM))
+  if (domain == PF_CAN &&
+      (type == SOCK_RAW || type == SOCK_DGRAM || type == SOCK_CTRL))
     {
       /* Allocate the CAN socket connection structure and save it in the
        * new socket instance.
@@ -217,10 +221,6 @@ static int can_setup(FAR struct socket *psock, int protocol)
 
           return -ENOMEM;
         }
-
-      /* Initialize the connection instance */
-
-      conn->protocol = (uint8_t)protocol;
 
       /* Set the reference count on the connection structure.  This
        * reference count will be incremented only if the socket is
@@ -542,6 +542,7 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
   FAR struct can_conn_s *conn;
   FAR struct can_poll_s *info;
   FAR struct devif_callback_s *cb;
+  pollevent_t eventset = 0;
   int ret = OK;
 
   DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
@@ -602,24 +603,19 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
         {
           /* Normal data may be read without blocking. */
 
-          fds->revents |= (POLLRDNORM & fds->events);
+          eventset |= POLLRDNORM;
         }
 
       if (psock_can_cansend(psock) >= 0)
         {
           /* A CAN frame may be sent without blocking. */
 
-          fds->revents |= (POLLWRNORM & fds->events);
+          eventset |= POLLWRNORM;
         }
 
       /* Check if any requested events are already in effect */
 
-      if (fds->revents != 0)
-        {
-          /* Yes.. then signal the poll logic */
-
-          nxsem_post(fds->sem);
-        }
+      poll_notify(&fds, 1, eventset);
 
 errout_with_lock:
       net_unlock();

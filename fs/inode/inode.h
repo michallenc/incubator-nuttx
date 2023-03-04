@@ -147,24 +147,24 @@ EXTERN FAR struct inode *g_root_inode;
 void inode_initialize(void);
 
 /****************************************************************************
- * Name: inode_semtake
+ * Name: inode_lock
  *
  * Description:
  *   Get exclusive access to the in-memory inode tree (tree_sem).
  *
  ****************************************************************************/
 
-int inode_semtake(void);
+int inode_lock(void);
 
 /****************************************************************************
- * Name: inode_semgive
+ * Name: inode_unlock
  *
  * Description:
  *   Relinquish exclusive access to the in-memory inode tree (tree_sem).
  *
  ****************************************************************************/
 
-void inode_semgive(void);
+void inode_unlock(void);
 
 /****************************************************************************
  * Name: inode_checkflags
@@ -406,18 +406,6 @@ void inode_release(FAR struct inode *inode);
  ****************************************************************************/
 
 int foreach_inode(foreach_inode_t handler, FAR void *arg);
-
-/****************************************************************************
- * Name: files_allocate
- *
- * Description:
- *   Allocate a struct files instance and associate it with an inode
- *   instance.  Returns the file descriptor == index into the files array.
- *
- ****************************************************************************/
-
-int files_allocate(FAR struct inode *inode, int oflags, off_t pos,
-                   FAR void *priv, int minfd);
 
 /****************************************************************************
  * Name: dir_allocate

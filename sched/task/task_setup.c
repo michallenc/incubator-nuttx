@@ -370,6 +370,7 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
                                     start_t start, CODE void *entry,
                                     uint8_t ttype)
 {
+  FAR struct tcb_s *rtcb = this_task();
   int ret;
 
   /* Assign a unique task ID to the task. */
@@ -432,7 +433,7 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
        * inherit the signal mask of the parent thread.
        */
 
-      nxsig_procmask(SIG_SETMASK, NULL, &tcb->sigprocmask);
+      tcb->sigprocmask = rtcb->sigprocmask;
 
       /* Initialize the task state.  It does not get a valid state
        * until it is activated.
@@ -590,8 +591,9 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
 
   stackargv[0] = str;
   nbytes       = strlen(name) + 1;
-  strcpy(str, name);
+  strlcpy(str, name, strtablen);
   str         += nbytes;
+  strtablen   -= nbytes;
 
   /* Copy each argument */
 
@@ -604,8 +606,9 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
 
       stackargv[i + 1] = str;
       nbytes           = strlen(argv[i]) + 1;
-      strcpy(str, argv[i]);
+      strlcpy(str, argv[i], strtablen);
       str             += nbytes;
+      strtablen       -= nbytes;
     }
 
   /* Put a terminator entry at the end of the argv[] array.  Then save the

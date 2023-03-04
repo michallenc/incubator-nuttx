@@ -136,11 +136,11 @@
 
 #else /* CONFIG_SMALL_MEMORY */
 
-#define _POSIX_SIZE_MAX       4294967295UL /* See sys/types.h */
+#define _POSIX_SIZE_MAX       ULONG_MAX
 #define _POSIX_SIZE_MIN       0
 
-#define _POSIX_SSIZE_MAX      2147483647L  /* See sys/types.h */
-#define _POSIX_SSIZE_MIN      -2147483648L
+#define _POSIX_SSIZE_MAX      LONG_MAX
+#define _POSIX_SSIZE_MIN      LONG_MIN
 
 #endif /* CONFIG_SMALL_MEMORY */
 
@@ -281,10 +281,10 @@
 #define NL_TEXTMAX _POSIX2_LINE_MAX
 
 /* NZERO
- *   Default process priority. Minimum Acceptable Value: 128
+ *   Default process priority. Minimum Acceptable Value: 100
  */
 
-#define NZERO 128
+#define NZERO SCHED_PRIORITY_DEFAULT
 
 /* Required for asynchronous I/O */
 
@@ -308,5 +308,10 @@
 #define IOV_MAX        INT_MAX
 
 #define HOST_NAME_MAX  32
+
+/* ptrdiff_t limits */
+
+#define PTRDIFF_MAX PTR_MAX
+#define PTRDIFF_MIN PTR_MIN
 
 #endif /* __INCLUDE_LIMITS_H */

@@ -139,19 +139,27 @@ int psock_getsockname(FAR struct socket *psock, FAR struct sockaddr *addr,
 int getsockname(int sockfd, FAR struct sockaddr *addr,
                 FAR socklen_t *addrlen)
 {
-  FAR struct socket *psock = sockfd_socket(sockfd);
+  FAR struct socket *psock;
   int ret;
+
+  /* Get the underlying socket structure */
+
+  ret = sockfd_socket(sockfd, &psock);
 
   /* Let psock_getsockname() do all of the work */
 
-  ret = psock_getsockname(psock, addr, addrlen);
-  if (ret < 0)
+  if (ret == OK)
     {
-      _SO_SETERRNO(psock, -ret);
-      return ERROR;
+      ret = psock_getsockname(psock, addr, addrlen);
     }
 
-  return OK;
+  if (ret < 0)
+    {
+      set_errno(-ret);
+      ret = ERROR;
+    }
+
+  return ret;
 }
 
 #endif /* CONFIG_NET */

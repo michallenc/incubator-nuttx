@@ -29,6 +29,7 @@
 #include <debug.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/leds/ws2812.h>
 
@@ -122,8 +123,8 @@ struct ws2812_dev_s
 {
   FAR struct spi_dev_s *spi;  /* SPI interface */
   uint16_t nleds;             /* Number of addressable LEDs */
-  uint8_t *tx_buf;            /* Buffer for write transaction and state */
-  sem_t exclsem;              /* Assures exclusive access to the driver */
+  FAR uint8_t *tx_buf;        /* Buffer for write transaction and state */
+  mutex_t lock;               /* Assures exclusive access to the driver */
 };
 
 #endif /* CONFIG_WS2812_NON_SPI_DRIVER */
@@ -143,9 +144,9 @@ static void ws2812_pack(FAR uint8_t *buf, uint32_t rgb);
 
 #ifdef CONFIG_WS2812_NON_SPI_DRIVER
 
-static ssize_t  ws2812_open(FAR struct file  *filep);
+static ssize_t ws2812_open(FAR struct file *filep);
 
-static ssize_t  ws2812_close(FAR struct file  *filep);
+static ssize_t ws2812_close(FAR struct file *filep);
 
 #endif /* CONFIG_WS2812_NON_SPI_DRIVER */
 
@@ -171,18 +172,13 @@ static const struct file_operations g_ws2812fops =
   ws2812_read,    /* read */
   ws2812_write,   /* write */
   ws2812_seek,    /* seek */
-  NULL,           /* ioctl */
-  NULL            /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL          /* unlink */
-#endif
 };
 
 /****************************************************************************
  * #### TODO ####
  *
- * Consider supporting mmap by returning memory buffer using...
- *       file_ioctl(filep, FIOC_MMAP, (unsigned long)((uintptr_t)&addr));
+ * Consider supporting mmap by returning memory buffer using file_operations'
+ *   mmap
  * Code using this would be non-portable across architectures as the format
  * of the buffer can be different.
  *
@@ -254,7 +250,7 @@ static const uint8_t ws2812_gamma[256] =
  *
  ****************************************************************************/
 
-ssize_t  ws2812_open(FAR struct file  *filep)
+ssize_t ws2812_open(FAR struct file *filep)
 {
   FAR struct inode        *inode = filep->f_inode;
   FAR struct ws2812_dev_s *priv  = inode->i_private;
@@ -282,9 +278,9 @@ ssize_t  ws2812_open(FAR struct file  *filep)
 
 static int ws2812_close(FAR struct file *filep)
 {
-  FAR struct inode         *inode    = filep->f_inode;
-  FAR struct ws2812_dev_s  *priv     = inode->i_private;
-  int                       res      = OK;
+  FAR struct inode        *inode = filep->f_inode;
+  FAR struct ws2812_dev_s *priv  = inode->i_private;
+  int                      res   = OK;
 
   if (priv != NULL  &&  priv->close != NULL)
     {
@@ -315,9 +311,9 @@ ssize_t ws2812_write(FAR struct file *filep,
                      FAR const char  *data,
                      size_t           len)
 {
-  FAR struct inode         *inode    = filep->f_inode;
-  FAR struct ws2812_dev_s  *priv     = inode->i_private;
-  ssize_t                   res;
+  FAR struct inode        *inode = filep->f_inode;
+  FAR struct ws2812_dev_s *priv  = inode->i_private;
+  ssize_t                  res;
 
   if ((len % WS2812_RW_PIXEL_SIZE) != 0)
     {
@@ -349,9 +345,9 @@ ssize_t ws2812_read(FAR struct file *filep,
                     FAR char        *data,
                     size_t           len)
 {
-  FAR struct inode         *inode    = filep->f_inode;
-  FAR struct ws2812_dev_s  *priv     = inode->i_private;
-  ssize_t                   res;
+  FAR struct inode        *inode = filep->f_inode;
+  FAR struct ws2812_dev_s *priv  = inode->i_private;
+  ssize_t                  res;
 
   if (priv == NULL  ||  priv->read == NULL)
     {
@@ -488,7 +484,7 @@ static ssize_t ws2812_write(FAR struct file *filep, FAR const char *buffer,
       return -EINVAL;
     }
 
-  nxsem_wait(&priv->exclsem);
+  nxmutex_lock(&priv->lock);
 
   start_led = filep->f_pos / WS2812_RW_PIXEL_SIZE;
   tx_pixel = priv->tx_buf + WS2812_RST_CYCLES + \
@@ -520,8 +516,7 @@ static ssize_t ws2812_write(FAR struct file *filep, FAR const char *buffer,
       filep->f_pos -= WS2812_RW_PIXEL_SIZE;
     }
 
-  nxsem_post(&priv->exclsem);
-
+  nxmutex_unlock(&priv->lock);
   return written;
 }
 
@@ -550,7 +545,7 @@ static off_t ws2812_seek(FAR struct file *filep, off_t offset, int whence)
       return (off_t)-EINVAL;
     }
 
-  nxsem_wait(&priv->exclsem);
+  nxmutex_lock(&priv->lock);
 
   maxpos = (priv->nleds - 1) * WS2812_RW_PIXEL_SIZE;
   pos    = filep->f_pos;
@@ -574,8 +569,7 @@ static off_t ws2812_seek(FAR struct file *filep, off_t offset, int whence)
 
         /* Return EINVAL if the whence argument is invalid */
 
-        nxsem_post(&priv->exclsem);
-
+        nxmutex_unlock(&priv->lock);
         return (off_t)-EINVAL;
     }
 
@@ -590,8 +584,7 @@ static off_t ws2812_seek(FAR struct file *filep, off_t offset, int whence)
 
   filep->f_pos = pos;
 
-  nxsem_post(&priv->exclsem);
-
+  nxmutex_unlock(&priv->lock);
   return pos;
 }
 
@@ -688,7 +681,7 @@ int ws2812_leds_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   priv->spi = spi;
   ws2812_configspi(priv->spi);
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   SPI_SNDBLOCK(priv->spi, priv->tx_buf, TXBUFF_SIZE(priv->nleds));
 
@@ -698,6 +691,7 @@ int ws2812_leds_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   if (ret < 0)
     {
       lederr("ERROR: Failed to register driver: %d\n", ret);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv->tx_buf);
       kmm_free(priv);
     }
@@ -847,8 +841,8 @@ uint32_t ws2812_hsv_to_rgb(uint8_t hue,
 uint32_t ws2812_gamma_correct(uint32_t pixel)
 {
   uint32_t     res;
-  FAR uint8_t *in  = (FAR uint8_t *) &pixel;
-  FAR uint8_t *out = (FAR uint8_t *) &res;
+  FAR uint8_t *in  = (FAR uint8_t *)&pixel;
+  FAR uint8_t *out = (FAR uint8_t *)&res;
 
   *out++ = ws2812_gamma[*in++];
   *out++ = ws2812_gamma[*in++];

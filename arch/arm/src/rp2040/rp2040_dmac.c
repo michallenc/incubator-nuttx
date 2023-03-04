@@ -33,6 +33,7 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #include "arm_internal.h"
@@ -61,8 +62,8 @@ struct dma_channel_s
 
 struct dma_controller_s
 {
-  sem_t exclsem; /* Protects channel table */
-  sem_t chansem; /* Count of free channels */
+  mutex_t lock;                 /* Protects channel table */
+  sem_t   chansem;              /* Count of free channels */
 };
 
 /****************************************************************************
@@ -71,7 +72,11 @@ struct dma_controller_s
 
 /* This is the overall state of the DMA controller */
 
-static struct dma_controller_s g_dmac;
+static struct dma_controller_s g_dmac =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .chansem = SEM_INITIALIZER(RP2040_DMA_NCHANNELS),
+};
 
 /* This is the array of all DMA channels */
 
@@ -160,9 +165,6 @@ void weak_function arm_dma_initialize(void)
 
   /* Initialize the channel list  */
 
-  nxsem_init(&g_dmac.exclsem, 0, 1);
-  nxsem_init(&g_dmac.chansem, 0, RP2040_DMA_NCHANNELS);
-
   for (i = 0; i < RP2040_DMA_NCHANNELS; i++)
     {
       g_dmach[i].chan = i;
@@ -222,7 +224,7 @@ DMA_HANDLE rp2040_dmachannel(void)
 
   /* Get exclusive access to the DMA channel list */
 
-  ret = nxsem_wait_uninterruptible(&g_dmac.exclsem);
+  ret = nxmutex_lock(&g_dmac.lock);
   if (ret < 0)
     {
       nxsem_post(&g_dmac.chansem);
@@ -244,7 +246,7 @@ DMA_HANDLE rp2040_dmachannel(void)
         }
     }
 
-  nxsem_post(&g_dmac.exclsem);
+  nxmutex_unlock(&g_dmac.lock);
 
   setbits_reg32(bit, RP2040_DMA_INTS0);
   setbits_reg32(bit, RP2040_DMA_INTE0);

@@ -58,9 +58,9 @@ static uint16_t getpeername_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -84,9 +84,9 @@ static uint16_t getpeername_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -123,7 +123,7 @@ static int do_getpeername_request(FAR struct usrsock_conn_s *conn,
   bufs[0].iov_base = (FAR void *)&req;
   bufs[0].iov_len = sizeof(req);
 
-  return usrsockdev_do_request(conn, bufs, ARRAY_SIZE(bufs));
+  return usrsock_do_request(conn, bufs, nitems(bufs));
 }
 
 /****************************************************************************
@@ -193,7 +193,7 @@ int usrsock_getpeername(FAR struct socket *psock,
   inbufs[0].iov_base = (FAR void *)addr;
   inbufs[0].iov_len = *addrlen;
 
-  usrsock_setup_datain(conn, inbufs, ARRAY_SIZE(inbufs));
+  usrsock_setup_datain(conn, inbufs, nitems(inbufs));
 
   /* Request user-space daemon to close socket. */
 
@@ -202,7 +202,7 @@ int usrsock_getpeername(FAR struct socket *psock,
     {
       /* Wait for completion of request. */
 
-      net_lockedwait_uninterruptible(&state.reqstate.recvsem);
+      net_sem_wait_uninterruptible(&state.reqstate.recvsem);
       ret = state.reqstate.result;
 
       DEBUGASSERT(state.valuelen <= *addrlen);

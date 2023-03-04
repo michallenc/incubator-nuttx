@@ -31,12 +31,13 @@
 #include <sys/un.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <stdint.h>
 #include <poll.h>
 
 #include <nuttx/fs/fs.h>
+#include <nuttx/queue.h>
 #include <nuttx/net/net.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #ifdef CONFIG_NET_LOCAL
@@ -56,8 +57,7 @@
 
 enum local_type_e
 {
-  LOCAL_TYPE_UNTYPED = 0,      /* Type is not determined until the socket is bound */
-  LOCAL_TYPE_UNNAMED,          /* A Unix socket that is not bound to any name */
+  LOCAL_TYPE_UNNAMED = 0,      /* A Unix socket that is not bound to any name */
   LOCAL_TYPE_PATHNAME,         /* lc_path holds a null terminated string */
   LOCAL_TYPE_ABSTRACT          /* lc_path is length zero */
 };
@@ -128,9 +128,10 @@ struct local_conn_s
   uint16_t lc_cfpcount;          /* Control file pointer counter */
   FAR struct file *
      lc_cfps[LOCAL_NCONTROLFDS]; /* Socket message control filep */
+  struct ucred lc_cred;          /* The credentials of connection instance */
 #endif /* CONFIG_NET_LOCAL_SCM */
 
-  sem_t lc_sendsem;            /* Make sending multi-thread safe */
+  mutex_t lc_sendlock;           /* Make sending multi-thread safe */
 
 #ifdef CONFIG_NET_LOCAL_STREAM
   /* SOCK_STREAM fields common to both client and server */

@@ -54,6 +54,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 
 #include <stdint.h>
@@ -70,14 +71,6 @@
 
 #include "inode/inode.h"
 #include "fs_fat32.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Private Types
@@ -646,7 +639,6 @@ static inline int fat_parselfname(FAR const char **path,
     }
 
 errout:
-
   dirinfo->fd_lfname[0] = '\0';
   return -EINVAL;
 }
@@ -1148,9 +1140,9 @@ static int fat_findsfnentry(FAR struct fat_mountpt_s *fs,
   uint16_t diroffset;
   FAR uint8_t *direntry;
 #ifdef CONFIG_FAT_LFN
-  off_t    startsector;
+  off_t startsector;
 #endif
-  int      ret;
+  int ret;
 
   /* Save the starting sector of the directory.  This is not really needed
    * for short name entries, but this keeps things consistent with long
@@ -2703,11 +2695,11 @@ int fat_finddirentry(FAR struct fat_mountpt_s *fs,
 int fat_allocatedirentry(FAR struct fat_mountpt_s *fs,
                          FAR struct fat_dirinfo_s *dirinfo)
 {
-  int32_t  cluster;
-  int32_t  prevcluster;
-  off_t    sector;
-  int      ret;
-  int      i;
+  int32_t cluster;
+  int32_t prevcluster;
+  off_t   sector;
+  int     ret;
+  int     i;
 
   /* Re-initialize directory object */
 
@@ -2910,7 +2902,7 @@ int fat_freedirentry(FAR struct fat_mountpt_s *fs, struct fat_dirseq_s *seq)
 
 #else
   FAR uint8_t *direntry;
-  int      ret;
+  int ret;
 
   /* Free the single short file name entry.
    *

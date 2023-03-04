@@ -530,10 +530,12 @@ static inline uint32_t imxrt_serialin(struct imxrt_uart_s *priv,
                                       uint32_t offset);
 static inline void imxrt_serialout(struct imxrt_uart_s *priv,
                                    uint32_t offset, uint32_t value);
+#if defined(CONFIG_SERIAL_TERMIOS) || defined(CONSOLE_DEV)
 static inline void imxrt_disableuartint(struct imxrt_uart_s *priv,
                                         uint32_t *ie);
 static inline void imxrt_restoreuartint(struct imxrt_uart_s *priv,
                                         uint32_t ie);
+#endif
 
 static int  imxrt_setup(struct uart_dev_s *dev);
 static void imxrt_shutdown(struct uart_dev_s *dev);
@@ -846,6 +848,7 @@ static struct imxrt_uart_s g_lpuart1priv =
 
 #ifdef CONFIG_LPUART1_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART1_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART1_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART1_RX,
@@ -914,6 +917,7 @@ static struct imxrt_uart_s g_lpuart2priv =
 
 #ifdef CONFIG_LPUART2_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART2_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART2_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART2_RX,
@@ -980,6 +984,7 @@ static struct imxrt_uart_s g_lpuart3priv =
 
 #ifdef CONFIG_LPUART3_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART3_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART3_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART3_RX,
@@ -1046,6 +1051,7 @@ static struct imxrt_uart_s g_lpuart4priv =
 
 #ifdef CONFIG_LPUART4_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART4_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART4_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART4_RX,
@@ -1112,6 +1118,7 @@ static struct imxrt_uart_s g_lpuart5priv =
 
 #ifdef CONFIG_LPUART5_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART5_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART5_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART5_RX,
@@ -1178,6 +1185,7 @@ static struct imxrt_uart_s g_lpuart6priv =
 
 #ifdef CONFIG_LPUART6_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART6_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART6_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART6_RX,
@@ -1244,6 +1252,7 @@ static struct imxrt_uart_s g_lpuart7priv =
 
 #ifdef CONFIG_LPUART7_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART7_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART7_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART7_RX,
@@ -1310,6 +1319,7 @@ static struct imxrt_uart_s g_lpuart8priv =
 
 #ifdef CONFIG_LPUART8_TXDMA
   .dma_txreqsrc = IMXRT_DMACHAN_LPUART8_TX,
+  .txdmasem     = SEM_INITIALIZER(1),
 #endif
 #ifdef CONFIG_LPUART8_RXDMA
   .dma_rxreqsrc = IMXRT_DMACHAN_LPUART8_RX,
@@ -1372,6 +1382,7 @@ static int imxrt_dma_nextrx(struct imxrt_uart_s *priv)
  * Name: imxrt_disableuartint
  ****************************************************************************/
 
+#if defined(CONFIG_SERIAL_TERMIOS) || defined(CONSOLE_DEV)
 static inline void imxrt_disableuartint(struct imxrt_uart_s *priv,
                                         uint32_t *ie)
 {
@@ -1392,11 +1403,13 @@ static inline void imxrt_disableuartint(struct imxrt_uart_s *priv,
   imxrt_serialout(priv, IMXRT_LPUART_CTRL_OFFSET, regval);
   spin_unlock_irqrestore(NULL, flags);
 }
+#endif
 
 /****************************************************************************
  * Name: imxrt_restoreuartint
  ****************************************************************************/
 
+#if defined(CONFIG_SERIAL_TERMIOS) || defined(CONSOLE_DEV)
 static inline void imxrt_restoreuartint(struct imxrt_uart_s *priv,
                                         uint32_t ie)
 {
@@ -1414,6 +1427,7 @@ static inline void imxrt_restoreuartint(struct imxrt_uart_s *priv,
   imxrt_serialout(priv, IMXRT_LPUART_CTRL_OFFSET, regval);
   spin_unlock_irqrestore(NULL, flags);
 }
+#endif
 
 /****************************************************************************
  * Name: imxrt_dma_setup
@@ -1457,9 +1471,6 @@ static int imxrt_dma_setup(struct uart_dev_s *dev)
             {
               return -EBUSY;
             }
-
-          nxsem_init(&priv->txdmasem, 0, 1);
-          nxsem_set_protocol(&priv->txdmasem, SEM_PRIO_NONE);
         }
 
       /* Enable Tx DMA for the UART */
@@ -1533,7 +1544,7 @@ static int imxrt_dma_setup(struct uart_dev_s *dev)
        * worth of time to claim bytes before they are overwritten.
        */
 
-      imxrt_dmach_start(priv->rxdma, imxrt_dma_rxcallback, (void *)priv);
+      imxrt_dmach_start(priv->rxdma, imxrt_dma_rxcallback, priv);
     }
 #endif
 
@@ -1567,15 +1578,15 @@ static int imxrt_setup(struct uart_dev_s *dev)
   config.parity     = priv->parity;     /* 0=none, 1=odd, 2=even */
   config.bits       = priv->bits;       /* Number of bits (5-9) */
   config.stopbits2  = priv->stopbits2;  /* true: Configure with 2 stop bits instead of 1 */
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
-  config.usects     = priv->iflow;      /* Flow control on inbound side */
-#endif
 #ifdef CONFIG_SERIAL_OFLOWCONTROL
-  /* Flow control on outbound side if not GPIO based */
+  config.usects     = priv->oflow;      /* Flow control on outbound side */
+#endif
+#ifdef CONFIG_SERIAL_IFLOWCONTROL
+  /* Flow control on inbound side if not GPIO based */
 
   if ((priv->rts_gpio & GPIO_MODE_MASK) == GPIO_PERIPH)
     {
-      config.userts = priv->oflow;
+      config.userts = priv->iflow;
     }
 
 #endif
@@ -1660,7 +1671,6 @@ static void imxrt_dma_shutdown(struct uart_dev_s *dev)
 
       imxrt_dmach_free(priv->txdma);
       priv->txdma = NULL;
-      nxsem_destroy(&priv->txdmasem);
     }
 #endif
 }
@@ -1724,9 +1734,11 @@ static void imxrt_detach(struct uart_dev_s *dev)
  * Name: imxrt_interrupt (and front-ends)
  *
  * Description:
- *   This is the common UART interrupt handler.  It should call
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate imxrt_uart_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -1770,7 +1782,7 @@ static int imxrt_interrupt(int irq, void *context, void *arg)
           imxrt_serialout(priv, IMXRT_LPUART_STAT_OFFSET, LPUART_STAT_OR);
         }
 
-      if ((usr & LPUART_STAT_PF) != 0)
+      if ((usr & LPUART_STAT_NF) != 0)
         {
           imxrt_serialout(priv, IMXRT_LPUART_STAT_OFFSET, LPUART_STAT_NF);
         }
@@ -1862,7 +1874,7 @@ static int imxrt_ioctl(struct file *filep, int cmd, unsigned long arg)
 #ifdef CONFIG_SERIAL_TERMIOS
     case TCGETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
+        struct termios *termiosp = (struct termios *)arg;
         struct imxrt_uart_s *priv = (struct imxrt_uart_s *)dev;
 
         if (!termiosp)
@@ -1924,7 +1936,7 @@ static int imxrt_ioctl(struct file *filep, int cmd, unsigned long arg)
 
     case TCSETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
+        struct termios *termiosp = (struct termios *)arg;
         struct imxrt_uart_s *priv = (struct imxrt_uart_s *)dev;
         uint32_t baud;
         uint32_t ie;
@@ -2394,7 +2406,7 @@ static void imxrt_dma_reenable(struct imxrt_uart_s *priv)
    * worth of time to claim bytes before they are overwritten.
    */
 
-  imxrt_dmach_start(priv->rxdma, imxrt_dma_rxcallback, (void *)priv);
+  imxrt_dmach_start(priv->rxdma, imxrt_dma_rxcallback, priv);
 
   /* Clear DMA suspended flag. */
 
@@ -2565,7 +2577,7 @@ static void imxrt_dma_send(struct uart_dev_s *dev)
 
   /* Start transmission with the callback on DMA completion */
 
-  imxrt_dmach_start(priv->txdma, imxrt_dma_txcallback, (void *)priv);
+  imxrt_dmach_start(priv->txdma, imxrt_dma_txcallback, priv);
 }
 #endif
 

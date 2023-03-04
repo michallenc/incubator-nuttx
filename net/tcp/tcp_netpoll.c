@@ -67,7 +67,6 @@ static uint16_t tcp_poll_eventhandler(FAR struct net_driver_s *dev,
                                       FAR void *pvpriv, uint16_t flags)
 {
   FAR struct tcp_poll_s *info = pvpriv;
-  int reason;
 
   ninfo("flags: %04x\n", flags);
 
@@ -83,20 +82,23 @@ static uint16_t tcp_poll_eventhandler(FAR struct net_driver_s *dev,
 
       if ((flags & (TCP_NEWDATA | TCP_BACKLOG)) != 0)
         {
-          eventset |= POLLIN & info->fds->events;
+          eventset |= POLLIN;
         }
 
       /* Non-blocking connection */
 
       if ((flags & TCP_CONNECTED) != 0)
         {
-          eventset |= POLLOUT & info->fds->events;
+          eventset |= POLLOUT;
         }
 
       /* Check for a loss of connection events. */
 
       if ((flags & TCP_DISCONN_EVENTS) != 0)
         {
+#ifdef CONFIG_NET_SOCKOPTS
+          int reason;
+
           /* TCP_TIMEDOUT: Connection aborted due to too many
            *               retransmissions.
            */
@@ -128,10 +130,8 @@ static uint16_t tcp_poll_eventhandler(FAR struct net_driver_s *dev,
               reason = ECONNREFUSED;
             }
 
-#ifdef CONFIG_NET_SOCKOPTS
-          info->conn->sconn.s_error = reason;
+          _SO_CONN_SETERRNO(info->conn, reason);
 #endif
-          set_errno(reason);
 
           /* Mark that the connection has been lost */
 
@@ -154,21 +154,20 @@ static uint16_t tcp_poll_eventhandler(FAR struct net_driver_s *dev,
 #endif
               )
         {
-          eventset |= (POLLOUT & info->fds->events);
+          eventset |= POLLOUT;
         }
 
       /* Awaken the caller of poll() if requested event occurred. */
 
-      if (eventset != 0)
+      poll_notify(&info->fds, 1, eventset);
+
+      if (info->fds->revents != 0)
         {
           /* Stop further callbacks */
 
           info->cb->flags   = 0;
           info->cb->priv    = NULL;
           info->cb->event   = NULL;
-
-          info->fds->revents |= eventset;
-          nxsem_post(info->fds->sem);
         }
     }
 
@@ -200,6 +199,7 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
   FAR struct tcp_conn_s *conn;
   FAR struct tcp_poll_s *info;
   FAR struct devif_callback_s *cb;
+  pollevent_t eventset = 0;
   bool nonblock_conn;
   int ret = OK;
 
@@ -229,6 +229,7 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
     {
       if (++info >= &conn->pollinfo[CONFIG_NET_TCP_NPOLLWAITERS])
         {
+          DEBUGPANIC();
           ret = -ENOMEM;
           goto errout_with_lock;
         }
@@ -291,7 +292,7 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
     {
       /* Normal data may be read without blocking. */
 
-      fds->revents |= (POLLRDNORM & fds->events);
+      eventset |= POLLRDNORM;
     }
 
   /* Check for a loss of connection events.  We need to be careful here.
@@ -342,22 +343,17 @@ int tcp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
        * exceptional event.
        */
 
-      fds->revents |= (POLLERR | POLLHUP);
+      eventset |= POLLERR | POLLHUP;
     }
   else if (_SS_ISCONNECTED(conn->sconn.s_flags) &&
            psock_tcp_cansend(conn) >= 0)
     {
-      fds->revents |= (POLLWRNORM & fds->events);
+      eventset |= POLLWRNORM;
     }
 
   /* Check if any requested events are already in effect */
 
-  if (fds->revents != 0)
-    {
-      /* Yes.. then signal the poll logic */
-
-      nxsem_post(fds->sem);
-    }
+  poll_notify(&fds, 1, eventset);
 
 errout_with_lock:
   net_unlock();

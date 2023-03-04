@@ -131,12 +131,6 @@
 #define NUM_BASE_LEVEL_ENTRIES  GET_NUM_BASE_LEVEL_ENTRIES( \
     CONFIG_ARM64_VA_BITS)
 
-static uint64_t base_xlat_table[NUM_BASE_LEVEL_ENTRIES] aligned_data(
-  NUM_BASE_LEVEL_ENTRIES * sizeof(uint64_t));
-
-static uint64_t xlat_tables[CONFIG_MAX_XLAT_TABLES][XLAT_TABLE_ENTRIES]
-aligned_data(XLAT_TABLE_ENTRIES * sizeof(uint64_t));
-
 #if (CONFIG_ARM64_PA_BITS == 48)
 #define TCR_PS_BITS             TCR_PS_BITS_256TB
 #elif (CONFIG_ARM64_PA_BITS == 44)
@@ -155,9 +149,15 @@ aligned_data(XLAT_TABLE_ENTRIES * sizeof(uint64_t));
  * Private Data
  ***************************************************************************/
 
+static uint64_t base_xlat_table[NUM_BASE_LEVEL_ENTRIES] aligned_data(
+  NUM_BASE_LEVEL_ENTRIES * sizeof(uint64_t));
+
+static uint64_t xlat_tables[CONFIG_MAX_XLAT_TABLES][XLAT_TABLE_ENTRIES]
+aligned_data(XLAT_TABLE_ENTRIES * sizeof(uint64_t));
+
 /* NuttX RTOS execution regions with appropriate attributes */
 
-static const struct arm_mmu_region mmu_nxrt_regions[] =
+static const struct arm_mmu_region g_mmu_nxrt_regions[] =
 {
   /* Mark text segment cacheable,read only and executable */
 
@@ -182,6 +182,12 @@ static const struct arm_mmu_region mmu_nxrt_regions[] =
                         (uint64_t)_sdata,
                         (uint64_t)_szdata,
                         MT_NORMAL | MT_RW | MT_SECURE),
+};
+
+static const struct arm_mmu_config g_mmu_nxrt_config =
+{
+  .num_regions = nitems(g_mmu_nxrt_regions),
+  .mmu_regions = g_mmu_nxrt_regions,
 };
 
 /***************************************************************************
@@ -482,9 +488,9 @@ static void setup_page_tables(void)
   const struct arm_mmu_region   *region;
   uint64_t                      max_va = 0, max_pa = 0;
 
-  for (index = 0; index < mmu_config.num_regions; index++)
+  for (index = 0; index < g_mmu_config.num_regions; index++)
     {
-      region    = &mmu_config.mmu_regions[index];
+      region    = &g_mmu_config.mmu_regions[index];
       max_va    = MAX(max_va, region->base_va + region->size);
       max_pa    = MAX(max_pa, region->base_pa + region->size);
     }
@@ -496,9 +502,9 @@ static void setup_page_tables(void)
 
   /* create translation tables for user provided platform regions */
 
-  for (index = 0; index < mmu_config.num_regions; index++)
+  for (index = 0; index < g_mmu_config.num_regions; index++)
     {
-      region = &mmu_config.mmu_regions[index];
+      region = &g_mmu_config.mmu_regions[index];
       if (region->size || region->attrs)
         {
           init_xlat_tables(region);
@@ -507,9 +513,9 @@ static void setup_page_tables(void)
 
   /* setup translation table for mirtos execution regions */
 
-  for (index = 0; index < ARRAY_SIZE(mmu_nxrt_regions); index++)
+  for (index = 0; index < g_mmu_nxrt_config.num_regions; index++)
     {
-      region = &mmu_nxrt_regions[index];
+      region = &g_mmu_nxrt_config.mmu_regions[index];
       if (region->size || region->attrs)
         {
           init_xlat_tables(region);
@@ -616,7 +622,7 @@ int arm64_mmu_init(bool is_primary_core)
 
   ctr_el0 = read_sysreg(CTR_EL0);
   dminline = (ctr_el0 >> CTR_EL0_DMINLINE_SHIFT) & CTR_EL0_DMINLINE_MASK;
-  dcache_line_size = 4 << dminline;
+  g_dcache_line_size = 4 << dminline;
 
   return 0;
 }

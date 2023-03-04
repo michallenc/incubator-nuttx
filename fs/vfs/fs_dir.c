@@ -24,8 +24,10 @@
 
 #include <nuttx/config.h>
 
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
@@ -71,10 +73,6 @@ static const struct file_operations g_dir_fileops =
   NULL,       /* write */
   dir_seek,   /* seek */
   dir_ioctl,  /* ioctl */
-  NULL,       /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  NULL,       /* unlink */
-#endif
 };
 
 static struct inode g_dir_inode =
@@ -203,7 +201,7 @@ static off_t seek_pseudodir(FAR struct file *filep, off_t offset)
    * be a very unpredictable operation.
    */
 
-  inode_semtake();
+  inode_lock();
 
   for (; curr != NULL && pos != offset; pos++, curr = curr->i_peer);
 
@@ -221,7 +219,7 @@ static off_t seek_pseudodir(FAR struct file *filep, off_t offset)
       curr->i_crefs++;
     }
 
-  inode_semgive();
+  inode_unlock();
 
   if (prev != NULL)
     {
@@ -372,7 +370,7 @@ static int read_pseudodir(FAR struct fs_dirent_s *dir,
 
   /* Now get the inode to visit next time that readdir() is called */
 
-  inode_semtake();
+  inode_lock();
 
   prev       = pdir->next;
   pdir->next = prev->i_peer; /* The next node to visit */
@@ -384,7 +382,7 @@ static int read_pseudodir(FAR struct fs_dirent_s *dir,
       pdir->next->i_crefs++;
     }
 
-  inode_semgive();
+  inode_unlock();
 
   if (prev != NULL)
     {
@@ -552,7 +550,7 @@ static int dir_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   if (cmd == FIOC_FILEPATH)
     {
-      strcpy((FAR char *)(uintptr_t)arg, dir->fd_path);
+      strlcpy((FAR char *)(uintptr_t)arg, dir->fd_path, PATH_MAX);
       ret = OK;
     }
 
@@ -575,6 +573,7 @@ int dir_allocate(FAR struct file *filep, FAR const char *relpath)
 {
   FAR struct fs_dirent_s *dir;
   FAR struct inode *inode = filep->f_inode;
+  char path_prefix[PATH_MAX];
   int ret;
 
   /* Is this a node in the pseudo filesystem? Or a mountpoint? */
@@ -600,7 +599,8 @@ int dir_allocate(FAR struct file *filep, FAR const char *relpath)
         }
     }
 
-  dir->fd_path = strdup(relpath);
+  inode_getpath(inode, path_prefix);
+  asprintf(&dir->fd_path, "%s%s/", path_prefix, relpath);
   filep->f_inode  = &g_dir_inode;
   filep->f_priv   = dir;
   inode_addref(&g_dir_inode);

@@ -12,6 +12,11 @@ config MM_DEFAULT_MANAGER
 	---help---
 		NuttX original memory manager strategy.
 
+config MM_TLSF_MANAGER
+	bool "TLSF heap manager"
+	---help---
+		TLSF memory manager strategy.
+
 config MM_CUSTOMIZE_MANAGER
 	bool "Customized heap manager"
 	---help---
@@ -21,16 +26,24 @@ config MM_CUSTOMIZE_MANAGER
 endchoice
 
 config MM_KERNEL_HEAP
-	bool "Support a protected, kernel heap"
-	default y
-	depends on !BUILD_FLAT
+	bool "Kernel dedicated heap"
+	default n if BUILD_FLAT
+	default y if BUILD_PROTECTED || BUILD_KERNEL
 	---help---
-		Partition heap memory into two parts:  (1) a protected, kernel-mode
-		heap accessible only by the NuttX kernel, and (2) an unprotected
-		user-mode heap for use by applications.  If you are only interested
-		in protected the kernel from read access, then this option is not
-		necessary.  If you wish to secure the kernel data as well, then
-		this option should be selected.
+		Under Flat build, this option will enable a separate heap for the kernel.
+		By separating the kernel and userspace heaps, the user is granted more
+		control over the heaps placement within the memory hierarchy, which is
+		specially useful for microcontrollers that provide External RAM.
+		Besides segregating the kernel and userspace allocations, this feature
+		does not prevent the userspace from accessing the kernel heap.
+
+		As for Protected and Kernel builds, this feature partitions heap memory
+		into two parts:
+		(1) a protected, kernel-mode heap accessible only by the NuttX kernel,
+		and (2) an unprotected user-mode heap for use by applications.
+		If you are only interested in protecting the kernel from read access,
+		then this option is not necessary. If you wish to secure the kernel data
+		as well, then this option should be selected.
 
 		The kernel heap size that is used is provided a a platform-specific
 		up_allocate_kheap() interface.  This configuration setting is made
@@ -51,6 +64,7 @@ config MM_KERNEL_HEAPSIZE
 config MM_SMALL
 	bool "Small memory model"
 	default n
+	depends on MM_DEFAULT_MANAGER
 	---help---
 		Each memory allocation has a small allocation overhead.  The size
 		of that overhead is normally determined by the "width" of the
@@ -160,27 +174,38 @@ endif # MM_PGALLOC
 config MM_SHM
 	bool "Shared memory support"
 	default n
-	depends on MM_PGALLOC && BUILD_KERNEL && EXPERIMENTAL
+	depends on MM_PGALLOC && BUILD_KERNEL
+	select ARCH_VMA_MAPPING
 	---help---
 		Build in support for the shared memory interfaces shmget(), shmat(),
 		shmctl(), and shmdt().
 
-config MM_CIRCBUF
-	bool "Circular buffer support"
-	default n
+config MM_HEAP_MEMPOOL_THRESHOLD
+	int "The size of threshold to avoid using multiple mempool in heap"
+	default 0
 	---help---
-		Build in support for the circular buffer management.
+		If the size of the memory requested by the user is less
+		than the threshold, the memory will be requested from the
+		multiple mempool by default.
 
-config MM_MEMPOOL
-	bool "Enable memory buffer pool"
-	default n
+config MM_HEAP_MEMPOOL_EXPAND
+	int "The expand size for each mempool in multiple mempool"
+	default 4096
+	depends on MM_HEAP_MEMPOOL_THRESHOLD != 0
 	---help---
-		Memory buffer pool support. Such pools are mostly used
-		for guaranteed, deadlock-free memory allocations.
+		This size describes the size of each expansion of each memory
+		pool with insufficient memory in the multi-level memory pool.
+
+config MM_HEAP_MEMPOOL_DICTIONARY_EXPAND
+	int "The expand size for multiple mempool's dictonary"
+	default MM_HEAP_MEMPOOL_EXPAND
+	depends on MM_HEAP_MEMPOOL_THRESHOLD != 0
+	---help---
+		This size describes the multiple mempool dictonary expend.
 
 config FS_PROCFS_EXCLUDE_MEMPOOL
 	bool "Exclude mempool"
-	default n
+	default DEFAULT_SMALL
 	depends on FS_PROCFS
 
 config MM_KASAN
@@ -234,7 +259,7 @@ config MM_UBSAN_OPTION
 config MM_UBSAN_TRAP_ON_ERROR
 	bool "Enable UBSan trap on error to crash immediately"
 	depends on MM_UBSAN
-	default y
+	default n
 	---help---
 		The undefined instruction trap should cause your program to crash,
 		save the code space significantly.

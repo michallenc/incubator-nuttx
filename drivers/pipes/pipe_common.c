@@ -65,49 +65,18 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: pipecommon_semtake
+ * Name: pipecommon_bufferused
  ****************************************************************************/
 
-static int pipecommon_semtake(FAR sem_t *sem)
+static pipe_ndx_t pipecommon_bufferused(FAR struct pipe_dev_s *dev)
 {
-  return nxsem_wait_uninterruptible(sem);
-}
-
-/****************************************************************************
- * Name: pipecommon_pollnotify
- ****************************************************************************/
-
-static void pipecommon_pollnotify(FAR struct pipe_dev_s *dev,
-                                  pollevent_t eventset)
-{
-  int i;
-
-  if (eventset & POLLERR)
+  if (dev->d_wrndx >= dev->d_rdndx)
     {
-      eventset &= ~(POLLOUT | POLLIN);
+      return dev->d_wrndx - dev->d_rdndx;
     }
-
-  for (i = 0; i < CONFIG_DEV_PIPE_NPOLLWAITERS; i++)
+  else
     {
-      FAR struct pollfd *fds = dev->d_fds[i];
-
-      if (fds)
-        {
-          fds->revents |= eventset & (fds->events | POLLERR | POLLHUP);
-
-          if ((fds->revents & (POLLOUT | POLLHUP)) == (POLLOUT | POLLHUP))
-            {
-              /* POLLOUT and POLLHUP are mutually exclusive. */
-
-              fds->revents &= ~POLLOUT;
-            }
-
-          if (fds->revents != 0)
-            {
-              finfo("Report events: %08" PRIx32 "\n", fds->revents);
-              nxsem_post(fds->sem);
-            }
-        }
+      return dev->d_bufsize + dev->d_wrndx - dev->d_rdndx;
     }
 }
 
@@ -133,17 +102,9 @@ FAR struct pipe_dev_s *pipecommon_allocdev(size_t bufsize)
       /* Initialize the private structure */
 
       memset(dev, 0, sizeof(struct pipe_dev_s));
-      nxsem_init(&dev->d_bfsem, 0, 1);
+      nxmutex_init(&dev->d_bflock);
       nxsem_init(&dev->d_rdsem, 0, 0);
       nxsem_init(&dev->d_wrsem, 0, 0);
-
-      /* The read/write wait semaphores are used for signaling and, hence,
-       * should not have priority inheritance enabled.
-       */
-
-      nxsem_set_protocol(&dev->d_rdsem, SEM_PRIO_NONE);
-      nxsem_set_protocol(&dev->d_wrsem, SEM_PRIO_NONE);
-
       dev->d_bufsize = bufsize + 1; /* +1 to compensate the full indicator */
     }
 
@@ -156,7 +117,7 @@ FAR struct pipe_dev_s *pipecommon_allocdev(size_t bufsize)
 
 void pipecommon_freedev(FAR struct pipe_dev_s *dev)
 {
-  nxsem_destroy(&dev->d_bfsem);
+  nxmutex_destroy(&dev->d_bflock);
   nxsem_destroy(&dev->d_rdsem);
   nxsem_destroy(&dev->d_wrsem);
   kmm_free(dev);
@@ -176,14 +137,14 @@ int pipecommon_open(FAR struct file *filep)
   DEBUGASSERT(dev != NULL);
 
   /* Make sure that we have exclusive access to the device structure.  The
-   * nxsem_wait() call should fail if we are awakened by a signal or if the
+   * nxmutex_lock() call should fail if we are awakened by a signal or if the
    * thread was canceled.
    */
 
-  ret = nxsem_wait(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
-      ferr("ERROR: nxsem_wait failed: %d\n", ret);
+      ferr("ERROR: nxmutex_lock failed: %d\n", ret);
       return ret;
     }
 
@@ -197,7 +158,7 @@ int pipecommon_open(FAR struct file *filep)
       dev->d_buffer = (FAR uint8_t *)kmm_malloc(dev->d_bufsize);
       if (!dev->d_buffer)
         {
-          nxsem_post(&dev->d_bfsem);
+          nxmutex_unlock(&dev->d_bflock);
           return -ENOMEM;
         }
     }
@@ -242,7 +203,7 @@ int pipecommon_open(FAR struct file *filep)
        * data to be read (policy == 1).
        */
 
-      nxsem_post(&dev->d_bfsem);
+      nxmutex_unlock(&dev->d_bflock);
 
       /* NOTE: d_rdsem is normally used when the read logic waits for more
        * data to be written.  But until the first writer has opened the
@@ -254,13 +215,13 @@ int pipecommon_open(FAR struct file *filep)
        */
 
       ret = nxsem_wait(&dev->d_rdsem);
-      if (ret < 0 || (ret = nxsem_wait(&dev->d_bfsem)) < 0)
+      if (ret < 0 || (ret = nxmutex_lock(&dev->d_bflock)) < 0)
         {
-          /* The nxsem_wait() call should fail if we are awakened by a
+          /* The nxmutex_lock() call should fail if we are awakened by a
            * signal or if the task is canceled.
            */
 
-          ferr("ERROR: nxsem_wait failed: %d\n", ret);
+          ferr("ERROR: nxmutex_lock failed: %d\n", ret);
 
           /* Immediately close the pipe that we just opened */
 
@@ -269,7 +230,7 @@ int pipecommon_open(FAR struct file *filep)
         }
     }
 
-  nxsem_post(&dev->d_bfsem);
+  nxmutex_unlock(&dev->d_bflock);
   return ret;
 }
 
@@ -291,7 +252,7 @@ int pipecommon_close(FAR struct file *filep)
    * I've never seen anyone check that.
    */
 
-  ret = pipecommon_semtake(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
       /* The close will not be performed if the task was canceled */
@@ -321,7 +282,7 @@ int pipecommon_close(FAR struct file *filep)
             {
               /* Inform poll readers that other end closed. */
 
-              pipecommon_pollnotify(dev, POLLHUP);
+              poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS, POLLHUP);
 
               while (nxsem_get_value(&dev->d_rdsem, &sval) == 0 && sval <= 0)
                 {
@@ -342,7 +303,8 @@ int pipecommon_close(FAR struct file *filep)
                 {
                   /* Inform poll writers that other end closed. */
 
-                  pipecommon_pollnotify(dev, POLLERR);
+                  poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS,
+                              POLLERR);
                   while (nxsem_get_value(&dev->d_wrsem, &sval) == 0
                          && sval <= 0)
                     {
@@ -386,7 +348,7 @@ int pipecommon_close(FAR struct file *filep)
 #endif
     }
 
-  nxsem_post(&dev->d_bfsem);
+  nxmutex_unlock(&dev->d_bflock);
   return OK;
 }
 
@@ -414,7 +376,7 @@ ssize_t pipecommon_read(FAR struct file *filep, FAR char *buffer, size_t len)
 
   /* Make sure that we have exclusive access to the device structure */
 
-  ret = nxsem_wait(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
       /* May fail because a signal was received or if the task was
@@ -432,7 +394,7 @@ ssize_t pipecommon_read(FAR struct file *filep, FAR char *buffer, size_t len)
 
       if (dev->d_nwriters <= 0)
         {
-          nxsem_post(&dev->d_bfsem);
+          nxmutex_unlock(&dev->d_bflock);
           return 0;
         }
 
@@ -440,16 +402,16 @@ ssize_t pipecommon_read(FAR struct file *filep, FAR char *buffer, size_t len)
 
       if (filep->f_oflags & O_NONBLOCK)
         {
-          nxsem_post(&dev->d_bfsem);
+          nxmutex_unlock(&dev->d_bflock);
           return -EAGAIN;
         }
 
       /* Otherwise, wait for something to be written to the pipe */
 
-      nxsem_post(&dev->d_bfsem);
+      nxmutex_unlock(&dev->d_bflock);
       ret = nxsem_wait(&dev->d_rdsem);
 
-      if (ret < 0 || (ret = nxsem_wait(&dev->d_bfsem)) < 0)
+      if (ret < 0 || (ret = nxmutex_lock(&dev->d_bflock)) < 0)
         {
           /* May fail because a signal was received or if the task was
            * canceled.
@@ -475,9 +437,14 @@ ssize_t pipecommon_read(FAR struct file *filep, FAR char *buffer, size_t len)
       nread++;
     }
 
-  /* Notify all poll/select waiters that they can write to the FIFO */
+  /* Notify all poll/select waiters that they can write to the
+   * FIFO when buffer can accept more than d_polloutthrd bytes.
+   */
 
-  pipecommon_pollnotify(dev, POLLOUT);
+  if (pipecommon_bufferused(dev) < (dev->d_bufsize - 1 - dev->d_polloutthrd))
+    {
+      poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS, POLLOUT);
+    }
 
   /* Notify all waiting writers that bytes have been removed from the
    * buffer.
@@ -488,7 +455,7 @@ ssize_t pipecommon_read(FAR struct file *filep, FAR char *buffer, size_t len)
       nxsem_post(&dev->d_wrsem);
     }
 
-  nxsem_post(&dev->d_bfsem);
+  nxmutex_unlock(&dev->d_bflock);
   pipe_dumpbuffer("From PIPE:", start, nread);
   return nread;
 }
@@ -519,11 +486,11 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
     }
 
   /* At present, this method cannot be called from interrupt handlers.  That
-   * is because it calls nxsem_wait() and nxsem_wait() cannot be called from
-   * interrupt level.  This actually happens fairly commonly IF [a-z]err()
-   * is called from interrupt handlers and stdout is being redirected via a
-   * pipe.  In that case, the debug output will try to go out the pipe
-   * (interrupt handlers should use the _err() APIs).
+   * is because it calls nxmutex_lock() and nxmutex_lock() cannot be called
+   * form interrupt level. This actually happens fairly commonly
+   * IF [a-z]err() is called from interrupt handlers and stdout is being
+   * redirected via a pipe.  In that case, the debug output will try to go
+   * out the pipe (interrupt handlers should use the _err() APIs).
    *
    * On the other hand, it would be very valuable to be able to feed the pipe
    * from an interrupt handler!  TODO:  Consider disabling interrupts instead
@@ -535,7 +502,7 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Make sure that we have exclusive access to the device structure */
 
-  ret = nxsem_wait(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
       /* May fail because a signal was received or if the task was
@@ -558,7 +525,7 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
 
       if (dev->d_nreaders <= 0)
         {
-          nxsem_post(&dev->d_bfsem);
+          nxmutex_unlock(&dev->d_bflock);
           return nwritten == 0 ? -EPIPE : nwritten;
         }
 
@@ -585,10 +552,14 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
           if ((size_t)nwritten >= len)
             {
               /* Notify all poll/select waiters that they can read from the
-               * FIFO.
+               * FIFO when buffer used exceeds poll threshold.
                */
 
-              pipecommon_pollnotify(dev, POLLIN);
+              if (pipecommon_bufferused(dev) > dev->d_pollinthrd)
+                {
+                  poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS,
+                              POLLIN);
+                }
 
               /* Yes.. Notify all of the waiting readers that more data is
                * available.
@@ -601,7 +572,7 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
 
               /* Return the number of bytes written */
 
-              nxsem_post(&dev->d_bfsem);
+              nxmutex_unlock(&dev->d_bflock);
               return len;
             }
         }
@@ -617,7 +588,7 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
                * FIFO.
                */
 
-              pipecommon_pollnotify(dev, POLLIN);
+              poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS, POLLIN);
 
               /* Yes.. Notify all of the waiting readers that more data is
                * available.
@@ -642,7 +613,7 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
                   nwritten = -EAGAIN;
                 }
 
-              nxsem_post(&dev->d_bfsem);
+              nxmutex_unlock(&dev->d_bflock);
               return nwritten;
             }
 
@@ -650,9 +621,9 @@ ssize_t pipecommon_write(FAR struct file *filep, FAR const char *buffer,
            * the pipe
            */
 
-          nxsem_post(&dev->d_bfsem);
+          nxmutex_unlock(&dev->d_bflock);
           ret = nxsem_wait(&dev->d_wrsem);
-          if (ret < 0 || (ret = nxsem_wait(&dev->d_bfsem)) < 0)
+          if (ret < 0 || (ret = nxmutex_lock(&dev->d_bflock)) < 0)
             {
               /* Either call nxsem_wait may fail because a signal was
                * received or if the task was canceled.
@@ -682,7 +653,7 @@ int pipecommon_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
   /* Are we setting up the poll?  Or tearing it down? */
 
-  ret = pipecommon_semtake(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
       return ret;
@@ -719,28 +690,23 @@ int pipecommon_poll(FAR struct file *filep, FAR struct pollfd *fds,
        * First, determine how many bytes are in the buffer
        */
 
-      if (dev->d_wrndx >= dev->d_rdndx)
-        {
-          nbytes = dev->d_wrndx - dev->d_rdndx;
-        }
-      else
-        {
-          nbytes = dev->d_bufsize + dev->d_wrndx - dev->d_rdndx;
-        }
+      nbytes = pipecommon_bufferused(dev);
 
-      /* Notify the POLLOUT event if the pipe is not full, but only if
+      /* Notify the POLLOUT event if the pipe buffer can accept
+       * more than d_polloutthrd bytes, but only if
        * there is readers.
        */
 
       eventset = 0;
-      if ((filep->f_oflags & O_WROK) && (nbytes < (dev->d_bufsize - 1)))
+      if ((filep->f_oflags & O_WROK) &&
+          nbytes < (dev->d_bufsize - 1 - dev->d_polloutthrd))
         {
           eventset |= POLLOUT;
         }
 
-      /* Notify the POLLIN event if the pipe is not empty */
+      /* Notify the POLLIN event if buffer used exceeds poll threshold */
 
-      if ((filep->f_oflags & O_RDOK) && (nbytes > 0))
+      if ((filep->f_oflags & O_RDOK) && (nbytes > dev->d_pollinthrd))
         {
           eventset |= POLLIN;
         }
@@ -761,10 +727,7 @@ int pipecommon_poll(FAR struct file *filep, FAR struct pollfd *fds,
           eventset |= POLLERR;
         }
 
-      if (eventset)
-        {
-          pipecommon_pollnotify(dev, eventset);
-        }
+      poll_notify(dev->d_fds, CONFIG_DEV_PIPE_NPOLLWAITERS, eventset);
     }
   else
     {
@@ -787,7 +750,7 @@ int pipecommon_poll(FAR struct file *filep, FAR struct pollfd *fds,
     }
 
 errout:
-  nxsem_post(&dev->d_bfsem);
+  nxmutex_unlock(&dev->d_bflock);
   return ret;
 }
 
@@ -810,7 +773,7 @@ int pipecommon_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     }
 #endif
 
-  ret = pipecommon_semtake(&dev->d_bfsem);
+  ret = nxmutex_lock(&dev->d_bflock);
   if (ret < 0)
     {
       return ret;
@@ -829,6 +792,34 @@ int pipecommon_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
               PIPE_POLICY_0(dev->d_flags);
             }
 
+          ret = OK;
+        }
+        break;
+
+      case PIPEIOC_POLLINTHRD:
+        {
+          pipe_ndx_t threshold = (pipe_ndx_t)arg;
+          if (threshold >= dev->d_bufsize)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          dev->d_pollinthrd = threshold;
+          ret = OK;
+        }
+        break;
+
+      case PIPEIOC_POLLOUTTHRD:
+        {
+          pipe_ndx_t threshold = (pipe_ndx_t)arg;
+          if (threshold >= dev->d_bufsize)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          dev->d_polloutthrd = threshold;
           ret = OK;
         }
         break;
@@ -886,12 +877,16 @@ int pipecommon_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         }
         break;
 
+      case BIOC_FLUSH:
+        ret = -EINVAL;
+        break;
+
       default:
         ret = -ENOTTY;
         break;
     }
 
-  nxsem_post(&dev->d_bfsem);
+  nxmutex_unlock(&dev->d_bflock);
   return ret;
 }
 

@@ -47,7 +47,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  netlink_setup(FAR struct socket *psock, int protocol);
+static int  netlink_setup(FAR struct socket *psock);
 static sockcaps_t netlink_sockcaps(FAR struct socket *psock);
 static void netlink_addref(FAR struct socket *psock);
 static int  netlink_bind(FAR struct socket *psock,
@@ -106,7 +106,6 @@ const struct sock_intf_s g_netlink_sockif =
  * Input Parameters:
  *   psock    - A pointer to a user allocated socket structure to be
  *              initialized.
- *   protocol - NetLink socket protocol (see sys/socket.h)
  *
  * Returned Value:
  *   Zero (OK) is returned on success.  Otherwise, a negated errno value is
@@ -114,16 +113,17 @@ const struct sock_intf_s g_netlink_sockif =
  *
  ****************************************************************************/
 
-static int netlink_setup(FAR struct socket *psock, int protocol)
+static int netlink_setup(FAR struct socket *psock)
 {
   int domain = psock->s_domain;
   int type = psock->s_type;
+  int proto = psock->s_proto;
 
   /* Verify that the protocol is supported */
 
-  DEBUGASSERT((unsigned int)protocol <= UINT8_MAX);
+  DEBUGASSERT((unsigned int)proto <= UINT8_MAX);
 
-  switch (protocol)
+  switch (proto)
     {
 #ifdef CONFIG_NETLINK_ROUTE
       case NETLINK_ROUTE:
@@ -136,7 +136,8 @@ static int netlink_setup(FAR struct socket *psock, int protocol)
 
   /* Verify the socket type (domain should always be PF_NETLINK here) */
 
-  if (domain == PF_NETLINK && (type == SOCK_RAW || type == SOCK_DGRAM))
+  if (domain == PF_NETLINK &&
+      (type == SOCK_RAW || type == SOCK_DGRAM || type == SOCK_CTRL))
     {
       /* Allocate the NetLink socket connection structure and save it in the
        * new socket instance.
@@ -149,10 +150,6 @@ static int netlink_setup(FAR struct socket *psock, int protocol)
 
           return -ENOMEM;
         }
-
-      /* Initialize the connection instance */
-
-      conn->protocol = (uint8_t)protocol;
 
       /* Set the reference count on the connection structure.  This
        * reference count will be incremented only if the socket is
@@ -262,7 +259,7 @@ static int netlink_bind(FAR struct socket *psock,
   nladdr = (FAR struct sockaddr_nl *)addr;
   conn   = (FAR struct netlink_conn_s *)psock->s_conn;
 
-  conn->pid    = nladdr->nl_pid ? nladdr->nl_pid : getpid();
+  conn->pid    = nladdr->nl_pid ? nladdr->nl_pid : nxsched_gettid();
   conn->groups = nladdr->nl_groups;
 
   return OK;
@@ -516,12 +513,11 @@ static void netlink_response_available(FAR void *arg)
   sched_lock();
   net_lock();
 
-  if (conn->pollsem != NULL && conn->pollevent != NULL)
+  if (conn->fds != NULL)
     {
       /* Wake up the poll() with POLLIN */
 
-       *conn->pollevent |= POLLIN;
-       nxsem_post(conn->pollsem);
+      poll_notify(&conn->fds, 1, POLLIN);
     }
   else
     {
@@ -530,8 +526,7 @@ static void netlink_response_available(FAR void *arg)
 
   /* Allow another poll() */
 
-  conn->pollsem   = NULL;
-  conn->pollevent = NULL;
+  conn->fds = NULL;
 
   net_unlock();
   sched_unlock();
@@ -591,11 +586,9 @@ static int netlink_poll(FAR struct socket *psock, FAR struct pollfd *fds,
        * requested event set.
        */
 
-      revents &= fds->events;
-      if (revents != 0)
+      poll_notify(&fds, 1, revents);
+      if (fds->revents != 0)
         {
-          fds->revents = revents;
-          nxsem_post(fds->sem);
           net_unlock();
           return OK;
         }
@@ -610,7 +603,7 @@ static int netlink_poll(FAR struct socket *psock, FAR struct pollfd *fds,
            * on the Netlink connection.
            */
 
-          if (conn->pollsem != NULL || conn->pollevent != NULL)
+          if (conn->fds != NULL)
             {
               nerr("ERROR: Multiple polls() on socket not supported.\n");
               net_unlock();
@@ -619,16 +612,14 @@ static int netlink_poll(FAR struct socket *psock, FAR struct pollfd *fds,
 
           /* Set up the notification */
 
-          conn->pollsem    = fds->sem;
-          conn->pollevent  = &fds->revents;
+          conn->fds = fds;
 
           ret = netlink_notifier_setup(netlink_response_available,
                                        conn, conn);
           if (ret < 0)
             {
               nerr("ERROR: netlink_notifier_setup() failed: %d\n", ret);
-              conn->pollsem   = NULL;
-              conn->pollevent = NULL;
+              conn->fds = NULL;
             }
         }
 
@@ -639,8 +630,7 @@ static int netlink_poll(FAR struct socket *psock, FAR struct pollfd *fds,
       /* Cancel any response notifications */
 
       netlink_notifier_teardown(conn);
-      conn->pollsem   = NULL;
-      conn->pollevent = NULL;
+      conn->fds = NULL;
     }
 
   return ret;
@@ -714,7 +704,7 @@ static ssize_t netlink_sendmsg(FAR struct socket *psock,
   nlmsg = (FAR struct nlmsghdr *)buf;
   DEBUGASSERT(nlmsg->nlmsg_len >= sizeof(struct nlmsghdr));
 
-  switch (conn->protocol)
+  switch (psock->s_proto)
     {
 #ifdef CONFIG_NETLINK_ROUTE
       case NETLINK_ROUTE:

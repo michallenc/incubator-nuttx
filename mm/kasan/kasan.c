@@ -22,7 +22,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/semaphore.h>
+#include <nuttx/spinlock.h>
 
 #include <assert.h>
 #include <debug.h>
@@ -50,6 +50,8 @@
 #define KASAN_REGION_SIZE(size) \
   (sizeof(struct kasan_region_s) + KASAN_SHADOW_SIZE(size))
 
+#define KASAN_INIT_VALUE            0xDEADCAFE
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -66,8 +68,9 @@ struct kasan_region_s
  * Private Data
  ****************************************************************************/
 
-static sem_t g_lock = SEM_INITIALIZER(1);
+static spinlock_t g_lock;
 static FAR struct kasan_region_s *g_region;
+static uint32_t g_region_init;
 
 /****************************************************************************
  * Private Functions
@@ -78,6 +81,11 @@ static FAR uintptr_t *kasan_mem_to_shadow(FAR const void *ptr, size_t size,
 {
   FAR struct kasan_region_s *region;
   uintptr_t addr = (uintptr_t)ptr;
+
+  if (g_region_init != KASAN_INIT_VALUE)
+    {
+      return NULL;
+    }
 
   for (region = g_region; region != NULL; region = region->next)
     {
@@ -125,6 +133,9 @@ static void kasan_set_poison(FAR const void *addr, size_t size,
   unsigned int bit;
   unsigned int nbit;
   uintptr_t mask;
+  int flags;
+
+  flags = spin_lock_irqsave(&g_lock);
 
   p = kasan_mem_to_shadow(addr, size, &bit);
   DEBUGASSERT(p != NULL);
@@ -163,6 +174,8 @@ static void kasan_set_poison(FAR const void *addr, size_t size,
           *p &= ~mask;
         }
     }
+
+  spin_unlock_irqrestore(&g_lock, flags);
 }
 
 /****************************************************************************
@@ -184,6 +197,7 @@ void kasan_unpoison(FAR const void *addr, size_t size)
 void kasan_register(FAR void *addr, FAR size_t *size)
 {
   FAR struct kasan_region_s *region;
+  int flags;
 
   region = (FAR struct kasan_region_s *)
     ((FAR char *)addr + *size - KASAN_REGION_SIZE(*size));
@@ -191,10 +205,11 @@ void kasan_register(FAR void *addr, FAR size_t *size)
   region->begin = (uintptr_t)addr;
   region->end   = region->begin + *size;
 
-  _SEM_WAIT(&g_lock);
-  region->next = g_region;
-  g_region     = region;
-  _SEM_POST(&g_lock);
+  flags = spin_lock_irqsave(&g_lock);
+  region->next  = g_region;
+  g_region      = region;
+  g_region_init = KASAN_INIT_VALUE;
+  spin_unlock_irqrestore(&g_lock, flags);
 
   kasan_poison(addr, *size);
   *size -= KASAN_REGION_SIZE(*size);

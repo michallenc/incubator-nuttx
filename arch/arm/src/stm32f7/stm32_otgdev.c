@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -46,6 +47,7 @@
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_otg.h"
+#include "stm32_rcc.h"
 #include "arm_internal.h"
 
 #if defined(CONFIG_USBDEV) && (defined(CONFIG_STM32F7_OTGFS) || \
@@ -384,16 +386,6 @@
 
 #  define stm32_rqempty(ep)            ((ep)->head == NULL)
 #  define stm32_rqpeek(ep)             ((ep)->head)
-
-/* Standard stuff ***********************************************************/
-
-#  ifndef MIN
-#    define MIN(a,b) ((a) < (b) ? (a) : (b))
-#  endif
-
-#  ifndef MAX
-#    define MAX(a,b) ((a) > (b) ? (a) : (b))
-#  endif
 
 /****************************************************************************
  * Private Types

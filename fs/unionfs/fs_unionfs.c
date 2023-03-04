@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/statfs.h>
 #include <sys/stat.h>
@@ -43,20 +44,11 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/unionfs.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include "inode/inode.h"
 
 #if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_FS_UNIONFS)
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#undef MIN
-#undef MAX
-#define MIN(a,b) (((a) < (b)) ? (a) : (b))
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
 
 /****************************************************************************
  * Private Types
@@ -85,7 +77,7 @@ struct unionfs_mountpt_s
 struct unionfs_inode_s
 {
   struct unionfs_mountpt_s ui_fs[2]; /* Contained file systems */
-  sem_t ui_exclsem;                  /* Enforces mutually exclusive access */
+  mutex_t ui_lock;                   /* Enforces mutually exclusive access */
   int16_t ui_nopen;                  /* Number of open references */
   bool ui_unmounted;                 /* File system has been unmounted */
 };
@@ -103,9 +95,6 @@ struct unionfs_file_s
  ****************************************************************************/
 
 /* Helper functions */
-
-static int     unionfs_semtake(FAR struct unionfs_inode_s *ui, bool noint);
-#define        unionfs_semgive(ui) nxsem_post(&(ui)->ui_exclsem)
 
 static FAR const char *unionfs_offsetpath(FAR const char *relpath,
                  FAR const char *prefix);
@@ -225,12 +214,13 @@ const struct mountpt_operations unionfs_operations =
   unionfs_write,       /* write */
   unionfs_seek,        /* seek */
   unionfs_ioctl,       /* ioctl */
+  NULL,                /* mmap */
+  unionfs_truncate,    /* truncate */
 
   unionfs_sync,        /* sync */
   unionfs_dup,         /* dup */
   unionfs_fstat,       /* fstat */
   unionfs_fchstat,     /* fchstat */
-  unionfs_truncate,    /* truncate */
 
   unionfs_opendir,     /* opendir */
   unionfs_closedir,    /* closedir */
@@ -252,22 +242,6 @@ const struct mountpt_operations unionfs_operations =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: unionfs_semtake
- ****************************************************************************/
-
-static int unionfs_semtake(FAR struct unionfs_inode_s *ui, bool noint)
-{
-  if (noint)
-    {
-      return nxsem_wait_uninterruptible(&ui->ui_exclsem);
-    }
-  else
-    {
-      return nxsem_wait(&ui->ui_exclsem);
-    }
-}
 
 /****************************************************************************
  * Name: unionfs_offsetpath
@@ -861,7 +835,7 @@ static void unionfs_destroy(FAR struct unionfs_inode_s *ui)
 
   /* And finally free the allocated unionfs state structure as well */
 
-  nxsem_destroy(&ui->ui_exclsem);
+  nxmutex_destroy(&ui->ui_lock);
   kmm_free(ui);
 }
 
@@ -886,7 +860,7 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Get exclusive access to the file system data structures */
 
-  ret = unionfs_semtake(ui, false);
+  ret = nxmutex_lock(&ui->ui_lock);
   if (ret < 0)
     {
       return ret;
@@ -899,7 +873,7 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
   if (uf == NULL)
     {
       ret = -ENOMEM;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Try to open the file on file system 1 */
@@ -935,7 +909,7 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
                             mode);
       if (ret < 0)
         {
-          goto errout_with_semaphore;
+          goto errout_with_lock;
         }
 
       /* Successfully opened on file system 1 */
@@ -953,8 +927,8 @@ static int unionfs_open(FAR struct file *filep, FAR const char *relpath,
   filep->f_priv = (FAR void *)uf;
   ret = OK;
 
-errout_with_semaphore:
-  unionfs_semgive(ui);
+errout_with_lock:
+  nxmutex_unlock(&ui->ui_lock);
   return ret;
 }
 
@@ -977,7 +951,7 @@ static int unionfs_close(FAR struct file *filep)
 
   /* Get exclusive access to the file system data structures */
 
-  ret = unionfs_semtake(ui, false);
+  ret = nxmutex_lock(&ui->ui_lock);
   if (ret < 0)
     {
       return ret;
@@ -1013,7 +987,7 @@ static int unionfs_close(FAR struct file *filep)
     }
   else
     {
-      unionfs_semgive(ui);
+      nxmutex_unlock(&ui->ui_lock);
     }
 
   /* Free the open file container */
@@ -1131,7 +1105,7 @@ static off_t unionfs_seek(FAR struct file *filep, off_t offset, int whence)
 
       /* Get exclusive access to the file system data structures */
 
-      ret = unionfs_semtake(ui, false);
+      ret = nxmutex_lock(&ui->ui_lock);
       if (ret < 0)
         {
           return ret;
@@ -1164,7 +1138,7 @@ static off_t unionfs_seek(FAR struct file *filep, off_t offset, int whence)
             break;
         }
 
-      unionfs_semgive(ui);
+      nxmutex_unlock(&ui->ui_lock);
     }
 
   return offset;
@@ -1447,7 +1421,7 @@ static int unionfs_opendir(FAR struct inode *mountpt,
 
   /* Get exclusive access to the file system data structures */
 
-  ret = unionfs_semtake(ui, false);
+  ret = nxmutex_lock(&ui->ui_lock);
   if (ret < 0)
     {
       goto errout_with_udir;
@@ -1464,7 +1438,7 @@ static int unionfs_opendir(FAR struct inode *mountpt,
       udir->fu_relpath = strdup(relpath);
       if (!udir->fu_relpath)
         {
-          goto errout_with_semaphore;
+          goto errout_with_lock;
         }
     }
 
@@ -1540,7 +1514,7 @@ static int unionfs_opendir(FAR struct inode *mountpt,
   ui->ui_nopen++;
   DEBUGASSERT(ui->ui_nopen > 0);
 
-  unionfs_semgive(ui);
+  nxmutex_unlock(&ui->ui_lock);
   *dir = &udir->fu_base;
   return OK;
 
@@ -1550,8 +1524,8 @@ errout_with_relpath:
       kmm_free(udir->fu_relpath);
     }
 
-errout_with_semaphore:
-  unionfs_semgive(ui);
+errout_with_lock:
+  nxmutex_unlock(&ui->ui_lock);
 
 errout_with_udir:
   kmm_free(udir);
@@ -1581,7 +1555,7 @@ static int unionfs_closedir(FAR struct inode *mountpt,
 
   /* Get exclusive access to the file system data structures */
 
-  ret = unionfs_semtake(ui, true);
+  ret = nxmutex_lock(&ui->ui_lock);
   if (ret < 0)
     {
       return ret;
@@ -1620,10 +1594,7 @@ static int unionfs_closedir(FAR struct inode *mountpt,
       kmm_free(udir->fu_relpath);
     }
 
-  udir->fu_ndx      = 0;
-  udir->fu_relpath  = NULL;
-  udir->fu_lower[0] = NULL;
-  udir->fu_lower[1] = NULL;
+  kmm_free(udir);
 
   /* Decrement the count of open reference.  If that count would go to zero
    * and if the file system has been unmounted, then destroy the file system
@@ -1636,7 +1607,7 @@ static int unionfs_closedir(FAR struct inode *mountpt,
     }
   else
     {
-      unionfs_semgive(ui);
+      nxmutex_unlock(&ui->ui_lock);
     }
 
   return ret;
@@ -2026,7 +1997,7 @@ static int unionfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   /* Get exclusive access to the file system data structures */
 
-  ret = unionfs_semtake(ui, true);
+  ret = nxmutex_lock(&ui->ui_lock);
   if (ret < 0)
     {
       return ret;
@@ -2042,12 +2013,12 @@ static int unionfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   if (ui->ui_nopen <= 0)
     {
-      unionfs_semgive(ui);
+      nxmutex_unlock(&ui->ui_lock);
       unionfs_destroy(ui);
     }
   else
     {
-      unionfs_semgive(ui);
+      nxmutex_unlock(&ui->ui_lock);
     }
 
   return OK;
@@ -2630,7 +2601,7 @@ static int unionfs_dobind(FAR const char *fspath1, FAR const char *prefix1,
       return -ENOMEM;
     }
 
-  nxsem_init(&ui->ui_exclsem, 0, 1);
+  nxmutex_init(&ui->ui_lock);
 
   /* Get the inodes associated with fspath1 and fspath2 */
 
@@ -2698,7 +2669,7 @@ errout_with_fs1:
   inode_release(ui->ui_fs[0].um_node);
 
 errout_with_uinode:
-  nxsem_destroy(&ui->ui_exclsem);
+  nxmutex_destroy(&ui->ui_lock);
   kmm_free(ui);
   return ret;
 }

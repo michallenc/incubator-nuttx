@@ -268,6 +268,7 @@ Standard I/O
   int    fgetc(FAR FILE *stream);
   int    fgetpos(FAR FILE *stream, FAR fpos_t *pos);
   FAR char *fgets(FAR char *s, int n, FAR FILE *stream);
+  void   flockfile(FAR FILE *stream);
   FAR FILE *fopen(FAR const char *path, FAR const char *type);
   int    fprintf(FAR FILE *stream, FAR const char *format, ...);
   int    fputc(int c, FAR FILE *stream);
@@ -278,6 +279,8 @@ Standard I/O
   int    fseek(FAR FILE *stream, long int offset, int whence);
   int    fsetpos(FAR FILE *stream, FAR fpos_t *pos);
   long   ftell(FAR FILE *stream);
+  int    ftrylockfile(FAR FILE *stream);
+  void   funlockfile(FAR FILE *stream);
   size_t fwrite(FAR const void *ptr, size_t size, size_t n_items, FAR FILE *stream);
   FAR char *gets(FAR char *s);
   FAR char *gets_s(FAR char *s, rsize_t n);
@@ -455,12 +458,11 @@ are two conditions where ``mmap()`` can be supported:
 1. ``mmap()`` can be used to support *eXecute In Place* (XIP) on random
    access media under the following very restrictive conditions:
 
-   a. The file-system supports the ``FIOC_MMAP`` ioctl command. Any file
-      system that maps files contiguously on the media should support
-      this ``ioctl`` command. By comparison, most file system scatter
-      files over the media in non-contiguous sectors. As of this
-      writing, ROMFS is the only file system that meets this
-      requirement.
+   a. Any file system that maps files contiguously on the media
+      should implement the mmap file operation. By comparison, most
+      file system scatter files over the media in non-contiguous
+      sectors. As of this writing, ROMFS is the only file system
+      that meets this requirement.
 
    b. The underlying block driver supports the ``BIOC_XIPBASE``
       ``ioctl`` command that maps the underlying media to a randomly

@@ -29,15 +29,13 @@
 #include <sys/time.h>
 #include <string.h>
 
+#include <sys/param.h>
+
 #include <nuttx/net/snoop.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef ARRAY_SIZE
-#  define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
 
 #define SNOOP_VERSION_1 1
 #define SNOOP_VERSION_2 2
@@ -161,76 +159,128 @@ begin_packed_struct struct snoop_packet_header_s
  ****************************************************************************/
 
 /****************************************************************************
- * Name: snoop_dump_packet_header
+ * Name: snoop_fill_packet_header
  *
  * Description:
- *   This function fill snoop headr info.
+ *   This function fill snoop packet header info.
  *
  ****************************************************************************/
 
-static int snoop_dump_packet_header(FAR struct snoop_s *snoop,
-                                    uint32_t bytes, uint32_t drops,
-                                    uint32_t flags)
+static void snoop_fill_packet_header(FAR struct snoop_s *snoop,
+                                     uint32_t bytes, uint32_t drops,
+                                     uint32_t flags, FAR struct
+                                     snoop_packet_header_s *header)
 {
-  struct snoop_packet_header_s header;
-  int ret;
-
-  if (!snoop)
-    {
-      return -EINVAL;
-    }
+  struct timeval tv;
 
   switch (snoop->datalink)
     {
-    case SNOOP_DATALINK_HCI_UNENCAP:
-    case SNOOP_DATALINK_HCI_UART:
-    case SNOOP_DATALINK_HCI_BSCP:
-    case SNOOP_DATALINK_HCI_SERIAL:
-      {
-        struct timeval tv;
-
+      case SNOOP_DATALINK_HCI_UNENCAP:
+      case SNOOP_DATALINK_HCI_UART:
+      case SNOOP_DATALINK_HCI_BSCP:
+      case SNOOP_DATALINK_HCI_SERIAL:
         gettimeofday(&tv, NULL);
-        header.ts_usec = htobe64(SNOOP_EPOCH_USEC(tv));
-        header.flags = htobe32(flags);
+        header->ts_usec = htobe64(SNOOP_EPOCH_USEC(tv));
+        header->flags = htobe32(flags);
         break;
-      }
 
-    case SNOOP_DATALINK_TYPE_TOKENBUS:
-    case SNOOP_DATALINK_TYPE_TOKERING:
-    case SNOOP_DATALINK_TYPE_METRONET:
-    case SNOOP_DATALINK_TYPE_ETHERNET:
-    case SNOOP_DATALINK_TYPE_HDLC:
-    case SNOOP_DATALINK_TYPE_CHARSYNC:
-    case SNOOP_DATALINK_TYPE_IBMC2C:
-    case SNOOP_DATALINK_TYPE_FDDI:
-    case SNOOP_DATALINK_TYPE_OTHER:
-      {
-        struct timeval tv;
-
+      case SNOOP_DATALINK_TYPE_TOKENBUS:
+      case SNOOP_DATALINK_TYPE_TOKERING:
+      case SNOOP_DATALINK_TYPE_METRONET:
+      case SNOOP_DATALINK_TYPE_ETHERNET:
+      case SNOOP_DATALINK_TYPE_HDLC:
+      case SNOOP_DATALINK_TYPE_CHARSYNC:
+      case SNOOP_DATALINK_TYPE_IBMC2C:
+      case SNOOP_DATALINK_TYPE_FDDI:
+      case SNOOP_DATALINK_TYPE_OTHER:
         gettimeofday(&tv, NULL);
-        header.ts.ts_sec = htobe32(tv.tv_sec);
-        header.ts.ts_usec = htobe32(tv.tv_usec);
-        header.rec_len = htobe32(flags);
+        header->ts.ts_sec = htobe32(tv.tv_sec);
+        header->ts.ts_usec = htobe32(tv.tv_usec);
+        header->rec_len = htobe32(flags);
         break;
-      }
 
-    default:
-      {
-        return -EINVAL;
-      }
+      default:
+        DEBUGASSERT(false);
     }
 
-  header.orig_len = htobe32(bytes);
-  header.incl_len = htobe32(bytes);
-  header.cum_drops = htobe32(drops);
+  header->orig_len = htobe32(bytes);
+  header->incl_len = htobe32(bytes);
+  header->cum_drops = htobe32(drops);
+}
 
-  ret = file_write(&snoop->filep, &header, sizeof(header));
-  if (ret != sizeof(header))
+/****************************************************************************
+ * Name: snoop_flush
+ *
+ * Description:
+ *   This function could flush snoop buf into file.
+ *
+ ****************************************************************************/
+
+static int snoop_flush(FAR struct snoop_s *snoop)
+{
+  ssize_t ret;
+
+  if (snoop->next == 0)
     {
-      return ret < 0 ? ret : -EINVAL;
+      return 0;
     }
 
-  return OK;
+  do
+    {
+      ret = file_write(&snoop->filep, snoop->buf, snoop->next);
+      if (ret < 0)
+        {
+          break;
+        }
+
+      snoop->next -= ret;
+      memmove(snoop->buf, snoop->buf + ret, snoop->next);
+    }
+  while (snoop->next > 0);
+
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+  if (snoop->autosync)
+    {
+      ret = file_fsync(&snoop->filep);
+    }
+#endif
+
+  return ret;
+}
+
+/****************************************************************************
+ * Name: snoop_flush_lock
+ *
+ * Description:
+ *   Snoop flush atomic
+ *
+ ****************************************************************************/
+
+static int snoop_flush_lock(FAR struct snoop_s *snoop)
+{
+  irqstate_t flags;
+  int ret;
+
+  flags = enter_critical_section();
+  nxmutex_lock(&snoop->mutex);
+  ret = snoop_flush(snoop);
+  nxmutex_unlock(&snoop->mutex);
+  leave_critical_section(flags);
+
+  return ret;
+}
+
+/****************************************************************************
+ * Name: snoop_flush_work
+ *
+ * Description:
+ *   Do snoop flush work.
+ *
+ ****************************************************************************/
+
+static void snoop_flush_work(FAR void *arg)
+{
+  snoop_flush_lock((FAR struct snoop_s *)arg);
 }
 
 /****************************************************************************
@@ -242,6 +292,17 @@ static int snoop_dump_packet_header(FAR struct snoop_s *snoop,
  *
  * Description:
  *   This function open snoop file by datalink.
+ *
+ * Input Parameters:
+ *   snoop     The snoop driver struct
+ *   filename  Snoop file name
+ *   datalink  Snoop datalink type, such as SNOOP_DATALINK_TYPE_XX
+ *   autosync  whether do file_sync when snoop_dump
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
  *
  ****************************************************************************/
 
@@ -268,12 +329,12 @@ int snoop_open(FAR struct snoop_s *snoop, FAR const char *filename,
       case SNOOP_DATALINK_TYPE_FDDI:
       case SNOOP_DATALINK_TYPE_OTHER:
         {
-          uint8_t snoop_magic[] =
+          static const uint8_t snoop_magic[] =
             {
               's', 'n', 'o', 'o', 'p', '\0', '\0', '\0'
             };
 
-          memcpy(header.magic, snoop_magic, ARRAY_SIZE(snoop_magic));
+          memcpy(header.magic, snoop_magic, nitems(snoop_magic));
           header.version = htobe32(SNOOP_VERSION_2);
           break;
         };
@@ -283,12 +344,12 @@ int snoop_open(FAR struct snoop_s *snoop, FAR const char *filename,
       case SNOOP_DATALINK_HCI_BSCP:
       case SNOOP_DATALINK_HCI_SERIAL:
         {
-          uint8_t btsnoop_magic[] =
+          static const uint8_t btsnoop_magic[] =
             {
               'b', 't', 's', 'n', 'o', 'o', 'p', '\0'
             };
 
-          memcpy(header.magic, btsnoop_magic, ARRAY_SIZE(btsnoop_magic));
+          memcpy(header.magic, btsnoop_magic, nitems(btsnoop_magic));
           header.version = htobe32(SNOOP_VERSION_1);
           break;
         }
@@ -307,8 +368,9 @@ int snoop_open(FAR struct snoop_s *snoop, FAR const char *filename,
 
   snoop->datalink = datalink;
   snoop->autosync = autosync;
-  header.datalink = htobe32(datalink);
+  snoop->next     = 0;
 
+  header.datalink = htobe32(datalink);
   ret = file_write(&snoop->filep, &header, sizeof(header));
   if (ret != sizeof(header))
     {
@@ -316,10 +378,11 @@ int snoop_open(FAR struct snoop_s *snoop, FAR const char *filename,
       goto error;
     }
 
+  nxmutex_init(&snoop->mutex);
   return OK;
 
 error:
-  file_close(&snoop->filep);
+  snoop_close(snoop);
   return ret;
 }
 
@@ -329,31 +392,93 @@ error:
  * Description:
  *   This function dump nbytes buf data into snoop file.
  *
+ * Input Parameters:
+ *   snoop     The snoop driver struct
+ *   buf       Snoop buffer
+ *   nbytes    Snoop buffer size
+ *   drops     cumulative number of dropped packets
+ *   flags     Packet Flags: 1 hci cmd , eg: btsnoop
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
+ *
  ****************************************************************************/
 
 int snoop_dump(FAR struct snoop_s *snoop, FAR const void *buf,
                uint32_t nbytes, uint32_t drops, uint32_t flags)
 {
-  int ret;
+  struct snoop_packet_header_s header;
+  irqstate_t irqflags;
+  int ret = 0;
 
   if (!snoop)
     {
       return -EINVAL;
     }
 
-  ret = snoop_dump_packet_header(snoop, nbytes, drops, flags);
-  if (ret != OK)
+  snoop_fill_packet_header(snoop, nbytes, drops, flags, &header);
+
+  irqflags = enter_critical_section();
+  if (up_interrupt_context())
     {
-      return ret;
+      if (sizeof(snoop->buf) - snoop->next <
+          nbytes + sizeof(struct snoop_packet_header_s))
+        {
+          ret = -ENOMEM;
+          goto out_leave;
+        }
+
+      memcpy(snoop->buf + snoop->next, &header, sizeof(header));
+      snoop->next += sizeof(header);
+      memcpy(snoop->buf + snoop->next, buf, nbytes);
+      snoop->next += nbytes;
+
+      if (work_available(&snoop->work))
+        {
+          work_queue(HPWORK, &snoop->work, snoop_flush_work, snoop, 0);
+        }
+
+      goto out_leave;
+    }
+  else
+    {
+      nxmutex_lock(&snoop->mutex);
+      ret = snoop_flush(snoop);
+      if (ret < 0)
+        {
+          goto out_unlock;
+        }
+
+      ret = file_write(&snoop->filep, &header, sizeof(header));
+      if (ret < 0)
+        {
+          goto out_unlock;
+        }
+      else if (ret != sizeof(header))
+        {
+          ret = -EINVAL;
+          goto out_unlock;
+        }
+
+      ret = file_write(&snoop->filep, buf, nbytes);
+      if (ret < 0)
+        {
+          goto out_unlock;
+        }
+      else if (ret != nbytes)
+        {
+          ret = -EINVAL;
+          goto out_unlock;
+        }
     }
 
-  ret = file_write(&snoop->filep, buf, nbytes);
-  if (ret != nbytes)
-    {
-      return ret < 0 ? ret : -EINVAL;
-    }
-
-  return snoop->autosync ? snoop_sync(snoop) : OK;
+out_unlock:
+  nxmutex_unlock(&snoop->mutex);
+out_leave:
+  leave_critical_section(irqflags);
+  return ret;
 }
 
 /****************************************************************************
@@ -362,21 +487,24 @@ int snoop_dump(FAR struct snoop_s *snoop, FAR const void *buf,
  * Description:
  *   This function sync snoop buffer.
  *
+ * Input Parameters:
+ *   snoop     The snoop driver struct
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
+ *
  ****************************************************************************/
 
 int snoop_sync(FAR struct snoop_s *snoop)
 {
-  int ret = OK;
-
   if (!snoop)
     {
       return -EINVAL;
     }
 
-#ifndef CONFIG_DISABLE_MOUNTPOINT
-  ret = file_fsync(&snoop->filep);
-#endif
-  return ret;
+  return snoop_flush_lock(snoop);
 }
 
 /****************************************************************************
@@ -384,6 +512,14 @@ int snoop_sync(FAR struct snoop_s *snoop)
  *
  * Description:
  *   This function close snoop file.
+ *
+ * Input Parameters:
+ *   snoop     The snoop driver struct
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
  *
  ****************************************************************************/
 
@@ -394,5 +530,6 @@ int snoop_close(FAR struct snoop_s *snoop)
       return -EINVAL;
     }
 
+  nxmutex_destroy(&snoop->mutex);
   return file_close(&snoop->filep);
 }

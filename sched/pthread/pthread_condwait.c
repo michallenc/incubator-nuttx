@@ -74,7 +74,7 @@ int pthread_cond_wait(FAR pthread_cond_t *cond, FAR pthread_mutex_t *mutex)
 
   /* Make sure that the caller holds the mutex */
 
-  else if (mutex->pid != (int)getpid())
+  else if (mutex->pid != nxsched_gettid())
     {
       ret = EPERM;
     }
@@ -107,7 +107,7 @@ int pthread_cond_wait(FAR pthread_cond_t *cond, FAR pthread_mutex_t *mutex)
        * or if the thread is canceled (ECANCELED)
        */
 
-      status = pthread_sem_take((FAR sem_t *)&cond->sem, NULL, false);
+      status = pthread_sem_take(&cond->sem, NULL);
       if (ret == OK)
         {
           /* Report the first failure that occurs */
@@ -126,7 +126,7 @@ int pthread_cond_wait(FAR pthread_cond_t *cond, FAR pthread_mutex_t *mutex)
 
       sinfo("Reacquire mutex...\n");
 
-      status = pthread_mutex_take(mutex, NULL, false);
+      status = pthread_mutex_take(mutex, NULL);
       if (ret == OK)
         {
           /* Report the first failure that occurs */
@@ -140,7 +140,7 @@ int pthread_cond_wait(FAR pthread_cond_t *cond, FAR pthread_mutex_t *mutex)
         {
           /* Yes.. Then initialize it properly */
 
-          mutex->pid    = getpid();
+          mutex->pid    = nxsched_gettid();
 #ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
           mutex->flags  = mflags;
 #endif

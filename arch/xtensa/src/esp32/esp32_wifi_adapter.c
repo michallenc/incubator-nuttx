@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <clock/clock.h>
+#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -42,7 +43,7 @@
 #include <nuttx/mqueue.h>
 #include <nuttx/spinlock.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/kthread.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
@@ -83,10 +84,6 @@
 #  define NVS_FS_PREFIX CONFIG_ESP32_WIFI_FS_MOUNTPT
 #  define NVS_DIR_BASE  NVS_FS_PREFIX"/wifi."
 #  define NVS_FILE_MODE 0777
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
 #define WIFI_CONNECT_TIMEOUT  CONFIG_ESP32_WIFI_CONNECT_TIMEOUT
@@ -323,7 +320,7 @@ static int32_t esp_get_random(uint8_t *buf, size_t len);
 static int32_t esp_get_time(void *t);
 static void esp_log_writev(uint32_t level, const char *tag,
                            const char *format, va_list args)
-            printflike(3, 0);
+            printf_like(3, 0);
 static void *esp_malloc_internal(size_t size);
 static void *esp_realloc_internal(void *ptr, size_t size);
 static void *esp_calloc_internal(size_t n, size_t size);
@@ -368,7 +365,7 @@ extern void coex_bt_high_prio(void);
 int64_t esp_timer_get_time(void);
 void esp_fill_random(void *buf, size_t len);
 void esp_log_write(uint32_t level, const char *tag, const char *format, ...)
-     printflike(3, 4);
+     printf_like(3, 4);
 uint32_t esp_log_timestamp(void);
 uint8_t esp_crc8(const uint8_t *p, uint32_t len);
 void intr_matrix_set(int cpu_no, uint32_t model_num, uint32_t intr_num);
@@ -382,7 +379,7 @@ void intr_matrix_set(int cpu_no, uint32_t model_num, uint32_t intr_num);
 static struct work_s g_wifi_evt_work;
 static sq_queue_t g_wifi_evt_queue;
 static struct wifi_notify g_wifi_notify[WIFI_ADPT_EVT_MAX];
-static sem_t g_wifiexcl_sem = SEM_INITIALIZER(1);
+static mutex_t g_wifiexcl_lock = NXMUTEX_INITIALIZER;
 
 /* Callback function to update Wi-Fi MAC time */
 
@@ -779,7 +776,7 @@ static int esp_wifi_lock(bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&g_wifiexcl_sem);
+      ret = nxmutex_lock(&g_wifiexcl_lock);
       if (ret < 0)
         {
           wlinfo("Failed to lock Wi-Fi ret=%d\n", ret);
@@ -787,7 +784,7 @@ static int esp_wifi_lock(bool lock)
     }
   else
     {
-      ret = nxsem_post(&g_wifiexcl_sem);
+      ret = nxmutex_unlock(&g_wifiexcl_lock);
       if (ret < 0)
         {
           wlinfo("Failed to unlock Wi-Fi ret=%d\n", ret);
@@ -2028,7 +2025,7 @@ static int32_t esp_task_ms_to_tick(uint32_t ms)
 
 static void *esp_task_get_current_task(void)
 {
-  pid_t pid = getpid();
+  pid_t pid = nxsched_getpid();
 
   return (void *)((uintptr_t)pid);
 }
@@ -2094,9 +2091,18 @@ static void esp_free(void *ptr)
     }
   else
 #endif
+#ifdef CONFIG_MM_KERNEL_HEAP
+  if (kmm_heapmember(ptr))
+#endif
     {
       kmm_free(ptr);
     }
+#ifdef CONFIG_MM_KERNEL_HEAP
+  else
+    {
+      free(ptr);
+    }
+#endif
 }
 
 /****************************************************************************
@@ -2142,6 +2148,24 @@ static int esp_event_id_map(int event_id)
 
       case WIFI_EVENT_STA_STOP:
         id = WIFI_ADPT_EVT_STA_STOP;
+        break;
+#endif
+
+#ifdef ESP32_WLAN_HAS_SOFTAP
+      case WIFI_EVENT_AP_START:
+        id = WIFI_ADPT_EVT_AP_START;
+        break;
+
+      case WIFI_EVENT_AP_STOP:
+        id = WIFI_ADPT_EVT_AP_STOP;
+        break;
+
+      case WIFI_EVENT_AP_STACONNECTED:
+        id = WIFI_ADPT_EVT_AP_STACONNECTED;
+        break;
+
+      case WIFI_EVENT_AP_STADISCONNECTED:
+        id = WIFI_ADPT_EVT_AP_STADISCONNECTED;
         break;
 #endif
       default:
@@ -2222,6 +2246,24 @@ static void esp_evt_work_cb(void *arg)
           case WIFI_ADPT_EVT_STA_STOP:
             wlinfo("Wi-Fi sta stop\n");
             g_sta_connected = false;
+            break;
+#endif
+
+#ifdef ESP32_WLAN_HAS_SOFTAP
+          case WIFI_ADPT_EVT_AP_START:
+            wlinfo("INFO: Wi-Fi softap start\n");
+            break;
+
+          case WIFI_ADPT_EVT_AP_STOP:
+            wlinfo("INFO: Wi-Fi softap stop\n");
+            break;
+
+          case WIFI_ADPT_EVT_AP_STACONNECTED:
+            wlinfo("INFO: Wi-Fi station join\n");
+            break;
+
+          case WIFI_ADPT_EVT_AP_STADISCONNECTED:
+            wlinfo("INFO: Wi-Fi station leave\n");
             break;
 #endif
           default:
@@ -3427,7 +3469,9 @@ uint32_t esp_log_timestamp(void)
 
 static void *esp_malloc_internal(size_t size)
 {
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_MM_KERNEL_HEAP
+  return kmm_malloc(size);
+#elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
   return xtensa_imm_malloc(size);
 #else
   void *ptr = kmm_malloc(size);
@@ -3458,7 +3502,9 @@ static void *esp_malloc_internal(size_t size)
 
 static void *esp_realloc_internal(void *ptr, size_t size)
 {
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_MM_KERNEL_HEAP
+  return kmm_realloc(ptr, size);
+#elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
   return xtensa_imm_realloc(ptr, size);
 #else
   void *old_ptr = ptr;
@@ -3479,7 +3525,7 @@ static void *esp_realloc_internal(void *ptr, size_t size)
           return NULL;
         }
 
-      old_size = malloc_size(old_ptr);
+      old_size = kmm_malloc_size(old_ptr);
       DEBUGASSERT(old_size > 0);
       memcpy(new_ptr, old_ptr, MIN(old_size, size));
       kmm_free(old_ptr);
@@ -3507,8 +3553,10 @@ static void *esp_realloc_internal(void *ptr, size_t size)
 
 static void *esp_calloc_internal(size_t n, size_t size)
 {
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
-  return  xtensa_imm_calloc(n, size);
+#ifdef CONFIG_MM_KERNEL_HEAP
+  return kmm_calloc(n, size);
+#elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
+  return xtensa_imm_calloc(n, size);
 #else
   void *ptr = kmm_calloc(n, size);
   if (esp32_ptr_extram(ptr))
@@ -3537,7 +3585,9 @@ static void *esp_calloc_internal(size_t n, size_t size)
 
 static void *esp_zalloc_internal(size_t size)
 {
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_MM_KERNEL_HEAP
+  return kmm_zalloc(size);
+#elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
   return xtensa_imm_zalloc(size);
 #else
   void *ptr = kmm_zalloc(size);
@@ -4630,7 +4680,7 @@ int esp_wifi_notify_subscribe(pid_t pid, struct sigevent *event)
             {
               if (pid == 0)
                 {
-                  pid = getpid();
+                  pid = nxsched_getpid();
                   wlinfo("Actual PID=%d\n", pid);
                 }
 

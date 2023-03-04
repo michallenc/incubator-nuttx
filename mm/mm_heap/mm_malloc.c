@@ -40,7 +40,7 @@
  * Private Functions
  ****************************************************************************/
 
-static void mm_free_delaylist(FAR struct mm_heap_s *heap)
+static void free_delaylist(FAR struct mm_heap_s *heap)
 {
 #if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
   FAR struct mm_delaynode_s *tmp;
@@ -106,12 +106,13 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
 {
   FAR struct mm_freenode_s *node;
   size_t alignsize;
+  size_t nodesize;
   FAR void *ret = NULL;
   int ndx;
 
   /* Free the delay list first */
 
-  mm_free_delaylist(heap);
+  free_delaylist(heap);
 
   /* Ignore zero-length allocations */
 
@@ -120,11 +121,19 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
       return NULL;
     }
 
+#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
+  ret = mempool_multiple_alloc(heap->mm_mpool, size);
+  if (ret != NULL)
+    {
+      return ret;
+    }
+#endif
+
   /* Adjust the size to account for (1) the size of the allocated node and
    * (2) to make sure that it is an even multiple of our granule size.
    */
 
-  alignsize = MM_ALIGN_UP(size + SIZEOF_MM_ALLOCNODE);
+  alignsize = MM_ALIGN_UP(size + OVERHEAD_MM_ALLOCNODE);
   if (alignsize < size)
     {
       /* There must have been an integer overflow */
@@ -135,35 +144,27 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
   DEBUGASSERT(alignsize >= MM_MIN_CHUNK);
   DEBUGASSERT(alignsize >= SIZEOF_MM_FREENODE);
 
-  /* We need to hold the MM semaphore while we muck with the nodelist. */
+  /* We need to hold the MM mutex while we muck with the nodelist. */
 
-  DEBUGVERIFY(mm_takesemaphore(heap));
+  DEBUGVERIFY(mm_lock(heap));
 
-  /* Get the location in the node list to start the search. Special case
-   * really big allocations
-   */
+  /* Convert the request size into a nodelist index */
 
-  if (alignsize >= MM_MAX_CHUNK)
-    {
-      ndx = MM_NNODES - 1;
-    }
-  else
-    {
-      /* Convert the request size into a nodelist index */
-
-      ndx = mm_size2ndx(alignsize);
-    }
+  ndx = mm_size2ndx(alignsize);
 
   /* Search for a large enough chunk in the list of nodes. This list is
    * ordered by size, but will have occasional zero sized nodes as we visit
    * other mm_nodelist[] entries.
    */
 
-  for (node = heap->mm_nodelist[ndx].flink;
-       node && node->size < alignsize;
-       node = node->flink)
+  for (node = heap->mm_nodelist[ndx].flink; node; node = node->flink)
     {
       DEBUGASSERT(node->blink->flink == node);
+      nodesize = SIZEOF_MM_NODE(node);
+      if (nodesize >= alignsize)
+        {
+          break;
+        }
     }
 
   /* If we found a node with non-zero size, then this is one to use. Since
@@ -188,6 +189,13 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
           node->flink->blink = node->blink;
         }
 
+      /* Get a pointer to the next node in physical memory */
+
+      next = (FAR struct mm_freenode_s *)(((FAR char *)node) + nodesize);
+      DEBUGASSERT((next->size & MM_ALLOC_BIT) != 0 &&
+                  (next->size & MM_PREVFREE_BIT) != 0 &&
+                  next->preceding == nodesize);
+
       /* Check if we have to split the free node into one of the allocated
        * size and another smaller freenode.  In some cases, the remaining
        * bytes can be smaller (they may be SIZEOF_MM_ALLOCNODE).  In that
@@ -195,52 +203,52 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
        * allocation.
        */
 
-      remaining = node->size - alignsize;
+      remaining = nodesize - alignsize;
       if (remaining >= SIZEOF_MM_FREENODE)
         {
-          /* Get a pointer to the next node in physical memory */
-
-          next = (FAR struct mm_freenode_s *)
-                 (((FAR char *)node) + node->size);
-
           /* Create the remainder node */
 
           remainder = (FAR struct mm_freenode_s *)
             (((FAR char *)node) + alignsize);
 
-          remainder->size      = remaining;
-          remainder->preceding = alignsize;
+          remainder->size = remaining;
 
           /* Adjust the size of the node under consideration */
 
-          node->size = alignsize;
+          node->size = alignsize | (node->size & MM_MASK_BIT);
 
-          /* Adjust the 'preceding' size of the (old) next node, preserving
-           * the allocated flag.
-           */
+          /* Adjust the 'preceding' size of the (old) next node. */
 
-          next->preceding = remaining | (next->preceding & MM_ALLOC_BIT);
+          next->preceding = remaining;
 
           /* Add the remainder back into the nodelist */
 
           mm_addfreechunk(heap, remainder);
         }
+      else
+        {
+          /* Previous physical memory node is alloced, so clear the previous
+           * free bit in next->size.
+           */
+
+          next->size &= ~MM_PREVFREE_BIT;
+        }
 
       /* Handle the case of an exact size match */
 
-      node->preceding |= MM_ALLOC_BIT;
+      node->size |= MM_ALLOC_BIT;
       ret = (FAR void *)((FAR char *)node + SIZEOF_MM_ALLOCNODE);
     }
 
   DEBUGASSERT(ret == NULL || mm_heapmember(heap, ret));
-  mm_givesemaphore(heap);
+  mm_unlock(heap);
 
   if (ret)
     {
       MM_ADD_BACKTRACE(heap, node);
-      kasan_unpoison(ret, mm_malloc_size(ret));
+      kasan_unpoison(ret, mm_malloc_size(heap, ret));
 #ifdef CONFIG_MM_FILL_ALLOCATIONS
-      memset(ret, 0xaa, alignsize - SIZEOF_MM_ALLOCNODE);
+      memset(ret, 0xaa, alignsize - OVERHEAD_MM_ALLOCNODE);
 #endif
 #ifdef CONFIG_DEBUG_MM
       minfo("Allocated %p, size %zu\n", ret, alignsize);
@@ -269,5 +277,6 @@ FAR void *mm_malloc(FAR struct mm_heap_s *heap, size_t size)
     }
 #endif
 
+  DEBUGASSERT(ret == NULL || ((uintptr_t)ret) % MM_MIN_CHUNK == 0);
   return ret;
 }

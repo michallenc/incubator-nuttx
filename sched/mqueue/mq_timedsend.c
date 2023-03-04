@@ -239,12 +239,13 @@ int file_mq_timedsend(FAR struct file *mq, FAR const char *msg,
   if (ret != OK)
     {
       ret = -ret;
+      nxmq_free_msg(mqmsg);
       goto errout_in_critical_section;
     }
 
   /* Start the watchdog and begin the wait for MQ not full */
 
-  wd_start(&rtcb->waitdog, ticks, nxmq_sndtimeout, getpid());
+  wd_start(&rtcb->waitdog, ticks, nxmq_sndtimeout, nxsched_gettid());
 
   /* And wait for the message queue to be non-empty */
 

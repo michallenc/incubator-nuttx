@@ -25,6 +25,7 @@
 #include <nuttx/config.h>
 
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -44,7 +45,6 @@
 
 #define ELF_PAGESIZE    4096
 
-#define ARRAY_SIZE(x)   (sizeof(x) / sizeof((x)[0]))
 #define ROUNDUP(x, y)   ((x + (y - 1)) / (y)) * (y)
 
 /****************************************************************************
@@ -61,7 +61,7 @@
 
 static int elf_flush(FAR struct elf_dumpinfo_s *cinfo)
 {
-  return cinfo->stream->flush(cinfo->stream);
+  return lib_stream_flush(cinfo->stream);
 }
 
 /****************************************************************************
@@ -81,7 +81,7 @@ static int elf_emit(FAR struct elf_dumpinfo_s *cinfo,
 
   while (total > 0)
     {
-      ret = cinfo->stream->puts(cinfo->stream, ptr, total);
+      ret = lib_stream_puts(cinfo->stream, ptr, total);
       if (ret < 0)
         {
           break;
@@ -244,7 +244,7 @@ static void elf_emit_note_info(FAR struct elf_dumpinfo_s *cinfo)
 
       status.pr_pid = tcb->pid;
 
-      for (j = 0; j < ARRAY_SIZE(status.pr_regs); j++)
+      for (j = 0; j < nitems(status.pr_regs); j++)
         {
           status.pr_regs[j] = *(uintptr_t *)((uint8_t *)tcb +
                                              g_tcbinfo.reg_off.p[j]);

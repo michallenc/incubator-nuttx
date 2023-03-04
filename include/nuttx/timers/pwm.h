@@ -120,6 +120,10 @@
 struct pwm_chan_s
 {
   ub16_t duty;
+#ifdef CONFIG_PWM_OVERWRITE
+  bool ch_outp_ovrwr;
+  bool ch_outp_ovrwr_val;
+#endif
   int8_t channel;
 };
 #endif
@@ -144,6 +148,9 @@ struct pwm_info_s
                                  * generate an indefinite number of pulses */
 #  endif
 #endif /* CONFIG_PWM_MULTICHAN */
+
+  FAR void           *arg;      /* User provided argument to be used in the
+                                 * lower half */
 };
 
 /* This structure is a set a callback functions used to call from the upper-

@@ -86,7 +86,7 @@ struct binary_s
    *   used to manage the tasks address space.
    */
 
-  group_addrenv_t addrenv;             /* Task group address environment */
+  addrenv_t addrenv;                   /* Address environment */
 #endif
 
   size_t mapsize;                      /* Size of the mapped address region (needed for munmap) */
@@ -97,6 +97,10 @@ struct binary_s
 
   uint8_t priority;                    /* Task execution priority */
   size_t stacksize;                    /* Size of the stack in bytes (unallocated) */
+
+#ifndef CONFIG_BUILD_KERNEL
+  FAR void *stackaddr;                 /* Task stack address */
+#endif
 
   /* Unload module callback */
 
@@ -257,7 +261,7 @@ int unload_module(FAR struct binary_s *bin);
  *
  ****************************************************************************/
 
-int exec_module(FAR const struct binary_s *binp,
+int exec_module(FAR struct binary_s *binp,
                 FAR const char *filename, FAR char * const *argv,
                 FAR char * const *envp);
 

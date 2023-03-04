@@ -458,15 +458,26 @@ static void qemu_pl011_rxint(struct uart_dev_s *dev, bool enable)
 static void qemu_pl011_txint(struct uart_dev_s *dev, bool enable)
 {
   struct pl011_uart_port_s *sport = (struct pl011_uart_port_s *)dev->priv;
+  irqstate_t flags;
+
+  flags = enter_critical_section();
 
   if (enable)
     {
       pl011_irq_tx_enable(sport);
+
+      /* Fake a TX interrupt here by just calling uart_xmitchars() with
+       * interrupts disabled (note this may recurse).
+       */
+
+      uart_xmitchars(dev);
     }
   else
     {
       pl011_irq_tx_disable(sport);
     }
+
+  leave_critical_section(flags);
 }
 
 /***************************************************************************
@@ -525,9 +536,11 @@ static int qemu_pl011_ioctl(struct file *filep, int cmd, unsigned long arg)
  * Name: qemu_pl011_irq_handler (and front-ends)
  *
  * Description:
- *   This is the common UART interrupt handler.  It should cal
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ***************************************************************************/
 
@@ -599,7 +612,6 @@ static int qemu_pl011_attach(struct uart_dev_s *dev)
   data  = &sport->data;
 
   ret = irq_attach(sport->irq_num, qemu_pl011_irq_handler, dev);
-  arm64_gic_irq_set_priority(sport->irq_num, IRQ_TYPE_LEVEL, 0);
 
   if (ret == OK)
     {
@@ -799,10 +811,6 @@ void qemu_earlyserialinit(void)
 #endif
 }
 
-/* Used to assure mutually exclusive access up_putc() */
-
-/* static sem_t g_putc_lock = SEM_INITIALIZER(1); */
-
 /***************************************************************************
  * Name: up_putc
  *
@@ -820,10 +828,10 @@ int up_putc(int ch)
     {
       /* Add CR */
 
-      up_lowputc('\r');
+      arm64_lowputc('\r');
     }
 
-  up_lowputc((uint8_t)ch);
+  arm64_lowputc((uint8_t)ch);
   return ch;
 }
 
@@ -868,10 +876,10 @@ int up_putc(int ch)
     {
       /* Add CR */
 
-      up_lowputc('\r');
+      arm64_lowputc('\r');
     }
 
-  up_lowputc((uint8_t)ch);
+  arm64_lowputc((uint8_t)ch);
   return ch;
 }
 

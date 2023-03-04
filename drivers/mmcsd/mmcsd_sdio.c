@@ -50,7 +50,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/sdio.h>
 #include <nuttx/mmcsd.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include "mmcsd.h"
 #include "mmcsd_sdio.h"
@@ -105,7 +105,7 @@ struct mmcsd_state_s
 {
   FAR struct sdio_dev_s *dev;      /* The SDIO device bound to this instance */
   uint8_t  crefs;                  /* Open references on the driver */
-  sem_t  sem;                      /* Assures mutually exclusive access to the slot */
+  mutex_t  lock;                   /* Assures mutually exclusive access to the slot */
 
   /* Status flags */
 
@@ -140,8 +140,8 @@ struct mmcsd_state_s
 
 /* Misc Helpers *************************************************************/
 
-static int    mmcsd_takesem(FAR struct mmcsd_state_s *priv);
-static void   mmcsd_givesem(FAR struct mmcsd_state_s *priv);
+static int    mmcsd_lock(FAR struct mmcsd_state_s *priv);
+static void   mmcsd_unlock(FAR struct mmcsd_state_s *priv);
 
 /* Command/response helpers *************************************************/
 
@@ -221,6 +221,12 @@ static int     mmcsd_probe(FAR struct mmcsd_state_s *priv);
 static int     mmcsd_removed(FAR struct mmcsd_state_s *priv);
 static int     mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv);
 static void    mmcsd_hwuninitialize(FAR struct mmcsd_state_s *priv);
+#ifdef CONFIG_MMCSD_IOCSUPPORT
+static int     mmcsd_iocmd(FAR struct mmcsd_state_s *priv,
+                           FAR struct mmc_ioc_cmd *ic_ptr);
+static int     mmcsd_multi_iocmd(FAR struct mmcsd_state_s *priv,
+                                 FAR struct mmc_ioc_multi_cmd *imc_ptr);
+#endif
 
 /****************************************************************************
  * Private Data
@@ -244,17 +250,17 @@ static const struct block_operations g_bops =
  * Misc Helpers
  ****************************************************************************/
 
-static int mmcsd_takesem(FAR struct mmcsd_state_s *priv)
+static int mmcsd_lock(FAR struct mmcsd_state_s *priv)
 {
   int ret;
 
-  /* Take the semaphore, giving exclusive access to the driver (perhaps
+  /* Take the lock, giving exclusive access to the driver (perhaps
    * waiting)
    */
 
   if (!up_interrupt_context() && !sched_idletask())
     {
-      ret = nxsem_wait_uninterruptible(&priv->sem);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return ret;
@@ -276,11 +282,11 @@ static int mmcsd_takesem(FAR struct mmcsd_state_s *priv)
   return ret;
 }
 
-static void mmcsd_givesem(FAR struct mmcsd_state_s *priv)
+static void mmcsd_unlock(FAR struct mmcsd_state_s *priv)
 {
   if (!up_interrupt_context() && !sched_idletask())
     {
-      /* Release the SDIO bus lock, then the MMC/SD driver semaphore in the
+      /* Release the SDIO bus lock, then the MMC/SD driver mutex in the
        * opposite order that they were taken to assure that no deadlock
        * conditions will arise.
        */
@@ -288,7 +294,7 @@ static void mmcsd_givesem(FAR struct mmcsd_state_s *priv)
 #ifdef CONFIG_SDIO_MUXBUS
       SDIO_LOCK(priv->dev, FALSE);
 #endif
-      nxsem_post(&priv->sem);
+      nxmutex_unlock(&priv->lock);
     }
 }
 
@@ -1184,7 +1190,7 @@ static int mmcsd_transferready(FAR struct mmcsd_state_s *priv)
 
   /* First, check if the card has been removed. */
 
-  if (!SDIO_PRESENT(priv->dev))
+  if (IS_EMPTY(priv) || !SDIO_PRESENT(priv->dev))
     {
       ferr("ERROR: Card has been removed\n");
       return -ENODEV;
@@ -1261,6 +1267,10 @@ static int mmcsd_transferready(FAR struct mmcsd_state_s *priv)
           ret = -EINVAL;
           goto errorout;
         }
+
+      /* Do not hog the CPU */
+
+      nxsig_usleep(1000);
 
       /* We are still in the programming state. Calculate the elapsed
        * time... we can't stay in this loop forever!
@@ -2028,14 +2038,14 @@ static int mmcsd_open(FAR struct inode *inode)
 
   DEBUGASSERT(priv->crefs < MAX_CREFS);
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
     }
 
   priv->crefs++;
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return OK;
 }
 
@@ -2058,14 +2068,14 @@ static int mmcsd_close(FAR struct inode *inode)
   /* Decrement the reference count on the block driver */
 
   DEBUGASSERT(priv->crefs > 0);
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
     }
 
   priv->crefs--;
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return OK;
 }
 
@@ -2094,7 +2104,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
 
   if (nsectors > 0)
     {
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2138,7 +2148,7 @@ static ssize_t mmcsd_read(FAR struct inode *inode, unsigned char *buffer,
           buffer += nread * priv->blocksize;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   /* On success, return the number of blocks read */
@@ -2172,7 +2182,7 @@ static ssize_t mmcsd_write(FAR struct inode *inode,
 
   if (nsectors > 0)
     {
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2216,7 +2226,7 @@ static ssize_t mmcsd_write(FAR struct inode *inode,
           buffer += nwrite * priv->blocksize;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   /* On success, return the number of blocks written */
@@ -2241,10 +2251,12 @@ static int mmcsd_geometry(FAR struct inode *inode, struct geometry *geometry)
 
   if (geometry)
     {
+      memset(geometry, 0, sizeof(*geometry));
+
       /* Is there a (supported) card inserted in the slot? */
 
       priv = (FAR struct mmcsd_state_s *)inode->i_private;
-      ret = mmcsd_takesem(priv);
+      ret = mmcsd_lock(priv);
       if (ret < 0)
         {
           return ret;
@@ -2278,7 +2290,7 @@ static int mmcsd_geometry(FAR struct inode *inode, struct geometry *geometry)
           ret = OK;
         }
 
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
     }
 
   return ret;
@@ -2302,7 +2314,7 @@ static int mmcsd_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
 
   /* Process the IOCTL by command */
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
@@ -2342,12 +2354,36 @@ static int mmcsd_ioctl(FAR struct inode *inode, int cmd, unsigned long arg)
       }
       break;
 
+#ifdef CONFIG_MMCSD_IOCSUPPORT
+    case MMC_IOC_CMD: /* MMCSD device ioctl commands */
+      {
+        finfo("MMC_IOC_CMD\n");
+        ret = mmcsd_iocmd(priv, (FAR struct mmc_ioc_cmd *)arg);
+        if (ret != OK)
+          {
+            ferr("ERROR: mmcsd_iocmd failed: %d\n", ret);
+          }
+      }
+      break;
+
+    case MMC_IOC_MULTI_CMD: /* MMCSD device ioctl muti commands */
+      {
+        finfo("MMC_IOC_MULTI_CMD\n");
+        ret = mmcsd_multi_iocmd(priv, (FAR struct mmc_ioc_multi_cmd *)arg);
+        if (ret != OK)
+          {
+            ferr("ERROR: mmcsd_iocmd failed: %d\n", ret);
+          }
+      }
+      break;
+#endif
+
     default:
       ret = -ENOTTY;
       break;
     }
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return ret;
 }
 
@@ -2379,7 +2415,7 @@ static void mmcsd_mediachange(FAR void *arg)
 
   /* Is there a card present in the slot? */
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return;
@@ -2410,7 +2446,7 @@ static void mmcsd_mediachange(FAR void *arg)
       SDIO_CALLBACKENABLE(priv->dev, SDIOMEDIA_INSERTED);
     }
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
 }
 
 /****************************************************************************
@@ -2659,6 +2695,8 @@ static int mmcsd_read_csd(FAR struct mmcsd_state_s *priv)
       return -EPERM;
     }
 
+  memset(buffer, 0, sizeof(buffer));
+
 #if defined(CONFIG_SDIO_DMA) && defined(CONFIG_ARCH_HAVE_SDIO_PREFLIGHT)
   /* If we think we are going to perform a DMA transfer, make sure that we
    * will be able to before we commit the card to the operation.
@@ -2753,6 +2791,359 @@ static int mmcsd_read_csd(FAR struct mmcsd_state_s *priv)
   SDIO_GOTEXTCSD(priv->dev, buffer);
 
   /* Return value:  One sector read */
+
+  return OK;
+}
+#endif
+
+/****************************************************************************
+ * Name: mmcsd_general_cmd_write
+ *
+ * Description:
+ *   Send cmd56 data, one sector size
+ *
+ ****************************************************************************/
+
+static int mmcsd_general_cmd_write(FAR struct mmcsd_state_s *priv,
+                                   FAR const uint8_t *buffer,
+                                   off_t startblock)
+{
+  int ret;
+
+  DEBUGASSERT(priv != NULL && buffer != NULL);
+
+  /* Check if the card is locked or write protected (either via software or
+   * via the mechanical write protect on the card)
+   */
+
+  if (mmcsd_wrprotected(priv))
+    {
+      ferr("ERROR: Card is locked or write protected\n");
+      return -EPERM;
+    }
+
+#if defined(CONFIG_SDIO_DMA) && defined(CONFIG_ARCH_HAVE_SDIO_PREFLIGHT)
+  /* If we think we are going to perform a DMA transfer, make sure that we
+   * will be able to before we commit the card to the operation.
+   */
+
+  if ((priv->caps & SDIO_CAPS_DMASUPPORTED) != 0)
+    {
+      ret = SDIO_DMAPREFLIGHT(priv->dev, buffer, priv->blocksize);
+      if (ret != OK)
+        {
+          return ret;
+        }
+    }
+#endif
+
+  /* Verify that the card is ready for the transfer.  The card may still be
+   * busy from the preceding write transfer.  It would be simpler to check
+   * for write busy at the end of each write, rather than at the beginning of
+   * each read AND write, but putting the busy-wait at the beginning of the
+   * transfer allows for more overlap and, hopefully, better performance
+   */
+
+  ret = mmcsd_transferready(priv);
+  if (ret != OK)
+    {
+      ferr("ERROR: Card not ready: %d\n", ret);
+      return ret;
+    }
+
+  /* Select the block size for the card */
+
+  ret = mmcsd_setblocklen(priv, priv->blocksize);
+  if (ret != OK)
+    {
+      ferr("ERROR: mmcsd_setblocklen failed: %d\n", ret);
+      return ret;
+    }
+
+  /* If Controller does not need DMA setup before the write then send CMD56
+   * now.
+   */
+
+  if ((priv->caps & SDIO_CAPS_DMABEFOREWRITE) == 0)
+    {
+      /* Send CMD56, WRITE_BLOCK, and verify good R1 status is returned */
+
+      mmcsd_sendcmdpoll(priv, MMCSD_CMD56WR, startblock);
+      ret = mmcsd_recv_r1(priv, MMCSD_CMD56WR);
+      if (ret != OK)
+        {
+          ferr("ERROR: mmcsd_recv_r1 for CMD56 failed: %d\n", ret);
+          return ret;
+        }
+    }
+
+  /* Configure SDIO controller hardware for the write transfer */
+
+  SDIO_BLOCKSETUP(priv->dev, priv->blocksize, 1);
+  SDIO_WAITENABLE(priv->dev,
+                  SDIOWAIT_TRANSFERDONE | SDIOWAIT_TIMEOUT | SDIOWAIT_ERROR,
+                  MMCSD_BLOCK_WDATADELAY);
+
+#ifdef CONFIG_SDIO_DMA
+  if ((priv->caps & SDIO_CAPS_DMASUPPORTED) != 0)
+    {
+      ret = SDIO_DMASENDSETUP(priv->dev, buffer, priv->blocksize);
+      if (ret != OK)
+        {
+          finfo("SDIO_DMASENDSETUP: error %d\n", ret);
+          SDIO_CANCEL(priv->dev);
+          return ret;
+        }
+    }
+  else
+#endif
+    {
+      SDIO_SENDSETUP(priv->dev, buffer, priv->blocksize);
+    }
+
+  /* If Controller needs DMA setup before write then only send CMD24 now. */
+
+  if ((priv->caps & SDIO_CAPS_DMABEFOREWRITE) != 0)
+    {
+      /* Send CMD56, WRITE_BLOCK, and verify good R1 status is returned */
+
+      mmcsd_sendcmdpoll(priv, MMCSD_CMD56WR, startblock);
+      ret = mmcsd_recv_r1(priv, MMCSD_CMD56WR);
+      if (ret != OK)
+        {
+          ferr("ERROR: mmcsd_recv_r1 for CMD56 failed: %d\n", ret);
+          SDIO_CANCEL(priv->dev);
+          return ret;
+        }
+    }
+
+  /* Wait for the transfer to complete */
+
+  ret = mmcsd_eventwait(priv, SDIOWAIT_TIMEOUT | SDIOWAIT_ERROR);
+  if (ret != OK)
+    {
+      ferr("ERROR: CMD56 transfer failed: %d\n", ret);
+      return ret;
+    }
+
+  /* Flag that a write transfer is pending that we will have to check for
+   * write complete at the beginning of the next transfer.
+   */
+
+  priv->wrbusy = true;
+
+#if defined(CONFIG_MMCSD_SDIOWAIT_WRCOMPLETE)
+  /* Arm the write complete detection with timeout */
+
+  SDIO_WAITENABLE(priv->dev, SDIOWAIT_WRCOMPLETE | SDIOWAIT_TIMEOUT,
+                  MMCSD_BLOCK_WDATADELAY);
+#endif
+
+  /* On success, return OK */
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: mmcsd_general_cmd_read
+ *
+ * Description:
+ *   Read cmd56 data, one sector size
+ *
+ ****************************************************************************/
+
+static int mmcsd_general_cmd_read(FAR struct mmcsd_state_s *priv,
+                                  FAR uint8_t *buffer, off_t startblock)
+{
+  int ret;
+
+  DEBUGASSERT(priv != NULL && buffer != NULL);
+
+  /* Check if the card is locked */
+
+  if (priv->locked)
+    {
+      ferr("ERROR: Card is locked\n");
+      return -EPERM;
+    }
+
+#if defined(CONFIG_SDIO_DMA) && defined(CONFIG_ARCH_HAVE_SDIO_PREFLIGHT)
+  /* If we think we are going to perform a DMA transfer, make sure that we
+   * will be able to before we commit the card to the operation.
+   */
+
+  if ((priv->caps & SDIO_CAPS_DMASUPPORTED) != 0)
+    {
+      ret = SDIO_DMAPREFLIGHT(priv->dev, buffer, priv->blocksize);
+      if (ret != OK)
+        {
+          return ret;
+        }
+    }
+#endif
+
+  /* Verify that the card is ready for the transfer.  The card may still be
+   * busy from the preceding write transfer.  It would be simpler to check
+   * for write busy at the end of each write, rather than at the beginning of
+   * each read AND write, but putting the busy-wait at the beginning of the
+   * transfer allows for more overlap and, hopefully, better performance
+   */
+
+  ret = mmcsd_transferready(priv);
+  if (ret != OK)
+    {
+      ferr("ERROR: Card not ready: %d\n", ret);
+      return ret;
+    }
+
+  /* Select the block size for the card */
+
+  ret = mmcsd_setblocklen(priv, priv->blocksize);
+  if (ret != OK)
+    {
+      ferr("ERROR: mmcsd_setblocklen failed: %d\n", ret);
+      return ret;
+    }
+
+  /* Configure SDIO controller hardware for the read transfer */
+
+  SDIO_BLOCKSETUP(priv->dev, priv->blocksize, 1);
+  SDIO_WAITENABLE(priv->dev,
+                  SDIOWAIT_TRANSFERDONE | SDIOWAIT_TIMEOUT | SDIOWAIT_ERROR,
+                  MMCSD_BLOCK_RDATADELAY);
+
+#ifdef CONFIG_SDIO_DMA
+  if ((priv->caps & SDIO_CAPS_DMASUPPORTED) != 0)
+    {
+      ret = SDIO_DMARECVSETUP(priv->dev, buffer, priv->blocksize);
+      if (ret != OK)
+        {
+          finfo("SDIO_DMARECVSETUP: error %d\n", ret);
+          SDIO_CANCEL(priv->dev);
+          return ret;
+        }
+    }
+  else
+#endif
+    {
+      SDIO_RECVSETUP(priv->dev, buffer, priv->blocksize);
+    }
+
+  /* Send CMD56: Read a sector size data and verify that good R1
+   * status is returned.
+   */
+
+  mmcsd_sendcmdpoll(priv, MMCSD_CMD56RD, startblock);
+  ret = mmcsd_recv_r1(priv, MMCSD_CMD56RD);
+  if (ret != OK)
+    {
+      ferr("ERROR: mmcsd_recv_r1 for CMD56 failed: %d\n", ret);
+      SDIO_CANCEL(priv->dev);
+      return ret;
+    }
+
+  /* Then wait for the data transfer to complete */
+
+  ret = mmcsd_eventwait(priv, SDIOWAIT_TIMEOUT | SDIOWAIT_ERROR);
+  if (ret != OK)
+    {
+      ferr("ERROR: CMD56 transfer failed: %d\n", ret);
+      return ret;
+    }
+
+  /* Return value:  OK */
+
+  return OK;
+}
+
+#ifdef CONFIG_MMCSD_IOCSUPPORT
+/****************************************************************************
+ * Name: mmcsd_iocmd
+ *
+ * Description:
+ *   MMCSD device ioctl commands.
+ *
+ ****************************************************************************/
+
+static int mmcsd_iocmd(FAR struct mmcsd_state_s *priv,
+                       FAR struct mmc_ioc_cmd *ic_ptr)
+{
+  int ret;
+
+  DEBUGASSERT(priv != NULL && ic_ptr != NULL);
+
+  if (!ic_ptr->is_acmd)
+    {
+      uint32_t opcode = ic_ptr->opcode & MMCSD_CMDIDX_MASK;
+      switch (opcode)
+        {
+        case MMCSD_CMDIDX56: /* support general commands */
+          {
+            if (ic_ptr->write_flag)
+              {
+                ret = mmcsd_general_cmd_write(priv,
+                      (FAR uint8_t *)(uintptr_t)(ic_ptr->data_ptr),
+                      ic_ptr->arg);
+                if (ret != OK)
+                  {
+                    ferr("mmcsd_iocmd MMCSD_CMDIDX56 write failed.\n");
+                    return ret;
+                  }
+              }
+            else
+              {
+                ret = mmcsd_general_cmd_read(priv,
+                      (FAR uint8_t *)(uintptr_t)(ic_ptr->data_ptr),
+                      ic_ptr->arg);
+                if (ret != OK)
+                  {
+                    ferr("mmcsd_iocmd MMCSD_CMDIDX56 read failed.\n");
+                    return ret;
+                  }
+              }
+          }
+          break;
+
+        default:
+          ferr("mmcsd_iocmd opcode unsupported.\n");
+          return -EINVAL;
+        }
+    }
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: mmcsd_multi_iocmd
+ *
+ * Description:
+ *   MMCSD device ioctl multi commands.
+ *
+ ****************************************************************************/
+
+static int mmcsd_multi_iocmd(FAR struct mmcsd_state_s *priv,
+                             FAR struct mmc_ioc_multi_cmd *imc_ptr)
+{
+  int ret;
+  int i;
+
+  DEBUGASSERT(priv != NULL && imc_ptr != NULL);
+
+  if (imc_ptr->num_of_cmds > MMC_IOC_MAX_CMDS)
+    {
+      ferr("mmcsd_multi_iocmd too many cmds.\n");
+      return -EINVAL;
+    }
+
+  for (i = 0; i < imc_ptr->num_of_cmds; ++i)
+    {
+      ret = mmcsd_iocmd(priv, &imc_ptr->cmds[i]);
+      if (ret != OK)
+        {
+          ferr("cmds %d failed.\n", i);
+          return ret;
+        }
+    }
 
   return OK;
 }
@@ -3448,7 +3839,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
 {
   int ret;
 
-  ret = mmcsd_takesem(priv);
+  ret = mmcsd_lock(priv);
   if (ret < 0)
     {
       return ret;
@@ -3464,7 +3855,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
   if (SDIO_ATTACH(priv->dev))
     {
       ferr("ERROR: Unable to attach MMC/SD interrupts\n");
-      mmcsd_givesem(priv);
+      mmcsd_unlock(priv);
       return -EBUSY;
     }
 
@@ -3525,7 +3916,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
    * the slot was successfully configured.
    */
 
-  mmcsd_givesem(priv);
+  mmcsd_unlock(priv);
   return ret;
 }
 
@@ -3591,7 +3982,7 @@ int mmcsd_slotinitialize(int minor, FAR struct sdio_dev_s *dev)
   /* Initialize the MMC/SD state structure */
 
   memset(priv, 0, sizeof(struct mmcsd_state_s));
-  nxsem_init(&priv->sem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   /* Bind the MMCSD driver to the MMCSD state structure */
 
@@ -3648,7 +4039,7 @@ int mmcsd_slotinitialize(int minor, FAR struct sdio_dev_s *dev)
 errout_with_hwinit:
   mmcsd_hwuninitialize(priv);
 errout_with_alloc:
-  nxsem_destroy(&priv->sem);
+  nxmutex_destroy(&priv->lock);
   kmm_free(priv);
   return ret;
 }

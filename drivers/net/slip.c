@@ -46,6 +46,7 @@
 #include <nuttx/kthread.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/mm/iob.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/ip.h>
@@ -109,11 +110,6 @@
 
 #define SLIP_WDDELAY   (1*1000000)
 
-/* This is a helper pointer for accessing the contents of the ip header */
-
-#define IPv4BUF        ((FAR struct ipv4_hdr_s *)priv->dev.d_buf)
-#define IPv6BUF        ((FAR struct ipv6_hdr_s *)priv->dev.d_buf)
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -127,7 +123,6 @@ struct slip_driver_s
   volatile bool bifup;      /* true:ifup false:ifdown */
   bool          txnodelay;  /* True: nxsig_usleep() not needed */
   struct file   file;       /* TTY file descriptor */
-  uint16_t      rxlen;      /* The number of bytes in rxbuf */
   pid_t         rxpid;      /* Receiver thread ID */
   pid_t         txpid;      /* Transmitter thread ID */
   sem_t         waitsem;    /* Mutually exclusive access to the network */
@@ -135,8 +130,7 @@ struct slip_driver_s
   /* This holds the information visible to the NuttX network */
 
   struct net_driver_s dev;  /* Interface understood by the network */
-  uint8_t rxbuf[CONFIG_NET_SLIP_PKTSIZE + 2];
-  uint8_t txbuf[CONFIG_NET_SLIP_PKTSIZE + 2];
+  FAR struct iob_s *rxiob;
 };
 
 /****************************************************************************
@@ -152,9 +146,6 @@ static struct slip_driver_s g_slip[CONFIG_NET_SLIP_NINTERFACES];
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
-
-static int slip_semtake(FAR struct slip_driver_s *priv);
-static void slip_forcetake(FAR struct slip_driver_s *priv);
 
 /* Common TX logic */
 
@@ -186,45 +177,6 @@ static int slip_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac);
  ****************************************************************************/
 
 /****************************************************************************
- * Name: slip_semtake
- ****************************************************************************/
-
-static int slip_semtake(FAR struct slip_driver_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
-
-#define slip_semgive(p) nxsem_post(&(p)->waitsem);
-
-/****************************************************************************
- * Name: slip_forcetake
- *
- * Description:
- *   This is just another wrapper but this one continues even if the thread
- *   is canceled.  This must be done in certain conditions where were must
- *   continue in order to clean-up resources.
- *
- ****************************************************************************/
-
-static void slip_forcetake(FAR struct slip_driver_s *priv)
-{
-  int ret;
-
-  do
-    {
-      ret = nxsem_wait_uninterruptible(&priv->waitsem);
-
-      /* The only expected error would -ECANCELED meaning that the
-       * parent thread has been canceled.  We have to continue and
-       * terminate the poll in this case.
-       */
-
-      DEBUGASSERT(ret == OK || ret == -ECANCELED);
-    }
-  while (ret < 0);
-}
-
-/****************************************************************************
  * Name: slip_write
  *
  * Description:
@@ -244,6 +196,32 @@ static inline void slip_write(FAR struct slip_driver_s *priv,
 
   while (file_write(&priv->file, buffer, len) < 0)
     {
+    }
+}
+
+/****************************************************************************
+ * Name: slip_write_iob
+ *
+ * Description:
+ *   Just an inline wrapper around IOB writing.
+ *
+ * Input Parameters:
+ *   priv - Reference to the driver state structure
+ *   iob - IO Buffer data to send
+ *   len - Buffer length in bytes
+ *
+ ****************************************************************************/
+
+static inline void slip_write_iob(FAR struct slip_driver_s *priv,
+                                  FAR struct iob_s **iob, int len)
+{
+  while (len > 0 && (*iob)->io_pktlen > 0)
+    {
+      int nbytes = MIN(len, (*iob)->io_len);
+      slip_write(priv, IOB_DATA(*iob), nbytes);
+
+      len -= nbytes;
+      *iob = iob_trimhead(*iob, nbytes);
     }
 }
 
@@ -282,8 +260,7 @@ static inline void slip_putc(FAR struct slip_driver_s *priv, int ch)
 
 static void slip_transmit(FAR struct slip_driver_s *priv)
 {
-  uint8_t *src;
-  uint8_t *start;
+  uint8_t  src;
   uint8_t  esc;
   int      remaining;
   int      len;
@@ -301,14 +278,13 @@ static void slip_transmit(FAR struct slip_driver_s *priv)
 
   /* For each byte in the packet, send the appropriate character sequence */
 
-  src       = priv->dev.d_buf;
+  iob_copyout(&src, priv->dev.d_iob, 1, 0);
   remaining = priv->dev.d_len;
-  start     = src;
   len       = 0;
 
   while (remaining-- > 0)
     {
-      switch (*src)
+      switch (src)
         {
           /* If it's the same code as an END character, we send a special two
            * character code so as not to make the receiver think we sent an
@@ -333,13 +309,13 @@ static void slip_transmit(FAR struct slip_driver_s *priv)
 
               if (len > 0)
                 {
-                  slip_write(priv, start, len);
+                  slip_write_iob(priv, &priv->dev.d_iob, len);
                 }
 
               /* Reset */
 
-              start = src + 1;
-              len   = 0;
+              priv->dev.d_iob = iob_trimhead(priv->dev.d_iob, 1);
+              len             = 0;
 
               /* Then send the escape sequence */
 
@@ -355,9 +331,9 @@ static void slip_transmit(FAR struct slip_driver_s *priv)
             break;
         }
 
-      /* Point to the next character in the packet */
+      /* Copyout the next character in the packet */
 
-      src++;
+      iob_copyout(&src, priv->dev.d_iob, 1, len);
     }
 
   /* We have looked at every character in the packet.  Now flush any unsent
@@ -366,7 +342,7 @@ static void slip_transmit(FAR struct slip_driver_s *priv)
 
   if (len > 0)
     {
-      slip_write(priv, start, len);
+      slip_write_iob(priv, &priv->dev.d_iob, len);
     }
 
   /* And send the END token */
@@ -402,17 +378,7 @@ static int slip_txpoll(FAR struct net_driver_s *dev)
   FAR struct slip_driver_s *priv =
     (FAR struct slip_driver_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
-   */
-
-  if (priv->dev.d_len > 0)
-    {
-      if (!devif_loopback(&priv->dev))
-        {
-          slip_transmit(priv);
-        }
-    }
+  slip_transmit(priv);
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
@@ -449,7 +415,7 @@ static int slip_txtask(int argc, FAR char *argv[])
    */
 
   priv = &g_slip[index];
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Loop forever */
 
@@ -457,7 +423,7 @@ static int slip_txtask(int argc, FAR char *argv[])
     {
       /* Wait for the timeout to expire (or until we are signaled by  */
 
-      ret = slip_semtake(priv);
+      ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
           DEBUGASSERT(ret == -ECANCELED);
@@ -466,13 +432,13 @@ static int slip_txtask(int argc, FAR char *argv[])
 
       if (!priv->txnodelay)
         {
-          slip_semgive(priv);
+          nxsem_post(&priv->waitsem);
           nxsig_usleep(SLIP_WDDELAY);
         }
       else
         {
           priv->txnodelay = false;
-          slip_semgive(priv);
+          nxsem_post(&priv->waitsem);
         }
 
       /* Is the interface up? */
@@ -482,7 +448,6 @@ static int slip_txtask(int argc, FAR char *argv[])
           /* Poll the networking layer for new XMIT data. */
 
           net_lock();
-          priv->dev.d_buf = priv->txbuf;
 
           /* perform the normal TX poll */
 
@@ -568,9 +533,9 @@ static inline void slip_receive(FAR struct slip_driver_s *priv)
              * are in turn sent to try to detect line noise.
              */
 
-            if (priv->rxlen > 0)
+            if (priv->rxiob->io_pktlen > 0)
               {
-                ninfo("Received packet size %d\n", priv->rxlen);
+                ninfo("Received packet size %d\n", priv->rxiob->io_pktlen);
                 return;
               }
           }
@@ -615,9 +580,10 @@ static inline void slip_receive(FAR struct slip_driver_s *priv)
 
         default:
           {
-            if (priv->rxlen < CONFIG_NET_SLIP_PKTSIZE + 2)
+            if (priv->rxiob->io_pktlen < CONFIG_NET_SLIP_PKTSIZE + 2)
               {
-                priv->rxbuf[priv->rxlen++] = ch;
+                iob_copyin(priv->rxiob, &ch, 1, priv->rxiob->io_pktlen,
+                           false);
               }
           }
           break;
@@ -645,8 +611,9 @@ static inline void slip_receive(FAR struct slip_driver_s *priv)
 static int slip_rxtask(int argc, FAR char *argv[])
 {
   FAR struct slip_driver_s *priv;
+  FAR struct net_driver_s *dev;
   unsigned int index = *(argv[1]) - '0';
-  int ch;
+  uint8_t ch;
 
   nerr("index: %d\n", index);
   DEBUGASSERT(index < CONFIG_NET_SLIP_NINTERFACES);
@@ -656,10 +623,11 @@ static int slip_rxtask(int argc, FAR char *argv[])
    */
 
   priv = &g_slip[index];
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Loop forever */
 
+  dev = &priv->dev;
   for (; ; )
     {
       /* Wait for the next character to be available on the input stream. */
@@ -674,6 +642,13 @@ static int slip_rxtask(int argc, FAR char *argv[])
           continue;
         }
 
+      /* Prepare our IOB for data receiving, may block until we get one. */
+
+      DEBUGASSERT(priv->rxiob == NULL);
+
+      priv->rxiob = iob_alloc(false);
+      iob_reserve(priv->rxiob, CONFIG_NET_LL_GUARDSIZE);
+
       /* We have something...
        *
        * END characters may appear at packet boundaries BEFORE as well as
@@ -682,7 +657,7 @@ static int slip_rxtask(int argc, FAR char *argv[])
 
       if (ch == SLIP_END)
         {
-          priv->rxlen = 0;
+          /* Do nothing. */
         }
 
       /* Otherwise, we are in danger of being out-of-sync.  Apparently the
@@ -691,8 +666,7 @@ static int slip_rxtask(int argc, FAR char *argv[])
 
       else
         {
-          priv->rxbuf[0] = (uint8_t)ch;
-          priv->rxlen    = 1;
+          iob_copyin(priv->rxiob, &ch, 1, 0, false);
         }
 
       /* Copy the data data from the hardware to priv->rxbuf until we put
@@ -704,8 +678,8 @@ static int slip_rxtask(int argc, FAR char *argv[])
       /* Handle the IP input.  Get exclusive access to the network. */
 
       net_lock();
-      priv->dev.d_buf = priv->rxbuf;
-      priv->dev.d_len = priv->rxlen;
+      netdev_iob_replace(&priv->dev, priv->rxiob);
+      priv->rxiob = NULL;
 
       NETDEV_RXPACKETS(&priv->dev);
 
@@ -787,8 +761,8 @@ static int slip_ifup(FAR struct net_driver_s *dev)
 
 #ifdef CONFIG_NET_IPv4
   nerr("Bringing up: %d.%d.%d.%d\n",
-       dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-       (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+        (int)(dev->d_ipaddr & 0xff), (int)((dev->d_ipaddr >> 8) & 0xff),
+        (int)((dev->d_ipaddr >> 16) & 0xff), (int)(dev->d_ipaddr >> 24));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -888,9 +862,6 @@ static int slip_txavail(FAR struct net_driver_s *dev)
 #ifdef CONFIG_NET_MCASTGROUP
 static int slip_addmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 {
-  FAR struct slip_driver_s *priv =
-    (FAR struct slip_driver_s *)dev->d_private;
-
   /* Add the MAC address to the hardware multicast routing table */
 
   return OK;
@@ -918,9 +889,6 @@ static int slip_addmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 #ifdef CONFIG_NET_MCASTGROUP
 static int slip_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 {
-  FAR struct slip_driver_s *priv =
-    (FAR struct slip_driver_s *)dev->d_private;
-
   /* Add the MAC address to the hardware multicast routing table */
 
   return OK;
@@ -954,7 +922,7 @@ static int slip_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 int slip_initialize(int intf, FAR const char *devname)
 {
   FAR struct slip_driver_s *priv;
-  char buffer[8];
+  char buffer[12];
   FAR char *argv[2];
   int ret;
 
@@ -987,17 +955,15 @@ int slip_initialize(int intf, FAR const char *devname)
   /* Initialize the wait semaphore */
 
   nxsem_init(&priv->waitsem, 0, 0);
-  nxsem_set_protocol(&priv->waitsem, SEM_PRIO_NONE);
 
   /* Start the SLIP receiver kernel thread */
 
-  snprintf(buffer, 8, "%d", intf);
+  snprintf(buffer, sizeof(buffer), "%d", intf);
   argv[0] = buffer;
   argv[1] = NULL;
 
   ret = kthread_create("rxslip", CONFIG_NET_SLIP_DEFPRIO,
-                       CONFIG_NET_SLIP_STACKSIZE, slip_rxtask,
-                       (FAR char * const *)argv);
+                       CONFIG_NET_SLIP_STACKSIZE, slip_rxtask, argv);
   if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
@@ -1008,13 +974,12 @@ int slip_initialize(int intf, FAR const char *devname)
 
   /* Wait and make sure that the receive task is started. */
 
-  slip_forcetake(priv);
+  nxsem_wait_uninterruptible(&priv->waitsem);
 
   /* Start the SLIP transmitter kernel thread */
 
   ret = kthread_create("txslip", CONFIG_NET_SLIP_DEFPRIO,
-                       CONFIG_NET_SLIP_STACKSIZE, slip_txtask,
-                       (FAR char * const *)argv);
+                       CONFIG_NET_SLIP_STACKSIZE, slip_txtask, argv);
   if (ret < 0)
     {
       nerr("ERROR: Failed to start receiver task\n");
@@ -1025,11 +990,11 @@ int slip_initialize(int intf, FAR const char *devname)
 
   /* Wait and make sure that the transmit task is started. */
 
-  slip_forcetake(priv);
+  nxsem_wait_uninterruptible(&priv->waitsem);
 
   /* Bump the semaphore count so that it can now be used as a mutex */
 
-  slip_semgive(priv);
+  nxsem_post(&priv->waitsem);
 
   /* Register the device with the OS so that socket IOCTLs can be performed */
 

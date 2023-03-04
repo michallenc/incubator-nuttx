@@ -42,6 +42,7 @@
 
 #include "esp32_smp.h"
 #include "esp32_gpio.h"
+#include "esp32_rtc_gpio.h"
 
 #include "esp32_irq.h"
 
@@ -115,18 +116,6 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-/* g_current_regs[] holds a reference to the current interrupt level
- * register storage structure.  It is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-/* For the case of architectures with multiple CPUs, then there must be one
- * such value for each processor that can receive an interrupt.
- */
-
-volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
 
 #if defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 15
 /* In the SMP configuration, we will need custom interrupt stacks.
@@ -508,6 +497,10 @@ void up_irqinitialize(void)
 
   esp32_gpioirqinitialize(0);
 #endif
+
+  /* Initialize RTCIO interrupt support */
+
+  esp32_rtcioirqinitialize();
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* And finally, enable interrupts.  Also clears PS.EXCM */

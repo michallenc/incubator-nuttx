@@ -149,7 +149,7 @@
  */
 
 #define SAVE_USERCONTEXT(tcb) \
-  z8_saveusercontext((tcb)->xcp.regs)
+  up_saveusercontext((tcb)->xcp.regs)
 
 /* Restore the full context -- either a simple user state save or the full,
  * IRQ state save.
@@ -157,11 +157,6 @@
 
 #define RESTORE_USERCONTEXT(tcb) \
   z8_restorecontext((tcb)->xcp.regs)
-
-/* Dump the current machine registers */
-
-#define _REGISTER_DUMP() \
-  z8_registerdump()
 
 /************************************************************************************
  * Public Types
@@ -217,7 +212,7 @@ void up_ack_irq(int irq);
 
 /* Defined in z8_saveusercontext.asm */
 
-int z8_saveusercontext(FAR chipreg_t *regs);
+int up_saveusercontext(FAR chipreg_t *regs);
 
 /* Defined in z8_saveirqcontext.c */
 
@@ -231,10 +226,6 @@ void z8_restorecontext(FAR chipreg_t *regs);
 
 void z8_sigsetup(FAR struct tcb_s *tcb, sig_deliver_t sigdeliver,
                  FAR chipreg_t *regs);
-
-/* Defined in z8_registerdump.c */
-
-void z8_registerdump(void);
 
 #ifdef __cplusplus
 }

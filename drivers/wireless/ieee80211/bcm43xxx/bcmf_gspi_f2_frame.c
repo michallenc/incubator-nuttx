@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
+#include <nuttx/signal.h>
 
 #include <debug.h>
 #include <errno.h>
@@ -40,7 +41,7 @@
 #include "bcmf_bdc.h"
 #include "bcmf_utils.h"
 
- #include "bcmf_netdev.h"
+#include "bcmf_netdev.h"
 
 #include "bcmf_sdio_regs.h"
 
@@ -129,7 +130,7 @@ int process_f2_frame_header(FAR bcmf_interface_dev_t *gbus,
  ****************************************************************************/
 
 /****************************************************************************
- * Name: read_f2_frame
+ * Name: bcmf_gspi_read_f2_frame
  *
  * Description:
  *    Read and process an F2 frame.
@@ -264,13 +265,13 @@ int bcmf_gspi_read_f2_frame(FAR struct bcmf_dev_s *priv,
 
         /* Queue frame and notify network layer frame is available */
 
-        if (nxsem_wait_uninterruptible(&gbus->queue_mutex) < 0)
+        if (nxmutex_lock(&gbus->queue_lock) < 0)
           {
             DEBUGPANIC();
           }
 
         list_add_tail(&gbus->rx_queue, &iframe->list_entry);
-        nxsem_post(&gbus->queue_mutex);
+        nxmutex_unlock(&gbus->queue_lock);
 
         bcmf_netdev_notify_rx(priv);
 
@@ -327,11 +328,11 @@ int bcmf_gspi_send_f2_frame(FAR struct bcmf_dev_s *priv)
     {
       /* TODO handle this case */
 
-      wlerr("No credit to send frame\n");
-      return -EAGAIN;
+      wlwarn("No credit to send frame\n");
+      nxsig_usleep(10 * 1000);
     }
 
-  if (nxsem_wait_uninterruptible(&gbus->queue_mutex) < 0)
+  if (nxmutex_lock(&gbus->queue_lock) < 0)
     {
       DEBUGPANIC();
     }
@@ -340,7 +341,7 @@ int bcmf_gspi_send_f2_frame(FAR struct bcmf_dev_s *priv)
                                  bcmf_interface_frame_t,
                                  list_entry);
 
-  nxsem_post(&gbus->queue_mutex);
+  nxmutex_unlock(&gbus->queue_lock);
 
   is_txframe = iframe->tx;
 

@@ -168,8 +168,6 @@ static void timer_initialize(void)
       snprintf(devname, sizeof(devname), "/dev/timer%d", i);
       cxd56_timer_initialize(devname, i);
     }
-
-  return;
 }
 #endif
 
@@ -378,13 +376,14 @@ int cxd56_bringup(void)
     }
 #endif
 
+#ifndef CONFIG_CXD56_CAMERA_LATE_INITIALIZE
 #ifdef CONFIG_VIDEO_ISX019
   ret = isx019_initialize();
   if (ret < 0)
     {
       _err("ERROR: Failed to initialize ISX019 board. %d\n", errno);
     }
-#endif
+#endif /* CONFIG_VIDEO_ISX019 */
 
 #ifdef CONFIG_VIDEO_ISX012
   ret = isx012_initialize();
@@ -392,7 +391,7 @@ int cxd56_bringup(void)
     {
       _err("ERROR: Failed to initialize ISX012 board. %d\n", errno);
     }
-#endif
+#endif /* CONFIG_VIDEO_ISX012 */
 
 #ifdef CONFIG_CXD56_CISIF
   ret = cxd56_cisif_initialize();
@@ -401,7 +400,8 @@ int cxd56_bringup(void)
       _err("ERROR: Failed to initialize CISIF. %d\n", errno);
       ret = ERROR;
     }
-#endif
+#endif /* CONFIG_CXD56_CISIF */
+#endif /* CONFIG_CXD56_CAMERA_LATE_INITIALIZE */
 
 #if defined(CONFIG_CXD56_SDIO)
   /* In order to prevent Hi-Z from being input to the SD Card controller,
@@ -434,6 +434,22 @@ int cxd56_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_CXD56_SDCARD_AUTOMOUNT
+  /* Initialize the auto-mounter */
+
+  board_automount_initialize();
+#endif
+
+#if defined(CONFIG_CXD56_EMMC) && !defined(CONFIG_CXD56_EMMC_LATE_INITIALIZE)
+  /* Mount the eMMC block driver */
+
+  ret = board_emmc_initialize();
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize eMMC: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_CPUFREQ_RELEASE_LOCK
   /* Enable dynamic clock control and CPU clock down for power saving */
 
@@ -458,6 +474,14 @@ int cxd56_bringup(void)
   if (ret < 0)
     {
       _err("ERROR: Failed to initialize GS2200M.\n");
+    }
+#endif
+
+#if defined(CONFIG_MODEM_ALT1250) && !defined(CONFIG_CXD56_LTE_LATE_INITIALIZE)
+  ret = board_alt1250_initialize("/dev/alt1250");
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize ALT1250.\n");
     }
 #endif
 

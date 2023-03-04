@@ -1,0 +1,88 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+comment "NRF53 Configuration Options"
+
+# NRF53 Families
+
+choice
+	prompt "NRF53 Chip Selection"
+	default ARCH_CHIP_NRF5340
+	depends on ARCH_CHIP_NRF53
+
+config ARCH_CHIP_NRF5340
+	bool "NRF5340"
+
+endchoice # NRF53 Chip Selection
+
+config NRF53_APPCORE
+	bool
+	default n
+
+config NRF53_NETCORE
+	bool
+	default n
+
+choice
+	prompt "NRF5340 Core Selection"
+	default ARCH_CHIP_NRF5340_CPUAPP
+	depends on ARCH_CHIP_NRF5340
+
+config ARCH_CHIP_NRF5340_CPUAPP
+	bool "NRF53 App core"
+	select NRF53_APPCORE
+	select ARCH_HAVE_FPU
+
+config ARCH_CHIP_NRF5340_CPUNET
+	bool "NRF53 Net core"
+	select NRF53_NETCORE
+
+endchoice # NRF5340 Core Selection
+
+if NRF53_APPCORE
+
+config NRF53_NET_BOOT
+	bool "NRF53 Net core configuration"
+	default y
+
+if NRF53_NET_BOOT
+
+config NRF53_NET_POWER_ON_BOOT
+	bool "NRF53 Power Net core on App core boot"
+	default y
+
+config NRF53_NET_GPIO_ALLOW_ALL
+	bool "NRF53 allow all GPIO for Net core"
+	default y
+
+endif # NRF53_NET_BOOT
+
+endif # NRF53_APPCORE
+
+config NRF53_ENABLE_APPROTECT
+	bool "NRF53 enable APPROTECT"
+	default n
+
+# Peripheral Selection
+
+config NRF53_UART
+	bool
+	default n
+
+menu "NRF53 Peripheral Selection"
+
+config NRF53_UART0
+	bool "UART0"
+	default n
+	select UART0_SERIALDRIVER
+	select NRF53_UART
+
+config NRF53_UART1
+	bool "UART1"
+	default n
+	select UART1_SERIALDRIVER
+	select NRF53_UART
+
+endmenu # NRF53 Peripheral Selection

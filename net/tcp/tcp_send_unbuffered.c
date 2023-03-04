@@ -42,7 +42,6 @@
 #include <nuttx/semaphore.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/net/tcp.h>
 
 #include "netdev/netdev.h"
@@ -67,9 +66,6 @@
 #  define NEED_IPDOMAIN_SUPPORT 1
 #endif
 
-#define TCPIPv4BUF ((FAR struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv4_HDRLEN])
-#define TCPIPv6BUF ((FAR struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN])
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -80,7 +76,7 @@
 
 struct send_s
 {
-  FAR struct socket      *snd_sock;     /* Points to the parent socket structure */
+  FAR struct tcp_conn_s  *snd_conn;     /* The TCP connection of interest */
   FAR struct devif_callback_s *snd_cb;  /* Reference to callback instance */
   sem_t                   snd_sem;      /* Used to wake up the waiting thread */
   FAR const uint8_t      *snd_buffer;   /* Points to the buffer of data to send */
@@ -106,49 +102,6 @@ struct send_s
  ****************************************************************************/
 
 /****************************************************************************
- * Name: tcpsend_ipselect
- *
- * Description:
- *   If both IPv4 and IPv6 support are enabled, then we will need to select
- *   which one to use when generating the outgoing packet.  If only one
- *   domain is selected, then the setup is already in place and we need do
- *   nothing.
- *
- * Input Parameters:
- *   dev    - The structure of the network driver that caused the event
- *   pstate - sendto state structure
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-#ifdef NEED_IPDOMAIN_SUPPORT
-static inline void tcpsend_ipselect(FAR struct net_driver_s *dev,
-                                    FAR struct tcp_conn_s *conn)
-{
-  /* Which domain does the socket support */
-
-  if (conn->domain == PF_INET)
-    {
-      /* Select the IPv4 domain */
-
-      tcp_ipv4_select(dev);
-    }
-  else /* if (conn->domain == PF_INET6) */
-    {
-      /* Select the IPv6 domain */
-
-      DEBUGASSERT(conn->domain == PF_INET6);
-      tcp_ipv6_select(dev);
-    }
-}
-#endif
-
-/****************************************************************************
  * Name: tcpsend_eventhandler
  *
  * Description:
@@ -172,19 +125,15 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
                                      FAR void *pvpriv, uint16_t flags)
 {
   FAR struct send_s *pstate = pvpriv;
-  FAR struct socket *psock;
   FAR struct tcp_conn_s *conn;
 
   DEBUGASSERT(pstate != NULL);
-
-  psock = pstate->snd_sock;
-  DEBUGASSERT(psock != NULL);
 
   /* Get the TCP connection pointer reliably from
    * the corresponding TCP socket.
    */
 
-  conn = psock->s_conn;
+  conn = pstate->snd_conn;
   DEBUGASSERT(conn != NULL);
 
   /* The TCP socket is connected and, hence, should be bound to a device.
@@ -227,7 +176,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
       if (conn->domain == PF_INET)
 #endif
         {
-          DEBUGASSERT(IFF_IS_IPv4(dev->d_flags));
           tcp = TCPIPv4BUF;
         }
 #endif /* CONFIG_NET_IPv4 */
@@ -237,7 +185,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
       else
 #endif
         {
-          DEBUGASSERT(IFF_IS_IPv6(dev->d_flags));
           tcp = TCPIPv6BUF;
         }
 #endif /* CONFIG_NET_IPv6 */
@@ -330,15 +277,14 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
        * place and we need do nothing.
        */
 
-      tcpsend_ipselect(dev, conn);
+      tcp_ip_select(conn);
 #endif
       /* Then set-up to send that amount of data. (this won't actually
        * happen until the polling cycle completes).
        */
 
-      devif_send(dev,
-                 &pstate->snd_buffer[pstate->snd_acked],
-                 sndlen);
+      devif_send(dev, &pstate->snd_buffer[pstate->snd_acked],
+                 sndlen, tcpip_hdrsize(conn));
 
       /* Continue waiting */
 
@@ -413,13 +359,18 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
            * place and we need do nothing.
            */
 
-          tcpsend_ipselect(dev, conn);
+          tcp_ip_select(conn);
 #endif
           /* Then set-up to send that amount of data. (this won't actually
            * happen until the polling cycle completes).
            */
 
-          devif_send(dev, &pstate->snd_buffer[pstate->snd_sent], sndlen);
+          devif_send(dev, &pstate->snd_buffer[pstate->snd_sent],
+                     sndlen, tcpip_hdrsize(conn));
+          if (dev->d_sndlen == 0)
+            {
+              return flags;
+            }
 
           /* Update the amount of data sent (but not necessarily ACKed) */
 
@@ -605,17 +556,11 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
     }
 
   memset(&state, 0, sizeof(struct send_s));
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0);    /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
-  state.snd_sock      = psock;             /* Socket descriptor to use */
-  state.snd_buflen    = len;               /* Number of bytes to send */
-  state.snd_buffer    = buf;               /* Buffer to send from */
+  state.snd_conn   = conn; /* Socket descriptor to use */
+  state.snd_buflen = len;  /* Number of bytes to send */
+  state.snd_buffer = buf;  /* Buffer to send from */
 
   if (len > 0)
     {
@@ -647,14 +592,14 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
           tcp_send_txnotify(psock, conn);
 
           /* Wait for the send to complete or an error to occur:  NOTES:
-           * net_lockedwait will also terminate if a signal is received.
+           * net_sem_wait will also terminate if a signal is received.
            */
 
           for (; ; )
             {
               uint32_t acked = state.snd_acked;
 
-              ret = net_timedwait(&state.snd_sem,
+              ret = net_sem_timedwait(&state.snd_sem,
                                   _SO_TIMEOUT(conn->sconn.s_sndtimeo));
               if (ret != -ETIMEDOUT || acked == state.snd_acked)
                 {
@@ -686,9 +631,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
       goto errout;
     }
 
-  /* If net_timedwait failed, then we were probably reawakened by a signal.
-   * In this case, net_timedwait will have returned negated errno
-   * appropriately.
+  /* If net_sem_timedwait failed, then we were probably reawakened by a
+   * signal. In this case, net_sem_timedwait will have returned negated
+   * errno appropriately.
    */
 
   if (ret < 0)

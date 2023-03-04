@@ -907,6 +907,7 @@ static inline void sam_serialout(struct sam_dev_s *priv, int offset,
  * Name: sam_restoreusartint
  ****************************************************************************/
 
+#ifdef CONFIG_SERIAL_TERMIOS
 static inline void sam_restoreusartint(struct sam_dev_s *priv, uint32_t imr)
 {
   /* Restore the previous interrupt state (assuming all interrupts
@@ -915,6 +916,7 @@ static inline void sam_restoreusartint(struct sam_dev_s *priv, uint32_t imr)
 
   sam_serialout(priv, SAM_UART_IER_OFFSET, imr);
 }
+#endif
 
 /****************************************************************************
  * Name: sam_disableallints
@@ -1388,9 +1390,11 @@ static void sam_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the common UART/USART interrupt handler.  It will be invoked
- *   when an interrupt received on the device.  It should call
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   when an interrupt is received on the 'irq'.  It should call
+ *   uart_xmitchars or uart_recvchars to perform the appropriate data
+ *   transfers.  The interrupt handling logic must be able to map the 'arg'
+ *   to the appropriate uart_dev_s structure in order to call these
+ *   functions.
  *
  ****************************************************************************/
 

@@ -153,7 +153,7 @@ struct proc_envinfo_s
 
 static FAR const char *g_policy[4] =
 {
-  "SCHED_FIFO", "SCHED_RR", "SCHED_SPORADIC", "SCHED_OTHER"
+  "SCHED_FIFO", "SCHED_RR", "SCHED_SPORADIC"
 };
 
 /****************************************************************************
@@ -397,32 +397,6 @@ static FAR const struct proc_node_s * const g_groupinfo[] =
 };
 #define PROC_NGROUPNODES (sizeof(g_groupinfo)/sizeof(FAR const struct proc_node_s * const))
 
-/* Names of task/thread states */
-
-static FAR const char * const g_statenames[] =
-{
-  "Invalid",
-  "Waiting,Unlock",
-  "Ready",
-#ifdef CONFIG_SMP
-  "Assigned",
-#endif
-  "Running",
-  "Inactive",
-  "Waiting,Semaphore",
-  "Waiting,Signal"
-#ifndef CONFIG_DISABLE_MQUEUE
-  , "Waiting,MQ empty"
-  , "Waiting,MQ full"
-#endif
-#ifdef CONFIG_PAGING
-  , "Waiting,Paging fill"
-#endif
-#ifdef CONFIG_SIG_SIGSTOP_ACTION
-  , "Stopped"
-#endif
-};
-
 static FAR const char * const g_ttypenames[4] =
 {
   "Task",
@@ -483,8 +457,7 @@ static FAR const struct proc_node_s *proc_findnode(FAR const char *relpath)
  *                                   MQ full}
  *   Flags:      xxx                N,P,X
  *   Priority:   nnn                Decimal, 0-255
- *   Scheduler:  xxxxxxxxxxxxxx     {SCHED_FIFO, SCHED_RR, SCHED_SPORADIC,
- *                                   SCHED_OTHER}
+ *   Scheduler:  xxxxxxxxxxxxxx     {SCHED_FIFO, SCHED_RR, SCHED_SPORADIC}
  *   Sigmask:    nnnnnnnn           Hexadecimal, 32-bit
  *
  ****************************************************************************/
@@ -493,9 +466,9 @@ static ssize_t proc_status(FAR struct proc_file_s *procfile,
                            FAR struct tcb_s *tcb, FAR char *buffer,
                            size_t buflen, off_t offset)
 {
-  FAR struct task_group_s *group;
   FAR const char *policy;
   FAR const char *name;
+  char state[32];
   size_t remaining;
   size_t linesize;
   size_t copysize;
@@ -543,12 +516,9 @@ static ssize_t proc_status(FAR struct proc_file_s *procfile,
       return totalsize;
     }
 
-  group = tcb->group;
-  DEBUGASSERT(group != NULL);
-
   linesize   = procfs_snprintf(procfile->line, STATUS_LINELEN,
-                               "%-12s%d\n",
-                               "Group:", group->tg_pid);
+                               "%-12s%d\n", "Group:",
+                               tcb->group ? tcb->group->tg_pid : -1);
   copysize   = procfs_memcpy(procfile->line, linesize, buffer, remaining,
                              &offset);
 
@@ -589,9 +559,9 @@ static ssize_t proc_status(FAR struct proc_file_s *procfile,
 
   /* Show the thread state */
 
+  nxsched_get_stateinfo(tcb, state, sizeof(state));
   linesize   = procfs_snprintf(procfile->line, STATUS_LINELEN,
-                               "%-12s%s\n", "State:",
-                               g_statenames[tcb->task_state]);
+                               "%-12s%s\n", "State:", state);
   copysize   = procfs_memcpy(procfile->line, linesize, buffer, remaining,
                              &offset);
 
@@ -685,7 +655,6 @@ static ssize_t proc_cmdline(FAR struct proc_file_s *procfile,
                             size_t buflen, off_t offset)
 {
   FAR const char *name;
-  FAR char **argv;
   size_t remaining;
   size_t linesize;
   size_t copysize;
@@ -715,44 +684,14 @@ static ssize_t proc_cmdline(FAR struct proc_file_s *procfile,
       return totalsize;
     }
 
-#ifndef CONFIG_DISABLE_PTHREAD
-  /* Show the pthread argument */
+  /* Show the task / thread argument list (skipping over the name) */
 
-  if ((tcb->flags & TCB_FLAG_TTYPE_MASK) == TCB_FLAG_TTYPE_PTHREAD)
-    {
-      FAR struct pthread_tcb_s *ptcb = (FAR struct pthread_tcb_s *)tcb;
-
-      linesize   = procfs_snprintf(procfile->line, STATUS_LINELEN, " %p\n",
-                                   ptcb->arg);
-      copysize   = procfs_memcpy(procfile->line, linesize, buffer,
-                                 remaining, &offset);
-
-      totalsize += copysize;
-      buffer    += copysize;
-      remaining -= copysize;
-
-      return totalsize;
-    }
-#endif
-
-  /* Show the task argument list (skipping over the name) */
-
-  for (argv = tcb->group->tg_info->argv + 1; *argv; argv++)
-    {
-      linesize   = procfs_snprintf(procfile->line, STATUS_LINELEN,
-                                   " %s", *argv);
-      copysize   = procfs_memcpy(procfile->line, linesize, buffer,
-                                 remaining, &offset);
-
-      totalsize += copysize;
-      buffer    += copysize;
-      remaining -= copysize;
-
-      if (totalsize >= buflen)
-        {
-          return totalsize;
-        }
-    }
+  linesize   = group_argvstr(tcb, procfile->line, remaining);
+  copysize   = procfs_memcpy(procfile->line, linesize, buffer,
+                             remaining, &offset);
+  totalsize += copysize;
+  buffer    += copysize;
+  remaining -= copysize;
 
   linesize   = procfs_snprintf(procfile->line, STATUS_LINELEN, "\n");
   copysize   = procfs_memcpy(procfile->line, linesize, buffer,
@@ -988,7 +927,7 @@ static ssize_t proc_heapcheck(FAR struct proc_file_s *procfile,
   size_t totalsize = 0;
   size_t heapcheck = 0;
 
-  if (tcb->flags & TCB_FLAG_HEAPCHECK)
+  if (tcb->flags & TCB_FLAG_HEAP_CHECK)
     {
       heapcheck = 1;
     }
@@ -1010,10 +949,10 @@ static ssize_t proc_heapcheck_write(FAR struct proc_file_s *procfile,
   switch (atoi(buffer))
     {
       case 0:
-        tcb->flags &= ~TCB_FLAG_HEAPCHECK;
+        tcb->flags &= ~TCB_FLAG_HEAP_CHECK;
         break;
       case 1:
-        tcb->flags |= TCB_FLAG_HEAPCHECK;
+        tcb->flags |= TCB_FLAG_HEAP_CHECK;
         break;
       default:
         ferr("ERROR: invalid argument\n");
@@ -1488,7 +1427,7 @@ static int proc_open(FAR struct file *filep, FAR const char *relpath,
 
   if (strncmp(relpath, "self", 4) == 0)
     {
-      tmp = (unsigned long)getpid();    /* Get the PID of the calling task */
+      tmp = nxsched_gettid();           /* Get the TID of the calling task */
       ptr = (FAR char *)relpath + 4;    /* Discard const */
     }
   else
@@ -1796,7 +1735,7 @@ static int proc_opendir(FAR const char *relpath,
 
   if (strncmp(relpath, "self", 4) == 0)
     {
-      tmp = (unsigned long)getpid();    /* Get the PID of the calling task */
+      tmp = nxsched_gettid();           /* Get the TID of the calling task */
       ptr = (FAR char *)relpath + 4;    /* Discard const */
     }
   else
@@ -2036,7 +1975,7 @@ static int proc_stat(const char *relpath, struct stat *buf)
 
   if (strncmp(relpath, "self", 4) == 0)
     {
-      tmp = (unsigned long)getpid();    /* Get the PID of the calling task */
+      tmp = nxsched_gettid();           /* Get the TID of the calling task */
       ptr = (FAR char *)relpath + 4;    /* Discard const */
     }
   else

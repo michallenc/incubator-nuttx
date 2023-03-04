@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <string.h>
@@ -58,10 +59,6 @@
 # define elf_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
 # define elf_dumpbuffer(m,b,n)
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
 #endif
 
 /****************************************************************************
@@ -274,7 +271,12 @@ static int elf_loadbinary(FAR struct binary_s *binp,
    * needed when the module is executed.
    */
 
-  up_addrenv_clone(&loadinfo.addrenv, &binp->addrenv);
+  up_addrenv_clone(&loadinfo.addrenv.addrenv, &binp->addrenv.addrenv);
+
+  /* Take a reference to the address environment, so it won't get freed */
+
+  addrenv_take(&binp->addrenv);
+
 #else
   binp->alloc[0]  = (FAR void *)loadinfo.textalloc;
   binp->alloc[1]  = (FAR void *)loadinfo.dataalloc;

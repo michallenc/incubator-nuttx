@@ -66,6 +66,10 @@ SECTIONS
     } > flash
     __exidx_end = ABSOLUTE(.);
     _eronly = ABSOLUTE(.);
+    /* The RAM vector table (if present) should lie at the beginning of SRAM */
+    .ram_vectors : {
+        *(.ram_vectors)
+    } > sram
     .data : {
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
@@ -74,7 +78,7 @@ SECTIONS
         . = ALIGN(4);
         _edata = ABSOLUTE(.);
     } > sram AT > flash
-    .ramfunc ALIGN(4): {
+    .ramfunc : ALIGN(4) {
         _sramfuncs = ABSOLUTE(.);
         *(.ramfunc .ramfunc.*)
         _eramfuncs = ABSOLUTE(.);

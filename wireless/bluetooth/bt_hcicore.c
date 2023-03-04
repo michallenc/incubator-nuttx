@@ -50,6 +50,8 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <sys/param.h>
+
 #include <nuttx/clock.h>
 #include <nuttx/kthread.h>
 #include <nuttx/spinlock.h>
@@ -68,8 +70,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 /* Wait up to 2.5 seconds for a response.  This delay is arbitrary and
  * intended only to avoid hangs while waiting for a response.  It may need
@@ -1448,7 +1448,6 @@ static void cmd_queue_init(void)
   DEBUGASSERT(ret >= 0);
 
   nxsem_init(&g_btdev.ncmd_sem, 0, 1);
-  nxsem_set_protocol(&g_btdev.ncmd_sem, SEM_PRIO_NONE);
 
   g_btdev.ncmd = 1;
   ret = kthread_create("BT HCI Tx", CONFIG_BLUETOOTH_TXCMD_PRIORITY,
@@ -1790,7 +1789,6 @@ int bt_hci_cmd_send_sync(uint16_t opcode, FAR struct bt_buf_s *buf,
   /* Set up for the wait */
 
   nxsem_init(&sync_sem, 0, 0);
-  nxsem_set_protocol(&sync_sem, SEM_PRIO_NONE);
   buf->u.hci.sync = &sync_sem;
 
   /* Send the frame */
@@ -1847,6 +1845,8 @@ int bt_hci_cmd_send_sync(uint16_t opcode, FAR struct bt_buf_s *buf,
 
       bt_buf_release(buf->u.hci.sync);
     }
+
+  nxsem_destroy(&sync_sem);
 
   return ret;
 }
@@ -2139,7 +2139,7 @@ FAR const char *bt_addr_str(FAR const bt_addr_t *addr)
   FAR char *str;
 
   str  = bufs[cur++];
-  cur %= ARRAY_SIZE(bufs);
+  cur %= nitems(bufs);
   bt_addr_to_str(addr, str, sizeof(bufs[cur]));
 
   return str;
@@ -2152,7 +2152,7 @@ FAR const char *bt_addr_le_str(FAR const bt_addr_le_t *addr)
   FAR char *str;
 
   str  = bufs[cur++];
-  cur %= ARRAY_SIZE(bufs);
+  cur %= nitems(bufs);
   bt_addr_le_to_str(addr, str, sizeof(bufs[cur]));
 
   return str;

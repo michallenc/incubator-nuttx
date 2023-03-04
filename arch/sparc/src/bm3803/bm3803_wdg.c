@@ -35,7 +35,7 @@
 #include <nuttx/timers/watchdog.h>
 #include <arch/board/board.h>
 
-#include "up_internal.h"
+#include "sparc_internal.h"
 #include "bm3803_wdg.h"
 
 #if defined(CONFIG_WATCHDOG) && defined(CONFIG_BM3803_WDG)
@@ -427,7 +427,7 @@ void bm3803_wdginitialize(const char *devpath)
 
   /* Register the watchdog driver as /dev/watchdog0 */
 
-  watchdog_register(devpath, (FAR struct watchdog_lowerhalf_s *)priv);
+  watchdog_register(devpath, (struct watchdog_lowerhalf_s *)priv);
 }
 
 #endif /* CONFIG_WATCHDOG && CONFIG_BM3803_WDG */

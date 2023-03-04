@@ -26,8 +26,9 @@
 
 #include <stdbool.h>
 #include <sched.h>
-#include <queue.h>
 #include <assert.h>
+
+#include <nuttx/queue.h>
 
 #ifdef CONFIG_SMP
 #  include <nuttx/spinlock.h>
@@ -115,7 +116,7 @@ bool nxsched_merge_pending(void)
       /* The ptcb goes just before rtcb */
 
       rprev = rtcb->blink;
-      if (!rprev)
+      if (rprev == NULL)
         {
           /* Special case: Inserting ptcb at the head of the list */
 
@@ -200,7 +201,7 @@ bool nxsched_merge_pending(void)
         {
           /* The pending task list is empty */
 
-          goto errout;
+          return false;
         }
 
       cpu  = nxsched_select_cpu(ALL_CPUS); /* REVISIT:  Maybe ptcb->affinity */
@@ -271,7 +272,6 @@ bool nxsched_merge_pending(void)
     }
 
 errout:
-
   return ret;
 }
 #endif /* CONFIG_SMP */

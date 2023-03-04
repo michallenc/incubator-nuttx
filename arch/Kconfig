@@ -98,7 +98,7 @@ config ARCH_SIM
 	select ARCH_HAVE_TICKLESS
 	select ARCH_HAVE_POWEROFF
 	select ARCH_HAVE_TESTSET
-	select ARCH_HAVE_VFORK
+	select ARCH_HAVE_VFORK if !HOST_WINDOWS
 	select ARCH_HAVE_SETJMP
 	select ARCH_HAVE_CUSTOMOPT
 	select ARCH_SETJMP_H
@@ -106,6 +106,7 @@ config ARCH_SIM
 	select ONESHOT
 	select SERIAL_CONSOLE
 	select SERIAL_IFLOWCONTROL
+	select SCHED_HPWORK
 	---help---
 		Linux/Cygwin user-mode simulation.
 
@@ -229,7 +230,7 @@ config ARCH_CHIP_CUSTOM_DIR_RELPATH
 endmenu # Custom Chip Configuration
 endif #ARCH_CHIP_CUSTOM
 
-source "arch/dummy/Kconfig"
+source "$BINDIR/arch/dummy/Kconfig"
 
 config ARCH_TOOLCHAIN_IAR
 	bool
@@ -512,7 +513,7 @@ config ARCH_USE_TEXT_HEAP
 menuconfig ARCH_ADDRENV
 	bool "Address environments"
 	default n
-	depends on ARCH_HAVE_ADDRENV
+	depends on ARCH_HAVE_ADDRENV && SCHED_LPWORK
 	---help---
 		Support per-task address environments using the MMU... i.e., support
 		"processes"
@@ -534,9 +535,13 @@ config ARCH_HEAP_VBASE
 	---help---
 		The virtual address of the beginning of the heap region.
 
+config ARCH_VMA_MAPPING
+	bool "Support runtime memory mapping into SHM area"
+	default n
+
 config ARCH_SHM_VBASE
 	hex "Shared memory base"
-	depends on MM_SHM
+	depends on ARCH_VMA_MAPPING
 	---help---
 		The virtual address of the beginning of the shared memory region.
 
@@ -564,7 +569,7 @@ config ARCH_HEAP_NPAGES
 		This, along with knowledge of the page size, determines the size of
 		the heap virtual address space. Default is 1.
 
-if MM_SHM
+if ARCH_VMA_MAPPING
 
 config ARCH_SHM_MAXREGIONS
 	int "Max shared memory regions"
@@ -592,7 +597,7 @@ config ARCH_SHM_NPAGES
 		maximum number of pages per region, and the configured size of
 		each page.
 
-endif # MM_SHM
+endif # ARCH_VMA_MAPPING
 
 config ARCH_STACK_DYNAMIC
 	bool "Dynamic user stack"
@@ -977,7 +982,7 @@ config ARCH_NUSER_INTERRUPTS
 # and DEBUG_FEATURES.
 
 menu "Bring-Up Options"
-	depends on EXPERIMENTAL && DEBUG_FEATURES
+	depends on DEBUG_FEATURES
 
 config SUPPRESS_CLOCK_CONFIG
 	bool "Suppress clock configuration"

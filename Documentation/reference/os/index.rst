@@ -13,6 +13,7 @@ in other header files.
   arch.rst
   board.rst
   time_clock.rst
+  mutex.rst
   wqueue.rst
   addrenv.rst
   nuttx.rst
@@ -22,3 +23,4 @@ in other header files.
   paging.rst
   led.rst
   iob.rst
+  notifier.rst

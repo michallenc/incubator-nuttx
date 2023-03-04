@@ -83,6 +83,8 @@
 #define MTD_READ(d,s,n,b)  ((d)->read    ? (d)->read(d,s,n,b)   : (-ENOSYS))
 #define MTD_WRITE(d,s,n,b) ((d)->write   ? (d)->write(d,s,n,b)  : (-ENOSYS))
 #define MTD_IOCTL(d,c,a)   ((d)->ioctl   ? (d)->ioctl(d,c,a)    : (-ENOSYS))
+#define MTD_ISBAD(d,b)     ((d)->isbad   ? (d)->isbad(d,b)      : (-ENOSYS))
+#define MTD_MARKBAD(d,b)   ((d)->markbad ? (d)->markbad(d,b)    : (-ENOSYS))
 
 /* If any of the low-level device drivers declare they want sub-sector erase
  * support, then define MTD_SUBSECTOR_ERASE.
@@ -110,6 +112,10 @@ struct mtd_geometry_s
   uint32_t erasesize;     /* Size of one erase blocks -- must be a multiple
                            * of blocksize. */
   uint32_t neraseblocks;  /* Number of erase blocks */
+
+  /* NULL-terminated string representing the device model */
+
+  char     model[NAME_MAX + 1];
 };
 
 /* This structure describes a range of sectors to be protected or
@@ -180,6 +186,11 @@ struct mtd_dev_s
    */
 
   int (*ioctl)(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg);
+
+  /* Check/Mark bad block for the specified block number */
+
+  int (*isbad)(FAR struct mtd_dev_s *dev, off_t block);
+  int (*markbad)(FAR struct mtd_dev_s *dev, off_t block);
 
   /* Name of this MTD device */
 
@@ -602,35 +613,6 @@ FAR struct mtd_dev_s *w25qxxxjv_initialize(FAR struct qspi_dev_s *qspi,
                                          bool unprotect);
 
 /****************************************************************************
- * Name: blockmtd_initialize
- *
- * Description:
- *   Create and initialize a BLOCK MTD device instance.
- *
- * Input Parameters:
- *   path - Path name of the block device backing the MTD device
- *
- ****************************************************************************/
-
-FAR struct mtd_dev_s *blockmtd_initialize(FAR const char *path,
-                                          size_t offset, size_t mtdlen,
-                                          int16_t sectsize,
-                                          int32_t erasesize);
-
-/****************************************************************************
- * Name: blockmtd_teardown
- *
- * Description:
- *   Teardown a previously created blockmtd device.
- *
- * Input Parameters:
- *   dev - Pointer to the mtd driver instance.
- *
- ****************************************************************************/
-
-void blockmtd_teardown(FAR struct mtd_dev_s *dev);
-
-/****************************************************************************
  * Name: filemtd_initialize
  *
  * Description:
@@ -686,6 +668,49 @@ bool filemtd_isfilemtd(FAR struct mtd_dev_s *mtd);
 
 FAR struct mtd_dev_s *nullmtd_initialize(size_t mtdlen, int16_t sectsize,
                                          int32_t erasesize);
+
+/****************************************************************************
+ * Name: rpmsgmtd_register
+ *
+ * Description:
+ *   Rpmsg-mtd client register function, the client cpu should call
+ *   this function in the board initialize process.
+ *
+ * Parameters:
+ *   remotecpu  - the server cpu name
+ *   remotepath - the device you want to access in the remote cpu
+ *   localpath  - the device path in local cpu, if NULL, the localpath is
+ *                same as the remotepath, provide this argument to supoort
+ *                custom device path
+ *
+ * Returned Values:
+ *   OK on success; A negated errno value is returned on any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_RPMSGMTD
+int rpmsgmtd_register(FAR const char *remotecpu, FAR const char *remotepath,
+                      FAR const char *localpath);
+#endif
+
+/****************************************************************************
+ * Name: rpmsgmtd_server_init
+ *
+ * Description:
+ *   Rpmsg-mtd server initialize function, the server cpu should call
+ *   this function.
+ *
+ * Parameters:
+ *   None
+ *
+ * Returned Values:
+ *   OK on success; A negated errno value is returned on any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_RPMSGMTD_SERVER
+int rpmsgmtd_server_init(void);
+#endif
 
 #undef EXTERN
 #ifdef __cplusplus

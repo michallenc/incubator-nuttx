@@ -31,12 +31,12 @@
 #  define CONFIG_DEBUG_NET 1
 #endif
 
-#include <queue.h>
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/queue.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/net/net.h>
 #include <nuttx/mm/iob.h>
@@ -73,7 +73,10 @@ struct wrbuffer_s
 
 /* This is the state of the global write buffer resource */
 
-static struct wrbuffer_s g_wrbuffer;
+static struct wrbuffer_s g_wrbuffer =
+{
+  SEM_INITIALIZER(CONFIG_NET_TCP_NWRBCHAINS),
+};
 
 /****************************************************************************
  * Public Functions
@@ -98,9 +101,6 @@ void tcp_wrbuffer_initialize(void)
     {
       sq_addfirst(&g_wrbuffer.buffers[i].wb_node, &g_wrbuffer.freebuffers);
     }
-
-  nxsem_init(&g_wrbuffer.sem, 0, CONFIG_NET_TCP_NWRBCHAINS);
-  nxsem_set_protocol(&g_wrbuffer.sem, SEM_PRIO_NONE);
 }
 
 /****************************************************************************
@@ -134,7 +134,7 @@ FAR struct tcp_wrbuffer_s *tcp_wrbuffer_timedalloc(unsigned int timeout)
    * buffer
    */
 
-  ret = net_timedwait_uninterruptible(&g_wrbuffer.sem, timeout);
+  ret = net_sem_timedwait_uninterruptible(&g_wrbuffer.sem, timeout);
   if (ret != OK)
     {
       return NULL;

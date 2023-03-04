@@ -28,10 +28,10 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <queue.h>
 #include <poll.h>
 
 #include <netpacket/netlink.h>
+#include <nuttx/queue.h>
 #include <nuttx/net/netlink.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/wqueue.h>
@@ -68,13 +68,11 @@ struct netlink_conn_s
   uint32_t dst_pid;                  /* Destination port ID */
   uint32_t dst_groups;               /* Destination multicast groups mask */
   uint8_t crefs;                     /* Reference counts on this instance */
-  uint8_t protocol;                  /* See NETLINK_* definitions */
 
   /* poll() support */
 
   int key;                           /* used to cancel notifications */
-  FAR sem_t *pollsem;                /* Used to wakeup poll() */
-  FAR pollevent_t *pollevent;        /* poll() wakeup event */
+  FAR struct pollfd *fds;            /* Used to wakeup poll() */
 
   /* Queued response data */
 

@@ -164,12 +164,7 @@ void icmpv6_rwait_setup(FAR struct net_driver_s *dev,
   memcpy(notify->rn_ifname, dev->d_ifname, IFNAMSIZ);
   notify->rn_result = -ETIMEDOUT;
 
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&notify->rn_sem, 0, 0);
-  nxsem_set_protocol(&notify->rn_sem, SEM_PRIO_NONE);
 
   /* Add the wait structure to the list with interrupts disabled */
 
@@ -255,7 +250,7 @@ int icmpv6_rwait(FAR struct icmpv6_rnotify_s *notify, unsigned int timeout)
 
   /* And wait for the Neighbor Advertisement (or a timeout). */
 
-  ret = net_timedwait(&notify->rn_sem, timeout);
+  ret = net_sem_timedwait(&notify->rn_sem, timeout);
   if (ret >= 0)
     {
       ret = notify->rn_result;

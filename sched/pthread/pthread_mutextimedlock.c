@@ -78,7 +78,7 @@
 int pthread_mutex_timedlock(FAR pthread_mutex_t *mutex,
                             FAR const struct timespec *abs_timeout)
 {
-  pid_t mypid = getpid();
+  pid_t mypid = nxsched_gettid();
   int ret = EINVAL;
 
   sinfo("mutex=%p\n", mutex);
@@ -187,7 +187,7 @@ int pthread_mutex_timedlock(FAR pthread_mutex_t *mutex,
            * or default mutex.
            */
 
-          ret = pthread_mutex_take(mutex, abs_timeout, true);
+          ret = pthread_mutex_take(mutex, abs_timeout);
 
           /* If we successfully obtained the semaphore, then indicate
            * that we own it.

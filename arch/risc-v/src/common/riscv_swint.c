@@ -53,45 +53,6 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: riscv_registerdump
- ****************************************************************************/
-
-#ifdef CONFIG_DEBUG_SYSCALL_INFO
-static void riscv_registerdump(const uintptr_t *regs)
-{
-  svcinfo("EPC: %" PRIxREG "\n",
-          regs[REG_EPC]);
-  svcinfo("A0: %" PRIxREG " A1: %" PRIxREG " A2: %" PRIxREG " A3: %" PRIxREG
-          " A4: %" PRIxREG " A5: %" PRIxREG " A6: %" PRIxREG " A7: %" PRIxREG
-          "\n",
-          regs[REG_A0], regs[REG_A1], regs[REG_A2], regs[REG_A3],
-          regs[REG_A4], regs[REG_A5], regs[REG_A6], regs[REG_A7]);
-  svcinfo("T0: %" PRIxREG " T1: %" PRIxREG " T2: %" PRIxREG " T3: %" PRIxREG
-          " T4: %" PRIxREG " T5: %" PRIxREG " T6: %" PRIxREG "\n",
-          regs[REG_T0], regs[REG_T1], regs[REG_T2], regs[REG_T3],
-          regs[REG_T4], regs[REG_T5], regs[REG_T6]);
-  svcinfo("S0: %" PRIxREG " S1: %" PRIxREG " S2: %" PRIxREG " S3: %" PRIxREG
-          " S4: %" PRIxREG " S5: %" PRIxREG " S6: %" PRIxREG " S7: %" PRIxREG
-          "\n",
-          regs[REG_S0], regs[REG_S1], regs[REG_S2], regs[REG_S3],
-          regs[REG_S4], regs[REG_S5], regs[REG_S6], regs[REG_S7]);
-  svcinfo("S8: %" PRIxREG " S9: %" PRIxREG " S10: %"PRIxREG
-          " S11: %" PRIxREG "\n",
-          regs[REG_S8], regs[REG_S9], regs[REG_S10], regs[REG_S11]);
-#ifdef RISCV_SAVE_GP
-  svcinfo("GP: %" PRIxREG " SP: %" PRIxREG " FP: %" PRIxREG
-          " TP: %" PRIxREG " RA: %" PRIxREG "\n",
-          regs[REG_GP], regs[REG_SP], regs[REG_FP], regs[REG_TP],
-          regs[REG_RA]);
-#else
-  svcinfo("SP: %" PRIxREG " FP: %" PRIxREG " TP: %" PRIxREG " RA: %" PRIxREG
-          "\n",
-          regs[REG_SP], regs[REG_FP], regs[REG_TP], regs[REG_RA]);
-#endif
-}
-#endif
-
-/****************************************************************************
  * Name: dispatch_syscall
  *
  * Description:
@@ -164,7 +125,7 @@ int riscv_swint(int irq, void *context, void *arg)
 
 #ifdef CONFIG_DEBUG_SYSCALL_INFO
   svcinfo("Entry: regs: %p cmd: %d\n", regs, regs[REG_A0]);
-  riscv_registerdump(regs);
+  up_dump_register(regs);
 #endif
 
   /* Handle the SWInt according to the command in $a0 */
@@ -405,8 +366,7 @@ int riscv_swint(int irq, void *context, void *arg)
 #if defined (CONFIG_BUILD_PROTECTED)
           regs[REG_EPC]        = (uintptr_t)USERSPACE->signal_handler;
 #else
-          regs[REG_EPC]        =
-              (uintptr_t)ARCH_DATA_RESERVE->ar_sigtramp;
+          regs[REG_EPC]        = (uintptr_t)ARCH_DATA_RESERVE->ar_sigtramp;
 #endif
           regs[REG_INT_CTX]   &= ~STATUS_PPP; /* User mode */
 
@@ -429,11 +389,31 @@ int riscv_swint(int irq, void *context, void *arg)
 
           if (rtcb->xcp.kstack != NULL)
             {
-              DEBUGASSERT(rtcb->xcp.kstkptr == NULL &&
-                          rtcb->xcp.ustkptr != NULL);
+              uintptr_t usp;
+
+              DEBUGASSERT(rtcb->xcp.kstkptr == NULL);
+
+              /* Copy "info" into user stack */
+
+              if (rtcb->xcp.sigdeliver)
+                {
+                  usp = rtcb->xcp.saved_regs[REG_SP];
+                }
+              else
+                {
+                  usp = rtcb->xcp.regs[REG_SP];
+                }
+
+              /* Create a frame for info and copy the kernel info */
+
+              usp = usp - sizeof(siginfo_t);
+              memcpy((void *)usp, (void *)regs[REG_A2], sizeof(siginfo_t));
+
+              /* Now set the updated SP and user copy of "info" to A2 */
 
               rtcb->xcp.kstkptr = (uintptr_t *)regs[REG_SP];
-              regs[REG_SP]      = (uintptr_t)rtcb->xcp.ustkptr;
+              regs[REG_SP]      = usp;
+              regs[REG_A2]      = usp;
             }
 #endif
         }
@@ -470,8 +450,7 @@ int riscv_swint(int irq, void *context, void *arg)
 
           if (rtcb->xcp.kstack != NULL)
             {
-              DEBUGASSERT(rtcb->xcp.kstkptr != NULL &&
-                          (uintptr_t)rtcb->xcp.ustkptr == regs[REG_SP]);
+              DEBUGASSERT(rtcb->xcp.kstkptr != NULL);
 
               regs[REG_SP]      = (uintptr_t)rtcb->xcp.kstkptr;
               rtcb->xcp.kstkptr = NULL;
@@ -536,8 +515,15 @@ int riscv_swint(int irq, void *context, void *arg)
           if (index == 0 && rtcb->xcp.kstack != NULL)
             {
               rtcb->xcp.ustkptr = (uintptr_t *)regs[REG_SP];
-              regs[REG_SP]      = (uintptr_t)rtcb->xcp.kstack +
+              if (rtcb->xcp.kstkptr != NULL)
+                {
+                  regs[REG_SP]  = (uintptr_t)rtcb->xcp.kstkptr;
+                }
+              else
+                {
+                  regs[REG_SP]  = (uintptr_t)rtcb->xcp.kstack +
                                   ARCH_KERNEL_STACKSIZE;
+                }
             }
 #endif
         }
@@ -552,7 +538,7 @@ int riscv_swint(int irq, void *context, void *arg)
   if (regs != CURRENT_REGS)
     {
       svcinfo("SWInt Return: Context switch!\n");
-      riscv_registerdump((const uintptr_t *)CURRENT_REGS);
+      up_dump_register(CURRENT_REGS);
     }
   else
     {

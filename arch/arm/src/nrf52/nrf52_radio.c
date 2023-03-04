@@ -143,6 +143,8 @@ struct nrf52_radio_dev_s g_nrf52_radio_dev_1 =
   .txbuf_len = NRF52_RADIO_TXBUFFER,
   .rxbuf     = g_nrf52_radio_dev_rx1,
   .txbuf     = g_nrf52_radio_dev_tx1,
+  .lock      = NXMUTEX_INITIALIZER,
+  .sem_isr   = SEM_INITIALIZER(0),
 };
 
 /****************************************************************************
@@ -726,7 +728,7 @@ static int nrf52_radio_write(struct nrf52_radio_dev_s *dev,
 
   /* Lock device */
 
-  ret = nxsem_wait(&dev->sem_excl);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -766,8 +768,7 @@ errout:
 
   /* Unlock device */
 
-  nxsem_post(&dev->sem_excl);
-
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 
@@ -786,7 +787,7 @@ static int nrf52_radio_read(struct nrf52_radio_dev_s *dev,
 
   /* Lock radio */
 
-  ret = nxsem_wait(&dev->sem_excl);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -826,8 +827,7 @@ errout:
 
   /* Unlock radio */
 
-  nxsem_post(&dev->sem_excl);
-
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 
@@ -1032,7 +1032,7 @@ static int nrf52_radio_isr(int irq, void *context, void *arg)
 
       default:
         {
-          ASSERT(0);
+          PANIC();
           break;
         }
     }
@@ -1161,17 +1161,6 @@ nrf52_radio_initialize(int intf, struct nrf52_radio_board_s *board)
 
   irq_attach(dev->irq, nrf52_radio_isr, dev);
   up_enable_irq(dev->irq);
-
-  /* Initialize semaphores */
-
-  nxsem_init(&dev->sem_excl, 0, 1);
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_init(&dev->sem_isr, 0, 0);
-  nxsem_set_protocol(&dev->sem_isr, SEM_PRIO_NONE);
 
   /* Connect board-specific data */
 

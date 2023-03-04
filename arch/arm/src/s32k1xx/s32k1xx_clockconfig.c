@@ -120,12 +120,6 @@
 #define SCG_SPLL_REF_MIN 8000000
 #define SCG_SPLL_REF_MAX 32000000
 
-/* Power management definitions */
-
-#ifndef OK
-#define OK 0
-#endif
-
 /****************************************************************************
  * Private Function Declarations
  ****************************************************************************/
@@ -2557,7 +2551,7 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
       /* Set PCC configuration */
 
-      s32k1xx_periphclocks(clkcfg->pcc.count, clkcfg->pcc.pclks);
+      s32k1xx_periphclocks(num_of_peripheral_clocks_0, clkcfg->pcc.pclks);
 
       /* Set SIM configuration */
 

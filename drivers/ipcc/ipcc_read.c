@@ -131,7 +131,7 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
 
   /* Get exclusive access to driver */
 
-  if ((ret = nxsem_wait(&priv->exclsem)))
+  if ((ret = nxmutex_lock(&priv->lock)))
     {
       /* nxsem_wait() will return on signal, we did not start
        * any transfer yet, so we can safely return with error
@@ -140,20 +140,21 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
       return ret;
     }
 
+  /* Disable interrupts, or we might get in situation when we:
+   * - read 0 bytes from circbuf
+   * - interrupt comes in
+   *   - it copies data to buffer and notifies blocked readers
+   *     (in this case sem count is 0, so no sem_post() is called)
+   * - interrupt ends
+   * - since we are in blocking mode, and we read 0 from buffer
+   *   we call sem_wait() and we hang in there cause rx interrupt
+   *   will not be triggered again.
+   */
+
+  flags = enter_critical_section();
+
   for (; ; )
     {
-      /* Disable interrupts, or we might get in situation when we:
-       * - read 0 bytes from circbuf
-       * - interrupt comes in
-       *   - it copies data to buffer and notifies blocked readers
-       *     (in this case sem count is 0, so no sem_post() is called)
-       * - interrupt ends
-       * - since we are in blocking mode, and we read 0 from buffer
-       *   we call sem_wait() and we hang in there cause rx interrupt
-       *   will not be triggered again.
-       */
-
-      flags = enter_critical_section();
 #ifdef CONFIG_IPCC_BUFFERED
       /* Data is buffered in interrupt handler, so we simply
        * have to return buffers content to the user
@@ -196,7 +197,7 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
 
           /* return number of bytes read to the caller */
 
-          nxsem_post(&priv->exclsem);
+          nxmutex_unlock(&priv->lock);
           return nread;
         }
 #else /* CONFIG_IPCC_BUFFERED */
@@ -211,7 +212,7 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
            */
 
           leave_critical_section(flags);
-          nxsem_post(&priv->exclsem);
+          nxmutex_unlock(&priv->lock);
           return nread;
         }
 #endif /* CONFIG_IPCC_BUFFERED */
@@ -225,18 +226,18 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
            */
 
           leave_critical_section(flags);
-          nxsem_post(&priv->exclsem);
+          nxmutex_unlock(&priv->lock);
           return -EAGAIN;
         }
 
       /* We are in blocking mode, so we have to wait for data to arrive.
-       * nxsem_wait() will atomically leave critical section for us so
-       * we don't have to do it.
        */
 
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       if ((ret = nxsem_wait(&priv->rxsem)))
         {
+          leave_critical_section(flags);
+
           /* We were interrupted by signal, but we have not written
            * any data to caller's buffer, so we return with error
            */
@@ -253,7 +254,8 @@ ssize_t ipcc_read(FAR struct file *filep, FAR char *buffer,
        * waiting for data, so now let's retake it.
        */
 
-      nxsem_wait(&priv->exclsem);
-      continue;
+      nxmutex_lock(&priv->lock);
     }
+
+  leave_critical_section(flags);
 }

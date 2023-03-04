@@ -52,11 +52,11 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
-#include <queue.h>
 #include <debug.h>
 #include <inttypes.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/queue.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
 
@@ -141,12 +141,13 @@ const struct mountpt_operations spiffs_operations =
   spiffs_write,      /* write */
   spiffs_seek,       /* seek */
   spiffs_ioctl,      /* ioctl */
+  NULL,              /* mmap */
+  spiffs_truncate,   /* truncate */
 
   spiffs_sync,       /* sync */
   spiffs_dup,        /* dup */
   spiffs_fstat,      /* fstat */
   NULL,              /* fchstat */
-  spiffs_truncate,   /* truncate */
 
   spiffs_opendir,    /* opendir */
   spiffs_closedir,   /* closedir */
@@ -1558,7 +1559,7 @@ static int spiffs_unbind(FAR void *handle, FAR struct inode **mtdinode,
       kmm_free(fs->cache);
     }
 
-  /* Free the volume memory (note that the semaphore is now stale!) */
+  /* Free the volume memory (note that the mutex is now stale!) */
 
   nxrmutex_destroy(&fs->lock);
   kmm_free(fs);

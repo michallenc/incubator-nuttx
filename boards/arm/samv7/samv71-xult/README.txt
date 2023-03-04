@@ -1691,7 +1691,7 @@ NOTES:
        CONFIG_WINDOWS_CYGWIN=y             : Cywin under Windows
 
      System Type -> Toolchain:
-       CONFIG_ARMV7M_TOOLCHAIN_GNU_EABI=y  : GNU ARM EABI toolchain
+       CONFIG_ARM_TOOLCHAIN_GNU_EABI=y  : GNU ARM EABI toolchain
 
 Configuration sub-directories
 -----------------------------
@@ -2082,9 +2082,9 @@ Configuration sub-directories
          CONFIG_PTHREAD_STACK_MIN=256
          CONFIG_PTHREAD_STACK_DEFAULT=2048
          CONFIG_POSIX_SPAWN_PROXY_STACKSIZE=1024
-         CONFIG_TASK_SPAWN_DEFAULT_STACKSIZE=2048
-         CONFIG_NSH_TELNETD_DAEMONSTACKSIZE=2048
-         CONFIG_NSH_TELNETD_CLIENTSTACKSIZE=2048
+         CONFIG_POSIX_SPAWN_DEFAULT_STACKSIZE=2048
+         CONFIG_SYSTEM_TELNETD_STACKSIZE=2048
+         CONFIG_SYSTEM_TELNETD_SESSION_STACKSIZE=2048
 
     3. NSH built-in applications are supported.  There are, however, not
        enabled built-in applications.

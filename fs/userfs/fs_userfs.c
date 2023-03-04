@@ -45,7 +45,7 @@
 #include <nuttx/fs/userfs.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/net/net.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -75,7 +75,7 @@ struct userfs_state_s
 
   struct socket psock;       /* Client socket instance */
   struct sockaddr_in server; /* Server address */
-  sem_t exclsem;             /* Exclusive access for request-response sequence */
+  mutex_t lock;              /* Exclusive access for request-response sequence */
 
   /* I/O Buffer (actual size depends on USERFS_REQ_MAXSIZE and the configured
    * mxwrite).
@@ -160,12 +160,13 @@ const struct mountpt_operations userfs_operations =
   userfs_write,      /* write */
   userfs_seek,       /* seek */
   userfs_ioctl,      /* ioctl */
+  NULL,              /* mmap */
+  userfs_truncate,   /* truncate */
 
   userfs_sync,       /* sync */
   userfs_dup,        /* dup */
   userfs_fstat,      /* fstat */
   userfs_fchstat,    /* fchstat */
-  userfs_truncate,   /* truncate */
 
   userfs_opendir,    /* opendir */
   userfs_closedir,   /* closedir */
@@ -221,7 +222,7 @@ static int userfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -243,7 +244,7 @@ static int userfs_open(FAR struct file *filep, FAR const char *relpath,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -251,7 +252,7 @@ static int userfs_open(FAR struct file *filep, FAR const char *relpath,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -298,7 +299,7 @@ static int userfs_close(FAR struct file *filep)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -317,7 +318,7 @@ static int userfs_close(FAR struct file *filep)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -325,7 +326,7 @@ static int userfs_close(FAR struct file *filep)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -378,7 +379,7 @@ static ssize_t userfs_read(FAR struct file *filep, char *buffer,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -398,7 +399,7 @@ static ssize_t userfs_read(FAR struct file *filep, char *buffer,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -406,7 +407,7 @@ static ssize_t userfs_read(FAR struct file *filep, char *buffer,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -478,7 +479,7 @@ static ssize_t userfs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -499,7 +500,7 @@ static ssize_t userfs_write(FAR struct file *filep, FAR const char *buffer,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -507,7 +508,7 @@ static ssize_t userfs_write(FAR struct file *filep, FAR const char *buffer,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -553,7 +554,7 @@ static off_t userfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -574,7 +575,7 @@ static off_t userfs_seek(FAR struct file *filep, off_t offset, int whence)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -582,7 +583,7 @@ static off_t userfs_seek(FAR struct file *filep, off_t offset, int whence)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -628,7 +629,7 @@ static int userfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -649,7 +650,7 @@ static int userfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -657,7 +658,7 @@ static int userfs_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -701,7 +702,7 @@ static int userfs_sync(FAR struct file *filep)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -720,7 +721,7 @@ static int userfs_sync(FAR struct file *filep)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -728,7 +729,7 @@ static int userfs_sync(FAR struct file *filep)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -778,7 +779,7 @@ static int userfs_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -797,7 +798,7 @@ static int userfs_dup(FAR const struct file *oldp, FAR struct file *newp)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -805,7 +806,7 @@ static int userfs_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -855,7 +856,7 @@ static int userfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -874,7 +875,7 @@ static int userfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -882,7 +883,7 @@ static int userfs_fstat(FAR const struct file *filep, FAR struct stat *buf)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -936,7 +937,7 @@ static int userfs_fchstat(FAR const struct file *filep,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -957,7 +958,7 @@ static int userfs_fchstat(FAR const struct file *filep,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %zd\n", nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -965,7 +966,7 @@ static int userfs_fchstat(FAR const struct file *filep,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1013,7 +1014,7 @@ static int userfs_truncate(FAR struct file *filep, off_t length)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1033,7 +1034,7 @@ static int userfs_truncate(FAR struct file *filep, off_t length)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1041,7 +1042,7 @@ static int userfs_truncate(FAR struct file *filep, off_t length)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1104,7 +1105,7 @@ static int userfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1124,7 +1125,7 @@ static int userfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1132,7 +1133,7 @@ static int userfs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1193,7 +1194,7 @@ static int userfs_closedir(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1212,7 +1213,7 @@ static int userfs_closedir(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1220,7 +1221,7 @@ static int userfs_closedir(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1271,7 +1272,7 @@ static int userfs_readdir(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1290,7 +1291,7 @@ static int userfs_readdir(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1298,7 +1299,7 @@ static int userfs_readdir(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1351,7 +1352,7 @@ static int userfs_rewinddir(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1370,7 +1371,7 @@ static int userfs_rewinddir(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1378,7 +1379,7 @@ static int userfs_rewinddir(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1435,11 +1436,11 @@ static int userfs_bind(FAR struct inode *blkdriver, FAR const void *data,
       return -ENOMEM;
     }
 
-  /* Initialize the semaphore that assures mutually exclusive access through
+  /* Initialize the mutex that assures mutually exclusive access through
    * the entire request-response sequence.
    */
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   /* Copy the configuration data into the allocated structure.  Why?  First
    * we can't be certain of the life time of the memory underlying the config
@@ -1487,6 +1488,7 @@ errout_with_psock:
   psock_close(&priv->psock);
 
 errout_with_alloc:
+  nxmutex_destroy(&priv->lock);
   kmm_free(priv);
   return ret;
 }
@@ -1513,7 +1515,7 @@ static int userfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1531,7 +1533,7 @@ static int userfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1539,7 +1541,7 @@ static int userfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1570,6 +1572,7 @@ static int userfs_unbind(FAR void *handle, FAR struct inode **blkdriver,
   /* Free resources and return success */
 
   psock_close(&priv->psock);
+  nxmutex_destroy(&priv->lock);
   kmm_free(priv);
   return OK;
 }
@@ -1597,7 +1600,7 @@ static int userfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1615,7 +1618,7 @@ static int userfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1623,7 +1626,7 @@ static int userfs_statfs(FAR struct inode *mountpt, FAR struct statfs *buf)
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1685,7 +1688,7 @@ static int userfs_unlink(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1705,7 +1708,7 @@ static int userfs_unlink(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1713,7 +1716,7 @@ static int userfs_unlink(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1771,7 +1774,7 @@ static int userfs_mkdir(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1792,7 +1795,7 @@ static int userfs_mkdir(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1800,7 +1803,7 @@ static int userfs_mkdir(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1858,7 +1861,7 @@ static int userfs_rmdir(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1878,7 +1881,7 @@ static int userfs_rmdir(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1886,7 +1889,7 @@ static int userfs_rmdir(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -1948,7 +1951,7 @@ static int userfs_rename(FAR struct inode *mountpt,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1970,7 +1973,7 @@ static int userfs_rename(FAR struct inode *mountpt,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -1978,7 +1981,7 @@ static int userfs_rename(FAR struct inode *mountpt,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -2036,7 +2039,7 @@ static int userfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2056,7 +2059,7 @@ static int userfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %d\n", (int)nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -2064,7 +2067,7 @@ static int userfs_stat(FAR struct inode *mountpt, FAR const char *relpath,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {
@@ -2126,7 +2129,7 @@ static int userfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2148,7 +2151,7 @@ static int userfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
   if (nsent < 0)
     {
       ferr("ERROR: psock_sendto failed: %zd\n", nsent);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return (int)nsent;
     }
 
@@ -2156,7 +2159,7 @@ static int userfs_chstat(FAR struct inode *mountpt, FAR const char *relpath,
 
   nrecvd = psock_recvfrom(&priv->psock, priv->iobuffer, IOBUFFER_SIZE(priv),
                           0, NULL, NULL);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   if (nrecvd < 0)
     {

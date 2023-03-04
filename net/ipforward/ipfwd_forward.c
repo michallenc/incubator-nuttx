@@ -82,7 +82,7 @@ static inline void forward_ipselect(FAR struct forward_s *fwd)
 
       /* Set the offset to the beginning of the UDP data payload */
 
-      dev->d_appdata = &dev->d_buf[IPv4UDP_HDRLEN + NET_LL_HDRLEN(dev)];
+      dev->d_appdata = IPBUF(IPv4UDP_HDRLEN);
     }
   else
     {
@@ -92,7 +92,7 @@ static inline void forward_ipselect(FAR struct forward_s *fwd)
 
       /* Set the offset to the beginning of the UDP data payload */
 
-      dev->d_appdata = &dev->d_buf[IPv6_HDRLEN + NET_LL_HDRLEN(dev)];
+      dev->d_appdata = IPBUF(IPv6UDP_HDRLEN);
     }
 }
 #endif
@@ -161,6 +161,11 @@ static uint16_t ipfwd_eventhandler(FAR struct net_driver_s *dev,
 
       else
         {
+          /* Copy the user data into d_appdata and send it. */
+
+          devif_forward(fwd);
+          flags &= ~DEVPOLL_MASK;
+
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
           /* If both IPv4 and IPv6 support are enabled, then we will need to
            * select which one to use when generating the outgoing packet.
@@ -170,10 +175,6 @@ static uint16_t ipfwd_eventhandler(FAR struct net_driver_s *dev,
 
           forward_ipselect(fwd);
 #endif
-          /* Copy the user data into d_appdata and send it. */
-
-          devif_forward(fwd);
-          flags &= ~DEVPOLL_MASK;
         }
 
       /* Free the allocated callback structure */

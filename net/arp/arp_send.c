@@ -34,7 +34,6 @@
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/ip.h>
-#include <nuttx/net/arp.h>
 
 #include "netdev/netdev.h"
 #include "devif/devif.h"
@@ -276,12 +275,7 @@ int arp_send(in_addr_t ipaddr)
       goto errout_with_lock;
     }
 
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0); /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
   state.snd_retries   = 0;              /* No retries yet */
   state.snd_ipaddr    = ipaddr;         /* IP address to query */
@@ -306,7 +300,7 @@ int arp_send(in_addr_t ipaddr)
        * issue.
        */
 
-      if (arp_find(ipaddr, NULL) >= 0)
+      if (arp_find(ipaddr, NULL, dev) >= 0)
         {
           /* We have it!  Break out with success */
 
@@ -331,12 +325,12 @@ int arp_send(in_addr_t ipaddr)
       netdev_txnotify_dev(dev);
 
       /* Wait for the send to complete or an error to occur.
-       * net_lockedwait will also terminate if a signal is received.
+       * net_sem_wait will also terminate if a signal is received.
        */
 
       do
         {
-          ret = net_timedwait_uninterruptible(&state.snd_sem,
+          ret = net_sem_timedwait_uninterruptible(&state.snd_sem,
                                               CONFIG_ARP_SEND_DELAYMSEC);
           if (ret == -ETIMEDOUT)
             {

@@ -65,10 +65,10 @@ static int local_sendctl(FAR struct local_conn_s *conn,
   FAR struct file *filep2;
   FAR struct file *filep;
   struct cmsghdr *cmsg;
-  int count;
+  int count = 0;
   int *fds;
   int ret;
-  int i;
+  int i = 0;
 
   net_lock();
 
@@ -196,7 +196,7 @@ static ssize_t local_send(FAR struct socket *psock,
 
           /* Send the packet */
 
-          ret = nxsem_wait_uninterruptible(&peer->lc_sendsem);
+          ret = nxmutex_lock(&peer->lc_sendlock);
           if (ret < 0)
             {
               /* May fail because the task was canceled. */
@@ -205,7 +205,7 @@ static ssize_t local_send(FAR struct socket *psock,
             }
 
           ret = local_send_packet(&peer->lc_outfile, buf, len, false);
-          nxsem_post(&peer->lc_sendsem);
+          nxmutex_unlock(&peer->lc_sendlock);
         }
         break;
 #endif /* CONFIG_NET_LOCAL_STREAM */
@@ -345,7 +345,7 @@ static ssize_t local_sendto(FAR struct socket *psock,
 
   /* Make sure that dgram is sent safely */
 
-  ret = nxsem_wait_uninterruptible(&conn->lc_sendsem);
+  ret = nxmutex_lock(&conn->lc_sendlock);
   if (ret < 0)
     {
       /* May fail because the task was canceled. */
@@ -361,7 +361,7 @@ static ssize_t local_sendto(FAR struct socket *psock,
       nerr("ERROR: Failed to send the packet: %zd\n", ret);
     }
 
-  nxsem_post(&conn->lc_sendsem);
+  nxmutex_unlock(&conn->lc_sendlock);
 
 errout_with_sender:
 
@@ -375,7 +375,6 @@ errout_with_halfduplex:
   /* Release our reference to the half duplex FIFO */
 
   local_release_halfduplex(conn);
-
   return ret;
 #else
   return -EISCONN;
@@ -413,7 +412,7 @@ ssize_t local_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   size_t len = msg->msg_iovlen;
 #ifdef CONFIG_NET_LOCAL_SCM
   FAR struct local_conn_s *conn = psock->s_conn;
-  int count;
+  int count = 0;
 
   if (msg->msg_control &&
       msg->msg_controllen > sizeof(struct cmsghdr))

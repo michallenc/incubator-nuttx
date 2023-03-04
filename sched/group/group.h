@@ -29,7 +29,6 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <sched.h>
 
 #include <nuttx/kmalloc.h>
@@ -45,21 +44,10 @@ typedef int (*foreachchild_t)(pid_t pid, FAR void *arg);
  * Public Data
  ****************************************************************************/
 
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
+#if defined(HAVE_GROUP_MEMBERS)
 /* This is the head of a list of all group members */
 
 extern FAR struct task_group_s *g_grouphead;
-#endif
-
-#ifdef CONFIG_ARCH_ADDRENV
-/* This variable holds the current task group.  This pointer is NULL
- * if the current task is a kernel thread that has no address environment
- * (other than the kernel context).
- *
- * This must only be accessed with interrupts disabled.
- */
-
-extern FAR struct task_group_s *g_group_current[CONFIG_SMP_NCPUS];
 #endif
 
 /****************************************************************************
@@ -81,12 +69,13 @@ int  group_bind(FAR struct pthread_tcb_s *tcb);
 int  group_join(FAR struct pthread_tcb_s *tcb);
 #endif
 void group_leave(FAR struct tcb_s *tcb);
+void group_drop(FAR struct task_group_s *group);
 #if defined(CONFIG_SCHED_WAITPID) && !defined(CONFIG_SCHED_HAVE_PARENT)
 void group_add_waiter(FAR struct task_group_s *group);
 void group_del_waiter(FAR struct task_group_s *group);
 #endif
 
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
+#if defined(HAVE_GROUP_MEMBERS)
 FAR struct task_group_s *group_findbypid(pid_t pid);
 #endif
 
@@ -98,12 +87,6 @@ int group_kill_children(FAR struct tcb_s *tcb);
 int group_suspend_children(FAR struct tcb_s *tcb);
 int group_continue(FAR struct tcb_s *tcb);
 #endif
-#endif
-
-#ifdef CONFIG_ARCH_ADDRENV
-/* Group address environment management */
-
-int group_addrenv(FAR struct tcb_s *tcb);
 #endif
 
 /* Convenience functions */

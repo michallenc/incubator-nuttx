@@ -4,13 +4,14 @@
 #
 
 config LIBC_NETDB
-	bool
+	bool "netdb support"
 	default n
 
 menu "NETDB Support"
 
 config LIBC_GAISTRERROR
 	bool "Enable gai_strerror"
+	depends on LIBC_NETDB
 	default n
 	---help---
 		The gai_strerror() function shall return a text string describing an error
@@ -20,10 +21,12 @@ config LIBC_GAISTRERROR
 
 config NETDB_BUFSIZE
 	int "gethostbyname/gethostbyaddr buffer size"
+	depends on LIBC_NETDB
 	default 256
 
 config NETDB_MAX_IPADDR
 	int "Max number of IP addresses per host"
+	depends on LIBC_NETDB
 	default 2 if NET_IPv4 && NET_IPv6
 	default 1
 	---help---
@@ -117,6 +120,13 @@ config NETDB_DNSCLIENT_RECV_TIMEOUT
 	---help---
 		This is the timeout value when DNS receives response after
 		dns_send_query, unit: seconds
+
+config NETDB_DNSCLIENT_SEND_TIMEOUT
+	int "DNS send timeout"
+	default NETDB_DNSCLIENT_RECV_TIMEOUT
+	---help---
+		This is the timeout value when DNS send request on dns_send_query,
+		unit: seconds
 
 config NETDB_DNSCLIENT_RETRIES
 	int "Number of retries for DNS request"

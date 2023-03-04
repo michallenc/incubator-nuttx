@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <clock/clock.h>
+#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -41,7 +42,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/mqueue.h>
 #include <nuttx/spinlock.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/kthread.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
@@ -90,10 +91,6 @@
 #  define NVS_FS_PREFIX CONFIG_ESP32C3_WIFI_FS_MOUNTPT
 #  define NVS_DIR_BASE  NVS_FS_PREFIX"/wifi."
 #  define NVS_FILE_MODE 0777
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
 #define WIFI_CONNECT_TIMEOUT  CONFIG_ESP32C3_WIFI_CONNECT_TIMEOUT
@@ -345,7 +342,7 @@ static int esp_get_time(void *t);
 static uint32_t esp_clk_slowclk_cal_get_wrapper(void);
 static void esp_log_writev(uint32_t level, const char *tag,
                            const char *format, va_list args)
-            printflike(3, 0);
+            printf_like(3, 0);
 static void *esp_malloc_internal(size_t size);
 static void *esp_realloc_internal(void *ptr, size_t size);
 static void *esp_calloc_internal(size_t n, size_t size);
@@ -400,7 +397,7 @@ void ets_timer_arm_us(void *timer, uint32_t us, bool repeat);
 int64_t esp_timer_get_time(void);
 void esp_fill_random(void *buf, size_t len);
 void esp_log_write(uint32_t level, const char *tag, const char *format, ...)
-     printflike(3, 4);
+     printf_like(3, 4);
 uint32_t esp_log_timestamp(void);
 uint8_t esp_crc8(const uint8_t *p, uint32_t len);
 
@@ -417,7 +414,7 @@ static bool g_wifi_irq_bind;
 static struct work_s g_wifi_evt_work;
 static sq_queue_t g_wifi_evt_queue;
 static struct wifi_notify g_wifi_notify[WIFI_ADPT_EVT_MAX];
-static sem_t g_wifiexcl_sem = SEM_INITIALIZER(1);
+static mutex_t g_wifiexcl_lock = NXMUTEX_INITIALIZER;
 
 /* Wi-Fi adapter reference */
 
@@ -898,7 +895,7 @@ static int esp_wifi_lock(bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&g_wifiexcl_sem);
+      ret = nxmutex_lock(&g_wifiexcl_lock);
       if (ret < 0)
         {
           wlinfo("INFO: Failed to lock Wi-Fi ret=%d\n", ret);
@@ -906,7 +903,7 @@ static int esp_wifi_lock(bool lock)
     }
   else
     {
-      ret = nxsem_post(&g_wifiexcl_sem);
+      ret = nxmutex_unlock(&g_wifiexcl_lock);
       if (ret < 0)
         {
           wlinfo("INFO: Failed to unlock Wi-Fi ret=%d\n", ret);
@@ -980,7 +977,9 @@ static void esp32c3_ints_on(uint32_t mask)
 {
   int n = __builtin_ffs(mask) - 1;
 
-  up_enable_irq(n);
+  wlinfo("INFO mask=%08lx irq=%d\n", mask, n);
+
+  up_enable_irq(ESP32C3_IRQ_WMAC);
 }
 
 /****************************************************************************
@@ -1001,7 +1000,9 @@ static void esp32c3_ints_off(uint32_t mask)
 {
   int n = __builtin_ffs(mask) - 1;
 
-  up_disable_irq(n);
+  wlinfo("INFO mask=%08lx irq=%d\n", mask, n);
+
+  up_disable_irq(ESP32C3_IRQ_WMAC);
 }
 
 /****************************************************************************
@@ -2094,7 +2095,7 @@ static int32_t esp_task_ms_to_tick(uint32_t ms)
 
 static void *esp_task_get_current_task(void)
 {
-  pid_t pid = getpid();
+  pid_t pid = nxsched_getpid();
 
   return (void *)((uintptr_t)pid);
 }
@@ -4960,7 +4961,7 @@ int esp_wifi_notify_subscribe(pid_t pid, struct sigevent *event)
             {
               if (pid == 0)
                 {
-                  pid = getpid();
+                  pid = nxsched_getpid();
                   wlinfo("Actual PID=%d\n", pid);
                 }
 
@@ -5089,13 +5090,6 @@ int esp_wifi_adapter_init(void)
       wlerr("ERROR: Failed to register TX done callback ret=%d\n", ret);
       ret = wifi_errno_trans(ret);
       goto errout_init_txdone;
-    }
-
-  ret = esp_wifi_scan_init();
-  if (ret < 0)
-    {
-      nerr("ERROR: Initialize Wi-Fi scan parameter error: %d\n", ret);
-      return ret;
     }
 
   ret = esp_wifi_set_country(&country);

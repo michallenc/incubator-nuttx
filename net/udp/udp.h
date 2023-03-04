@@ -29,11 +29,12 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <queue.h>
 
+#include <nuttx/queue.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/net/ip.h>
 #include <nuttx/net/net.h>
+#include <nuttx/net/udp.h>
 #include <nuttx/mm/iob.h>
 
 #ifdef CONFIG_NET_UDP_NOTIFIER
@@ -69,8 +70,14 @@
 /* Definitions for the UDP connection struct flag field */
 
 #define _UDP_FLAG_CONNECTMODE (1 << 0) /* Bit 0:  UDP connection-mode */
+#define _UDP_FLAG_PKTINFO     (1 << 1) /* Bit 1:  UDP PKTINFO */
 
 #define _UDP_ISCONNECTMODE(f) (((f) & _UDP_FLAG_CONNECTMODE) != 0)
+
+/* This is a helper pointer for accessing the contents of the udp header */
+
+#define UDPIPv4BUF ((FAR struct udp_hdr_s *)IPBUF(IPv4_HDRLEN))
+#define UDPIPv6BUF ((FAR struct udp_hdr_s *)IPBUF(IPv6_HDRLEN))
 
 /****************************************************************************
  * Public Type Definitions
@@ -689,11 +696,8 @@ uint16_t udp_callback(FAR struct net_driver_s *dev,
  *
  * Input Parameters:
  *   psock    Pointer to the socket structure for the SOCK_DRAM socket
- *   buf      Buffer to receive data
- *   len      Length of buffer
+ *   msg      Receive info and buffer for receive data
  *   flags    Receive flags
- *   from     INET address of source (may be NULL)
- *   fromlen  The length of the address structure
  *
  * Returned Value:
  *   On success, returns the number of characters received.  On  error,
@@ -703,9 +707,8 @@ uint16_t udp_callback(FAR struct net_driver_s *dev,
  *
  ****************************************************************************/
 
-ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR void *buf,
-                           size_t len, int flags, FAR struct sockaddr *from,
-                           FAR socklen_t *fromlen);
+ssize_t psock_udp_recvfrom(FAR struct socket *psock, FAR struct msghdr *msg,
+                           int flags);
 
 /****************************************************************************
  * Name: psock_udp_sendto
@@ -892,7 +895,7 @@ void udp_readahead_signal(FAR struct udp_conn_s *conn);
  *   When write buffer becomes empty, *all* of the workers waiting
  *   for that event data will be executed.  If there are multiple workers
  *   waiting for read-ahead data then only the first to execute will get the
- *   data.  Others will need to call tcp_writebuffer_notifier_setup() once
+ *   data.  Others will need to call udp_writebuffer_notifier_setup() once
  *   again.
  *
  * Input Parameters:
@@ -939,12 +942,10 @@ int udp_txdrain(FAR struct socket *psock, unsigned int timeout);
  *   conn     The TCP connection of interest
  *   cmd      The ioctl command
  *   arg      The argument of the ioctl cmd
- *   arglen   The length of 'arg'
  *
  ****************************************************************************/
 
-int udp_ioctl(FAR struct udp_conn_s *conn,
-              int cmd, FAR void *arg, size_t arglen);
+int udp_ioctl(FAR struct udp_conn_s *conn, int cmd, unsigned long arg);
 
 /****************************************************************************
  * Name: udp_sendbuffer_notify
@@ -963,6 +964,22 @@ int udp_ioctl(FAR struct udp_conn_s *conn,
 #if CONFIG_NET_SEND_BUFSIZE > 0
 void udp_sendbuffer_notify(FAR struct udp_conn_s *conn);
 #endif /* CONFIG_NET_SEND_BUFSIZE */
+
+/****************************************************************************
+ * Name: udpip_hdrsize
+ *
+ * Description:
+ *   Get the total size of L3 and L4 UDP header
+ *
+ * Input Parameters:
+ *   conn     The connection structure associated with the socket
+ *
+ * Returned Value:
+ *   the total size of L3 and L4 TCP header
+ *
+ ****************************************************************************/
+
+uint16_t udpip_hdrsize(FAR struct udp_conn_s *conn);
 
 #undef EXTERN
 #ifdef __cplusplus

@@ -24,6 +24,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <string.h>
@@ -55,10 +56,6 @@
 # define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
 # define nxflat_dumpbuffer(m,b,n)
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
 #endif
 
 /****************************************************************************
@@ -205,7 +202,7 @@ static int nxflat_loadbinary(FAR struct binary_s *binp,
    * needed when the module is executed.
    */
 
-  up_addrenv_clone(&loadinfo.addrenv, &binp->addrenv);
+  up_addrenv_clone(&loadinfo.addrenv.addrenv, &binp->addrenv.addrenv);
 #endif
 
   nxflat_dumpbuffer("Entry code", (FAR const uint8_t *)binp->entrypt,

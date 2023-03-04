@@ -31,7 +31,6 @@
 
 #include <sys/types.h>
 #include <sys/uio.h>
-#include <queue.h>
 
 #include <nuttx/semaphore.h>
 
@@ -41,15 +40,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef ARRAY_SIZE
-#  define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
-
-/* Internal socket type/domain for marking usrsock sockets */
-
-#define SOCK_USRSOCK_TYPE   0x7f
-#define PF_USRSOCK_DOMAIN   0x7f
 
 /* Internal event flags */
 
@@ -61,8 +51,6 @@
 /****************************************************************************
  * Public Type Definitions
  ****************************************************************************/
-
-struct usrsockdev_s;
 
 enum usrsock_conn_state_e
 {
@@ -91,7 +79,6 @@ struct usrsock_conn_s
 
   enum usrsock_conn_state_e state;   /* State of kernel<->daemon link for conn */
   bool          connected;           /* Socket has been connected */
-  int8_t        type;                /* Socket type (SOCK_STREAM, etc) */
   int16_t       usockid;             /* Connection number used for kernel<->daemon */
   uint16_t      flags;               /* Socket state flags */
 
@@ -103,6 +90,7 @@ struct usrsock_conn_s
     uint16_t valuelen;          /* Length of value from daemon */
     uint16_t valuelen_nontrunc; /* Actual length of value at daemon */
     int      result;            /* Result for request */
+    uint16_t events;            /* Response events for the request */
 
     struct
     {
@@ -265,24 +253,19 @@ void usrsock_setup_datain(FAR struct usrsock_conn_s *conn,
  *
  ****************************************************************************/
 
-int usrsock_event(FAR struct usrsock_conn_s *conn, uint16_t events);
+int usrsock_event(FAR struct usrsock_conn_s *conn);
 
 /****************************************************************************
- * Name: usrsockdev_do_request
- ****************************************************************************/
-
-int usrsockdev_do_request(FAR struct usrsock_conn_s *conn,
-                          FAR struct iovec *iov, unsigned int iovcnt);
-
-/****************************************************************************
- * Name: usrsockdev_register
+ * Name: usrsock_do_request
  *
  * Description:
- *   Register /dev/usrsock
+ *   The usrsock_do_request() function will send usrsock request message
+ *   to the usrsock network interface driver
  *
  ****************************************************************************/
 
-void usrsockdev_register(void);
+int usrsock_do_request(FAR struct usrsock_conn_s *conn,
+                       FAR struct iovec *iov, unsigned int iovcnt);
 
 /****************************************************************************
  * Name: usrsock_socket
@@ -557,7 +540,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
  *   See <sys/socket.h> a complete list of values for the 'option' argument.
  *
  * Input Parameters:
- *   conn      usrsock socket connection structure
+ *   psock     Socket structure of the socket to query
  *   level     Protocol level to set the option
  *   option    identifies the option to get
  *   value     Points to the argument value
@@ -565,9 +548,8 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
  *
  ****************************************************************************/
 
-int usrsock_getsockopt(FAR struct usrsock_conn_s *conn, int level,
-                       int option, FAR void *value,
-                       FAR socklen_t *value_len);
+int usrsock_getsockopt(FAR struct socket *psock, int level, int option,
+                       FAR void *value, FAR socklen_t *value_len);
 
 /****************************************************************************
  * Name: usrsock_setsockopt
@@ -583,7 +565,7 @@ int usrsock_getsockopt(FAR struct usrsock_conn_s *conn, int level,
  *   See <sys/socket.h> a complete list of values for the 'option' argument.
  *
  * Input Parameters:
- *   conn      usrsock socket connection structure
+ *   psock     Socket structure of the socket to query
  *   level     Protocol level to set the option
  *   option    identifies the option to set
  *   value     Points to the argument value
@@ -591,9 +573,8 @@ int usrsock_getsockopt(FAR struct usrsock_conn_s *conn, int level,
  *
  ****************************************************************************/
 
-int usrsock_setsockopt(FAR struct usrsock_conn_s *conn, int level,
-                       int option, FAR const void *value,
-                       FAR socklen_t value_len);
+int usrsock_setsockopt(FAR struct socket *psock, int level, int option,
+                       FAR const void *value, socklen_t value_len);
 
 /****************************************************************************
  * Name: usrsock_getsockname
@@ -656,12 +637,33 @@ int usrsock_getpeername(FAR struct socket *psock,
  *   psock    A reference to the socket structure of the socket
  *   cmd      The ioctl command
  *   arg      The argument of the ioctl cmd
- *   arglen   The length of 'arg'
  *
  ****************************************************************************/
 
-int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
-                  size_t arglen);
+int usrsock_ioctl(FAR struct socket *psock, int cmd, unsigned long arg);
+
+/****************************************************************************
+ * Name: usrsock_shutdown
+ *
+ * Description:
+ *   The shutdown() function will cause all or part of a full-duplex
+ *   connection on the socket associated with the file descriptor socket to
+ *   be shut down.
+ *
+ *   The shutdown() function disables subsequent send and/or receive
+ *   operations on a socket, depending on the value of the how argument.
+ *
+ * Input Parameters:
+ *   psock    A reference to the socket structure of the socket
+ *   how      Specifies the type of shutdown. The values are as follows:
+ *
+ *     SHUT_RD   - Disables further receive operations.
+ *     SHUT_WR   - Disables further send operations.
+ *     SHUT_RDWR - Disables further send and receive operations.
+ *
+ ****************************************************************************/
+
+int usrsock_shutdown(FAR struct socket *psock, int how);
 
 #undef EXTERN
 #ifdef __cplusplus

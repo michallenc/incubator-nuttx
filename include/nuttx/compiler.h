@@ -126,10 +126,10 @@
 #  if !defined(__CYGWIN__) && !defined(CONFIG_ARCH_GNU_NO_WEAKFUNCTIONS)
 #    define CONFIG_HAVE_WEAKFUNCTIONS 1
 #    define weak_alias(name, aliasname) \
-     extern __typeof (name) aliasname __attribute__ ((weak, alias (#name)));
-#    define weak_data __attribute__ ((weak))
-#    define weak_function __attribute__ ((weak))
-#    define weak_const_function __attribute__ ((weak, __const__))
+     extern __typeof(name) aliasname __attribute__((weak, alias(#name)));
+#    define weak_data __attribute__((weak))
+#    define weak_function __attribute__((weak))
+#    define weak_const_function __attribute__((weak, __const__))
 #  else
 #    undef  CONFIG_HAVE_WEAKFUNCTIONS
 #    define weak_alias(name, aliasname)
@@ -142,32 +142,41 @@
  * C11 adds _Noreturn keyword (see stdnoreturn.h)
  */
 
-#  define noreturn_function __attribute__ ((noreturn))
+#  define noreturn_function __attribute__((noreturn))
 
 /* The farcall_function attribute informs GCC that is should use long calls
  * (even though -mlong-calls does not appear in the compilation options)
  */
 
-#  define farcall_function __attribute__ ((long_call))
+#  if defined(__clang__)
+#    define farcall_function
+#  else
+#    define farcall_function __attribute__((long_call))
+#  endif
+
+/* Branch prediction */
+
+#  define likely(x) __builtin_expect((x), 1)
+#  define unlikely(x) __builtin_expect((x), 0)
 
 /* Code locate */
 
-#  define locate_code(n) __attribute__ ((section(n)))
+#  define locate_code(n) __attribute__((section(n)))
 
 /* Data alignment */
 
-#  define aligned_data(n) __attribute__ ((aligned(n)))
+#  define aligned_data(n) __attribute__((aligned(n)))
 
 /* Data location */
 
-#  define locate_data(n) __attribute__ ((section(n)))
+#  define locate_data(n) __attribute__((section(n)))
 
 /* The packed attribute informs GCC that the structure elements are packed,
  * ignoring other alignment rules.
  */
 
 #  define begin_packed_struct
-#  define end_packed_struct __attribute__ ((packed))
+#  define end_packed_struct __attribute__((packed))
 
 /* GCC does not support the reentrant attribute */
 
@@ -177,23 +186,23 @@
  * the function prolog and epilog.
  */
 
-#  define naked_function __attribute__ ((naked,no_instrument_function))
+#  define naked_function __attribute__((naked,no_instrument_function))
 
-/* The inline_function attribute informs GCC that the function should always
- * be inlined, regardless of the level of optimization.  The
+/* The always_inline_function attribute informs GCC that the function should
+ * always be inlined, regardless of the level of optimization.  The
  * noinline_function indicates that the function should never be inlined.
  */
 
-#  define inline_function __attribute__ ((always_inline,no_instrument_function))
-#  define noinline_function __attribute__ ((noinline))
+#  define always_inline_function __attribute__((always_inline,no_instrument_function))
+#  define noinline_function __attribute__((noinline))
 
 /* The noinstrument_function attribute informs GCC don't instrument it */
 
-#  define noinstrument_function __attribute__ ((no_instrument_function))
+#  define noinstrument_function __attribute__((no_instrument_function))
 
 /* The nosanitize_address attribute informs GCC don't sanitize it */
 
-#  define nosanitize_address __attribute__ ((no_sanitize_address))
+#  define nosanitize_address __attribute__((no_sanitize_address))
 
 /* The nosanitize_undefined attribute informs GCC don't sanitize it */
 
@@ -205,7 +214,7 @@
 
 #  if defined(__has_attribute)
 #    if __has_attribute(no_stack_protector)
-#      define nostackprotect_function __attribute__ ((no_stack_protector))
+#      define nostackprotect_function __attribute__((no_stack_protector))
 #    endif
 #  endif
 
@@ -216,9 +225,9 @@
 
 #  ifndef nostackprotect_function
 #    if defined(__clang__)
-#      define nostackprotect_function __attribute__ ((optnone))
+#      define nostackprotect_function __attribute__((optnone))
 #    else
-#      define nostackprotect_function __attribute__ ((__optimize__("-fno-stack-protector")))
+#      define nostackprotect_function __attribute__((__optimize__("-fno-stack-protector")))
 #    endif
 #  endif
 
@@ -229,6 +238,24 @@
 #  define used_code __attribute__((used))
 #  define used_data __attribute__((used))
 
+/* The allocation function annonations */
+
+#  if __GNUC__ >= 11
+#    define fopen_like __attribute__((__malloc__(fclose, 1)))
+#    define popen_like __attribute__((__malloc__(pclose, 1)))
+#    define malloc_like __attribute__((__malloc__(__builtin_free, 1)))
+#    define malloc_like1(a) __attribute__((__malloc__(__builtin_free, 1))) __attribute__((__alloc_size__(a)))
+#    define malloc_like2(a, b) __attribute__((__malloc__(__builtin_free, 1))) __attribute__((__alloc_size__(a, b)))
+#    define realloc_like(a) __attribute__((__alloc_size__(a)))
+#  else
+#    define fopen_like __attribute__((__malloc__))
+#    define popen_like __attribute__((__malloc__))
+#    define malloc_like __attribute__((__malloc__))
+#    define malloc_like1(a) __attribute__((__malloc__)) __attribute__((__alloc_size__(a)))
+#    define malloc_like2(a, b) __attribute__((__malloc__)) __attribute__((__alloc_size__(a, b)))
+#    define realloc_like(a) __attribute__((__alloc_size__(a)))
+#  endif
+
 /* Some versions of GCC have a separate __syslog__ format.
  * http://mail-index.netbsd.org/source-changes/2015/10/14/msg069435.html
  * Use it if available. Otherwise, assume __printf__ accepts %m.
@@ -238,11 +265,11 @@
 #    define __syslog__ __printf__
 #  endif
 
-#  define formatlike(a) __attribute__((__format_arg__ (a)))
-#  define printflike(a, b) __attribute__((__format__ (__printf__, a, b)))
-#  define sysloglike(a, b) __attribute__((__format__ (__syslog__, a, b)))
-#  define scanflike(a, b) __attribute__((__format__ (__scanf__, a, b)))
-#  define strftimelike(a) __attribute__((__format__ (__strftime__, a, 0)))
+#  define format_like(a) __attribute__((__format_arg__(a)))
+#  define printf_like(a, b) __attribute__((__format__(__printf__, a, b)))
+#  define syslog_like(a, b) __attribute__((__format__(__syslog__, a, b)))
+#  define scanf_like(a, b) __attribute__((__format__(__scanf__, a, b)))
+#  define strftime_like(a) __attribute__((__format__(__strftime__, a, 0)))
 
 /* GCC does not use storage classes to qualify addressing */
 
@@ -449,6 +476,8 @@
  */
 
 #  define noreturn_function
+#  define likely(x) (x)
+#  define unlikely(x) (x)
 #  define locate_code(n)
 #  define aligned_data(n)
 #  define locate_data(n)
@@ -465,7 +494,7 @@
 
 /* SDCC does not support forced inlining. */
 
-#  define inline_function
+#  define always_inline_function
 #  define noinline_function
 #  define noinstrument_function
 #  define nosanitize_address
@@ -477,11 +506,18 @@
 #  define used_code
 #  define used_data
 
-#  define formatlike(a)
-#  define printflike(a, b)
-#  define sysloglike(a, b)
-#  define scanflike(a, b)
-#  define strftimelike(a)
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
 
 /* The reentrant attribute informs SDCC that the function
  * must be reentrant.  In this case, SDCC will store input
@@ -592,13 +628,15 @@
  */
 
 #  define noreturn_function
+#  define likely(x) (x)
+#  define unlikely(x) (x)
 #  define aligned_data(n)
 #  define locate_code(n)
 #  define locate_data(n)
 #  define begin_packed_struct
 #  define end_packed_struct
 #  define naked_function
-#  define inline_function
+#  define always_inline_function
 #  define noinline_function
 #  define noinstrument_function
 #  define nosanitize_address
@@ -608,11 +646,17 @@
 #  define unused_data
 #  define used_code
 #  define used_data
-#  define formatlike(a)
-#  define printflike(a, b)
-#  define sysloglike(a, b)
-#  define scanflike(a, b)
-#  define strftimelike(a)
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
 
 /* REVISIT: */
 
@@ -693,6 +737,8 @@
 #  define weak_const_function
 #  define noreturn_function
 #  define farcall_function
+#  define likely(x) (x)
+#  define unlikely(x) (x)
 #  define locate_code(n)
 #  define aligned_data(n)
 #  define locate_data(n)
@@ -700,7 +746,7 @@
 #  define end_packed_struct
 #  define reentrant_function
 #  define naked_function
-#  define inline_function
+#  define always_inline_function
 #  define noinline_function
 #  define noinstrument_function
 #  define nosanitize_address
@@ -710,11 +756,17 @@
 #  define unused_data
 #  define used_code
 #  define used_data
-#  define formatlike(a)
-#  define printflike(a, b)
-#  define sysloglike(a, b)
-#  define scanflike(a, b)
-#  define strftimelike(a)
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
 
 #  define FAR
 #  define NEAR
@@ -745,6 +797,83 @@
 
 #  define no_builtin(n)
 
+/* MSVC(Microsoft Visual C++)-specific definitions **************************/
+
+#elif defined(_MSC_VER)
+
+/* Define these here and allow specific architectures to override as needed */
+
+#  define CONFIG_HAVE_LONG_LONG 1
+#  define CONFIG_HAVE_FLOAT 1
+#  define CONFIG_HAVE_DOUBLE 1
+#  define CONFIG_HAVE_LONG_DOUBLE 1
+
+/* Pre-processor */
+
+#  define CONFIG_CPP_HAVE_VARARGS 1 /* Supports variable argument macros */
+
+/* Intriniscs */
+
+#  define CONFIG_HAVE_FUNCTIONNAME 1 /* Has __FUNCTION__ */
+#  define CONFIG_HAVE_FILENAME     1 /* Has __FILE__ */
+
+#  undef  CONFIG_CPP_HAVE_WARNING
+#  undef  CONFIG_HAVE_WEAKFUNCTIONS
+#  define weak_alias(name, aliasname)
+#  define weak_data
+#  define weak_function
+#  define weak_const_function
+#  define restrict
+#  define noreturn_function
+#  define farcall_function
+#  define likely(x) (x)
+#  define unlikely(x) (x)
+#  define aligned_data(n)
+#  define locate_code(n)
+#  define locate_data(n)
+#  define begin_packed_struct
+#  define end_packed_struct
+#  define reentrant_function
+#  define naked_function
+#  define always_inline_function
+#  define noinline_function
+#  define noinstrument_function
+#  define nosanitize_address
+#  define nosanitize_undefined
+#  define nostackprotect_function
+#  define unused_code
+#  define unused_data
+#  define used_code
+#  define used_data
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
+
+#  define FAR
+#  define NEAR
+#  define DSEG
+#  define CODE
+#  define IOBJ
+#  define IPTR
+
+#  undef  CONFIG_SMALL_MEMORY
+#  undef  CONFIG_LONG_IS_NOT_INT
+#  undef  CONFIG_PTR_IS_NOT_INT
+
+#  define UNUSED(a) ((void)(1 || &(a)))
+
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
+
+#  define no_builtin(n)
+
 /* Unknown compiler *********************************************************/
 
 #else
@@ -761,6 +890,8 @@
 #  define restrict
 #  define noreturn_function
 #  define farcall_function
+#  define likely(x) (x)
+#  define unlikely(x) (x)
 #  define aligned_data(n)
 #  define locate_code(n)
 #  define locate_data(n)
@@ -768,7 +899,7 @@
 #  define end_packed_struct
 #  define reentrant_function
 #  define naked_function
-#  define inline_function
+#  define always_inline_function
 #  define noinline_function
 #  define noinstrument_function
 #  define nosanitize_address
@@ -778,11 +909,17 @@
 #  define unused_data
 #  define used_code
 #  define used_data
-#  define formatlike(a)
-#  define printflike(a, b)
-#  define sysloglike(a, b)
-#  define scanflike(a, b)
-#  define strftimelike(a)
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
 
 #  define FAR
 #  define NEAR
@@ -805,6 +942,10 @@
 
 #  define no_builtin(n)
 
+#endif
+
+#ifndef CONFIG_HAVE_LONG_LONG
+#  undef CONFIG_FS_LARGEFILE
 #endif
 
 /****************************************************************************

@@ -27,12 +27,14 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/fs/nxffs.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 /****************************************************************************
@@ -170,16 +172,6 @@
 
 #define NXFFS_NERASED             128
 
-/* Quasi-standard definitions */
-
-#ifndef MIN
-#  define MIN(a,b)                ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b)                ((a) > (b) ? (a) : (b))
-#endif
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -274,7 +266,7 @@ struct nxffs_wrfile_s
 struct nxffs_volume_s
 {
   FAR struct mtd_dev_s     *mtd;       /* Supports FLASH access */
-  sem_t                     exclsem;   /* Used to assure thread-safe access */
+  mutex_t                   lock;      /* Used to assure thread-safe access */
   sem_t                     wrsem;     /* Enforces single writer restriction */
   struct mtd_geometry_s     geo;       /* Device geometry */
   uint8_t                   blkper;    /* R/W blocks per erase block */

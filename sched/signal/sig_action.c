@@ -27,12 +27,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <signal.h>
-#include <queue.h>
 #include <sched.h>
 #include <assert.h>
 #include <errno.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/queue.h>
 #include <nuttx/spinlock.h>
 
 #include "sched/sched.h"
@@ -373,6 +373,7 @@ int nxsig_action(int signo, FAR const struct sigaction *act,
       sigact->act.sa_handler = handler;
       sigact->act.sa_mask    = act->sa_mask;
       sigact->act.sa_flags   = act->sa_flags;
+      sigact->act.sa_user    = act->sa_user;
     }
 
   return OK;

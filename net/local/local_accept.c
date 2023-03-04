@@ -28,10 +28,10 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <queue.h>
 #include <debug.h>
 
 #include <nuttx/nuttx.h>
+#include <nuttx/queue.h>
 #include <nuttx/net/net.h>
 
 #include "socket/socket.h"
@@ -55,7 +55,7 @@ static int local_waitlisten(FAR struct local_conn_s *server)
     {
       /* No.. wait for a connection or a signal */
 
-      ret = net_lockedwait(&server->lc_waitsem);
+      ret = net_sem_wait(&server->lc_waitsem);
       if (ret < 0)
         {
           return ret;
@@ -245,7 +245,7 @@ int local_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
 
           if (ret == OK)
             {
-              ret = net_lockedwait(&client->lc_donesem);
+              ret = net_sem_wait(&client->lc_donesem);
             }
 
           return ret;

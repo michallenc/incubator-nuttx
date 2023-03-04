@@ -613,7 +613,6 @@ static int sixlowpan_send_packet(FAR struct socket *psock,
           /* Initialize the send state structure */
 
           nxsem_init(&sinfo.s_waitsem, 0, 0);
-          nxsem_set_protocol(&sinfo.s_waitsem, SEM_PRIO_NONE);
 
           sinfo.s_conn      = conn;
           sinfo.s_result    = -EBUSY;
@@ -643,7 +642,7 @@ static int sixlowpan_send_packet(FAR struct socket *psock,
           netdev_txnotify_dev(dev);
 
           /* Wait for the send to complete or an error to occur.
-           * net_timedwait will also terminate if a signal is received.
+           * net_sem_timedwait will also terminate if a signal is received.
            */
 
           ninfo("Wait for send complete\n");
@@ -652,7 +651,7 @@ static int sixlowpan_send_packet(FAR struct socket *psock,
             {
               uint32_t acked = sinfo.s_acked;
 
-              ret = net_timedwait(&sinfo.s_waitsem, timeout);
+              ret = net_sem_timedwait(&sinfo.s_waitsem, timeout);
               if (ret != -ETIMEDOUT || acked == sinfo.s_acked)
                 {
                   if (ret == -ETIMEDOUT)
@@ -908,7 +907,7 @@ void sixlowpan_tcp_send(FAR struct net_driver_s *dev,
           if (hdrlen > dev->d_len)
             {
               nwarn("WARNING:  Dropping small TCP packet: %u < %u\n",
-                    buflen, hdrlen);
+                    dev->d_len, hdrlen);
             }
           else
             {

@@ -27,25 +27,13 @@
 #include "arm.h"
 #include "cp15.h"
 #include "sctlr.h"
+#include "arm_internal.h"
 
 	.file	"arm_head.S"
 
 /****************************************************************************
  * Configuration
  ****************************************************************************/
-
-/* Hard-coded options */
-
-#undef CPU_ALIGNMENT_TRAP
-#undef CPU_CACHE_ROUND_ROBIN
-#undef CPU_DCACHE_DISABLE
-#undef CPU_ICACHE_DISABLE
-#define CPU_SCTLR_CCP15BEN 1
-#define CPU_BACKGROUND_REGION 1
-#undef CPU_DIV0_FAULT
-#undef CPU_FAST_INTERRUPT
-#undef CPU_IMPL_VECTORS
-#undef CPU_NONMASKABLE_FIQ
 
 /* There are three operational memory configurations:
  *
@@ -130,6 +118,8 @@
  */
 
 	.text
+	.syntax	unified
+	.arm
 	.global	__start
 	.type	__start, #function
 
@@ -160,6 +150,7 @@ __start:
 	mcr		CP15_BPIALL(r0)		/* Invalidate entire branch prediction array */
 	mcr		CP15_ICIALLU(r0)	/* Invalidate I-cache */
 	mcr		CP15_DCIALLU(r0)	/* Invalidate D-cache */
+	isb
 
 	/* Configure the system control register (see sctrl.h) */
 
@@ -189,19 +180,18 @@ __start:
 	 *   SCTLR_EE       Bit 25: 0=Little endian.
 	 *   SCTLR_NMFI     Bit 27: Non-maskable FIQ (NMFI) support
 	 *   SCTLR_TE       Bit 30: All exceptions handled in ARM state.
-	 *   SCTLR_IE       Bit 31: Instruction endian-ness.
 	 */
 
 	/* Clear all configurable bits */
 
-	bic		r0, r0, #(SCTLR_M | SCTLR_A  | SCTLR_C | SCTLR_CCP15BEN | SCTLR_B)
-	bic		r0, r0, #(SCTLR_SW | SCTLR_I | SCTLR_V   | SCTLR_RR)
-	bic		r0, r0, #(SCTLR_BR | SCTLR_DZ | SCTLR_FI | SCTLR_U)
-	bic		r0, r0, #(SCTLR_VE | SCTLR_EE | SCTLR_NMFI | SCTLR_TE | SCTLR_IE)
+	bic		r0, r0, #(SCTLR_M  | SCTLR_A  | SCTLR_C    | SCTLR_CCP15BEN | SCTLR_B)
+	bic		r0, r0, #(SCTLR_SW | SCTLR_I  | SCTLR_V    | SCTLR_RR)
+	bic		r0, r0, #(SCTLR_BR | SCTLR_DZ | SCTLR_FI)
+	bic		r0, r0, #(SCTLR_VE | SCTLR_EE | SCTLR_NMFI | SCTLR_TE)
 
 	/* Set configured bits */
 
-#ifdef CPU_ALIGNMENT_TRAP
+#ifdef CONFIG_ARMV7R_ALIGNMENT_TRAP
 	/* Alignment abort enable
 	 *
 	 *   SCTLR_A Bit 1:  Strict alignment enabled
@@ -210,7 +200,7 @@ __start:
 	orr		r0, r0, #(SCTLR_A)
 #endif
 
-#ifndef CPU_DCACHE_DISABLE
+#ifndef CONFIG_ARMV7R_DCACHE_DISABLE
 	/* Dcache enable
 	 *
 	 *   SCTLR_C    Bit 2:  DCache enable
@@ -219,7 +209,7 @@ __start:
 	orr		r0, r0, #(SCTLR_C)
 #endif
 
-#ifdef CPU_SCTLR_CCP15BEN
+#ifdef CONFIG_ARMV7R_SCTLR_CCP15BEN
 	/* Enable memory barriers
 	 *
 	 *  SCTLR_CCP15BEN Bit 5: CP15 barrier enable
@@ -228,7 +218,7 @@ __start:
 	orr		r0, r0, #(SCTLR_CCP15BEN)
 #endif
 
-#ifndef CPU_ICACHE_DISABLE
+#ifndef CONFIG_ARMV7R_ICACHE_DISABLE
 	/* Icache enable
 	 *
 	 *   SCTLR_I    Bit 12: ICache enable
@@ -246,7 +236,7 @@ __start:
 	orr		r0, r0, #(SCTLR_V)
 #endif
 
-#ifdef CPU_CACHE_ROUND_ROBIN
+#ifdef CONFIG_ARMV7R_CACHE_ROUND_ROBIN
 	/* Round Robin cache replacement
 	 *
 	 *   SCTLR_RR   Bit 14: Round-robin replacement strategy.
@@ -255,7 +245,7 @@ __start:
 	orr		r0, r0, #(SCTLR_RR)
 #endif
 
-#ifdef CPU_BACKGROUND_REGION
+#ifdef CONFIG_ARMV7R_BACKGROUND_REGION
 	/* Allow PL1 access to back region when MPU is enabled
 	 *
 	 *  SCTLR_BR Bit 17: Background Region bit
@@ -264,7 +254,7 @@ __start:
 	orr		r0, r0, #(SCTLR_BR)
 #endif
 
-#ifdef CPU_DIV0_FAULT
+#ifdef CONFIG_ARMV7R_DIV0_FAULT
 	/* Enable divide by zero faults
 	 *
 	 *   SCTLR_DZ Bit 19: Divide by Zero fault enable bit
@@ -273,7 +263,7 @@ __start:
 	orr		r0, r0, #(SCTLR_DZ)
 #endif
 
-#ifdef CPU_FAST_INTERRUPT
+#ifdef CONFIG_ARMV7R_FAST_INTERRUPT
 	/* Fast interrupts configuration enable bit
 	 *
 	 *   SCTLR_FI Bit 21: Fast interrupts configuration enable bit
@@ -282,7 +272,7 @@ __start:
 	orr		r0, r0, #(SCTLR_FI)
 #endif
 
-#ifdef CPU_IMPL_VECTORS
+#ifdef CONFIG_ARMV7R_IMPL_VECTORS
 	/* Implementation defined interrupt vectors
 	 *
 	 *   SCTLR_VE Bit 24: Interrupt Vectors Enable bit
@@ -300,7 +290,7 @@ __start:
 	orr		r0, r0, #(SCTLR_EE)
 #endif
 
-#ifdef CPU_NONMASKABLE_FIQ
+#ifdef CONFIG_ARMV7R_NONMASKABLE_FIQ
 	/* Non-maskable FIQ support
 	 *
 	 *   SCTLR_NMFI Bit 27: Non-maskable FIQ (NMFI) support
@@ -312,6 +302,7 @@ __start:
 	/* Then write the configured control register */
 
 	mcr		CP15_SCTLR(r0)			/* Write control reg */
+	isb
 	.rept		12				/* Some CPUs want want lots of NOPs here */
 	nop
 	.endr
@@ -426,7 +417,7 @@ arm_data_initialize:
 	cmp		r1, r2
 	blt		3b
 
-#ifndef CPU_DCACHE_DISABLE
+#ifndef CONFIG_ARMV7R_DCACHE_DISABLE
 	/* Flush the copied RAM functions into physical RAM so that will
 	 * be available when fetched into the I-Cache.
 	 *

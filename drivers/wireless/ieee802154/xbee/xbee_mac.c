@@ -302,7 +302,7 @@ int xbee_req_data(XBEEHANDLE xbee,
 
   /* Support one pending transmit at a time */
 
-  while (nxsem_wait(&priv->tx_sem) < 0);
+  while (nxmutex_lock(&priv->tx_lock) < 0);
 
   /* Figure out how much room we need to place the API frame header */
 
@@ -320,6 +320,7 @@ int xbee_req_data(XBEEHANDLE xbee,
     }
   else
     {
+      nxmutex_unlock(&priv->tx_lock);
       return -EINVAL;
     }
 
@@ -403,7 +404,7 @@ int xbee_req_data(XBEEHANDLE xbee,
     }
   while (!priv->txdone);
 
-  nxsem_post(&priv->tx_sem);
+  nxmutex_unlock(&priv->tx_lock);
   iob_free(frame);
   return OK;
 }

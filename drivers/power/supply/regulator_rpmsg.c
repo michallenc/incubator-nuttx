@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/param.h>
+
 #include <nuttx/kmalloc.h>
 #include <nuttx/list.h>
 #include <nuttx/power/consumer.h>
@@ -37,10 +39,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef ARRAY_SIZE
-#  define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
 
 #define REGULATOR_RPMSG_EPT_NAME    "rpmsg-regulator"
 
@@ -400,7 +398,7 @@ static int regulator_rpmsg_ept_cb(FAR struct rpmsg_endpoint *ept,
       nxsem_post(&cookie->sem);
       ret = 0;
     }
-  else if (cmd < ARRAY_SIZE(g_regulator_rpmsg_handler)
+  else if (cmd < nitems(g_regulator_rpmsg_handler)
            && g_regulator_rpmsg_handler[cmd])
     {
       header->response = 1;
@@ -488,7 +486,6 @@ static int regulator_rpmsg_sendrecv(FAR struct rpmsg_endpoint *ept,
   int ret;
 
   nxsem_init(&cookie.sem, 0, 0);
-  nxsem_set_protocol(&cookie.sem, SEM_PRIO_NONE);
 
   msg->command = command;
   msg->response = 0;
@@ -496,18 +493,17 @@ static int regulator_rpmsg_sendrecv(FAR struct rpmsg_endpoint *ept,
   msg->cookie = (uintptr_t)&cookie;
 
   ret = rpmsg_send_nocopy(ept, msg, len);
-  if (ret < 0)
+  if (ret >= 0)
     {
-      return ret;
+      ret = nxsem_wait_uninterruptible(&cookie.sem);
+      if (ret >= 0)
+        {
+          ret = cookie.result;
+        }
     }
 
-  ret = nxsem_wait_uninterruptible(&cookie.sem);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  return cookie.result;
+  nxsem_destroy(&cookie.sem);
+  return ret;
 }
 
 static int regulator_rpmsg_enable(FAR struct regulator_dev_s *rdev)
@@ -530,7 +526,7 @@ static int regulator_rpmsg_enable(FAR struct regulator_dev_s *rdev)
       return -ENOMEM;
     }
 
-  strcpy(msg->name, name);
+  strlcpy(msg->name, name, len - sizeof(*msg));
   return regulator_rpmsg_sendrecv(ept, REGULATOR_RPMSG_ENABLE,
                                  (struct regulator_rpmsg_header_s *)msg,
                                   len);
@@ -556,7 +552,7 @@ static int regulator_rpmsg_disable(FAR struct regulator_dev_s *rdev)
       return -ENOMEM;
     }
 
-  strcpy(msg->name, name);
+  strlcpy(msg->name, name, len - sizeof(*msg));
   return regulator_rpmsg_sendrecv(ept, REGULATOR_RPMSG_DISABLE,
                                  (struct regulator_rpmsg_header_s *)msg,
                                  len);
@@ -584,7 +580,7 @@ static int regulator_rpmsg_set_voltage(FAR struct regulator_dev_s *rdev,
       return -ENOMEM;
     }
 
-  strcpy(msg->name, name);
+  strlcpy(msg->name, name, len - sizeof(*msg));
   msg->min_uv = min_uv;
   msg->max_uv = max_uv;
 
@@ -613,7 +609,7 @@ static int regulator_rpmsg_get_voltage(FAR struct regulator_dev_s *rdev)
       return -ENOMEM;
     }
 
-  strcpy(msg->name, name);
+  strlcpy(msg->name, name, len - sizeof(*msg));
   return regulator_rpmsg_sendrecv(ept, REGULATOR_RPMSG_GET_VOLTAGE,
                                  (struct regulator_rpmsg_header_s *)msg,
                                   len);
@@ -639,7 +635,7 @@ static int regulator_rpmsg_is_enabled(FAR struct regulator_dev_s *rdev)
       return -ENOMEM;
     }
 
-  strcpy(msg->name, name);
+  strlcpy(msg->name, name, len - sizeof(*msg));
   return regulator_rpmsg_sendrecv(ept, REGULATOR_RPMSG_IS_ENABLED,
                                  (struct regulator_rpmsg_header_s *)msg,
                                   len);

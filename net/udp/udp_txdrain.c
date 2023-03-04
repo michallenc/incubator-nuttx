@@ -100,7 +100,6 @@ int udp_txdrain(FAR struct socket *psock, unsigned int timeout)
   /* Initialize the wait semaphore */
 
   nxsem_init(&waitsem, 0, 0);
-  nxsem_set_protocol(&waitsem, SEM_PRIO_NONE);
 
   /* The following needs to be done with the network stable */
 
@@ -112,7 +111,7 @@ int udp_txdrain(FAR struct socket *psock, unsigned int timeout)
 
       /* There is pending write data.. wait for it to drain. */
 
-      ret = net_timedwait_uninterruptible(&waitsem, timeout);
+      ret = net_sem_timedwait_uninterruptible(&waitsem, timeout);
 
       /* Tear down the notifier (in case we timed out or were canceled) */
 
