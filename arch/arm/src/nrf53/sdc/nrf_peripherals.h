@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/nrf52/sdc/core_cm4.h
+ * arch/arm/src/nrf53/sdc/nrf_peripherals.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,24 +18,13 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_NRF52_SDC_CORE_CM4_H
-#define __ARCH_ARM_SRC_NRF52_SDC_CORE_CM4_H
+#ifndef __ARCH_ARM_SRC_NRF53_SDC_NRF_PERIPHERALS_H
+#define __ARCH_ARM_SRC_NRF53_SDC_NRF_PERIPHERALS_H
 
 /****************************************************************************
- * Preprocessor Definitions
+ * Public Definitions
  ****************************************************************************/
 
-/* These are the definitions needed from CMSIS */
+#define DPPIC_PRESENT 1
 
-#ifdef __cplusplus
-#  define   __I     volatile
-#else
-#  define   __I     volatile const
-#endif
-#define     __O     volatile
-#define     __IO    volatile
-#define     __IM    volatile const
-#define     __OM    volatile
-#define     __IOM   volatile
-
-#endif /* __ARCH_ARM_SRC_NRF52_SDC_CORE_CM4_H */
+#endif  /* __ARCH_ARM_SRC_NRF53_SDC_NRF_PERIPHERALS_H */

@@ -1220,6 +1220,40 @@ static int netdev_imsf_ioctl(FAR struct socket *psock, int cmd,
 #endif
 
 /****************************************************************************
+ * Name: ioctl_arpreq_parse
+ *
+ * Description:
+ *   Parse arpreq into netdev and sockaddr.
+ *
+ * Input Parameters:
+ *   req    The argument of the ioctl cmd
+ *   dev    The pointer to get ethernet driver device structure
+ *   addr   The pointer to get address in the request
+ *
+ * Returned Value:
+ *   true on success and false on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ARP
+static bool ioctl_arpreq_parse(FAR struct arpreq *req,
+                               FAR struct net_driver_s **dev,
+                               FAR struct sockaddr_in **addr)
+{
+  if (req != NULL)
+    {
+      *addr = (FAR struct sockaddr_in *)&req->arp_pa;
+      *dev  = req->arp_dev[0] != '\0' ?
+              netdev_findbyname((FAR const char *)req->arp_dev) :
+              netdev_findby_ripv4addr(INADDR_ANY, (*addr)->sin_addr.s_addr);
+      return true;
+    }
+
+  return false;
+}
+#endif
+
+/****************************************************************************
  * Name: netdev_arp_ioctl
  *
  * Description:
@@ -1241,17 +1275,9 @@ static int netdev_imsf_ioctl(FAR struct socket *psock, int cmd,
 static int netdev_arp_ioctl(FAR struct socket *psock, int cmd,
                             FAR struct arpreq *req)
 {
-  FAR struct net_driver_s *dev  = NULL;
-  FAR struct sockaddr_in  *addr = NULL;
+  FAR struct net_driver_s *dev;
+  FAR struct sockaddr_in  *addr;
   int ret;
-
-  if (req != NULL)
-    {
-      addr = (FAR struct sockaddr_in *)&req->arp_pa;
-      dev  = req->arp_dev[0] ?
-             netdev_findbyname((FAR const char *)req->arp_dev) :
-             netdev_findby_ripv4addr(INADDR_ANY, addr->sin_addr.s_addr);
-    }
 
   /* Execute the command */
 
@@ -1259,7 +1285,7 @@ static int netdev_arp_ioctl(FAR struct socket *psock, int cmd,
     {
       case SIOCSARP:  /* Set an ARP mapping */
         {
-          if (dev != NULL && req != NULL &&
+          if (ioctl_arpreq_parse(req, &dev, &addr) && dev != NULL &&
               req->arp_pa.sa_family == AF_INET &&
               req->arp_ha.sa_family == ARPHRD_ETHER)
             {
@@ -1279,7 +1305,8 @@ static int netdev_arp_ioctl(FAR struct socket *psock, int cmd,
 
       case SIOCDARP:  /* Delete an ARP mapping */
         {
-          if (dev != NULL && req != NULL && req->arp_pa.sa_family == AF_INET)
+          if (ioctl_arpreq_parse(req, &dev, &addr) && dev != NULL &&
+              req->arp_pa.sa_family == AF_INET)
             {
               /* Delete the ARP entry for this protocol address. */
 
@@ -1294,7 +1321,8 @@ static int netdev_arp_ioctl(FAR struct socket *psock, int cmd,
 
       case SIOCGARP:  /* Get an ARP mapping */
         {
-          if (req != NULL && req->arp_pa.sa_family == AF_INET)
+          if (ioctl_arpreq_parse(req, &dev, &addr) &&
+              req->arp_pa.sa_family == AF_INET)
             {
               ret = arp_find(addr->sin_addr.s_addr,
                             (FAR uint8_t *)req->arp_ha.sa_data, dev);
@@ -1434,72 +1462,6 @@ static int netdev_rt_ioctl(FAR struct socket *psock, int cmd,
 #endif
 
 /****************************************************************************
- * Name: netdev_file_ioctl
- *
- * Description:
- *   Perform file ioctl operations.
- *
- * Parameters:
- *   psock    Socket structure
- *   cmd      The ioctl command
- *   arg      The argument of the ioctl cmd
- *
- * Return:
- *   >=0 on success (positive non-zero values are cmd-specific)
- *   Negated errno returned on failure.
- *
- ****************************************************************************/
-
-static int netdev_file_ioctl(FAR struct socket *psock, int cmd,
-                             unsigned long arg)
-{
-  int ret = OK;
-
-  switch (cmd)
-    {
-      case FIONBIO:
-        {
-          FAR struct socket_conn_s *conn = psock->s_conn;
-          FAR int *nonblock = (FAR int *)(uintptr_t)arg;
-          sockcaps_t sockcaps;
-
-           /* Non-blocking is the only configurable option.  And it applies
-            * only Unix domain sockets and to read operations on TCP/IP
-            * and UDP/IP sockets when read-ahead is enabled.
-            */
-
-          DEBUGASSERT(psock->s_sockif != NULL &&
-                      psock->s_sockif->si_sockcaps != NULL);
-          sockcaps = psock->s_sockif->si_sockcaps(psock);
-
-          if ((sockcaps & SOCKCAP_NONBLOCKING) != 0)
-            {
-               if (nonblock && *nonblock)
-                 {
-                   conn->s_flags |= _SF_NONBLOCK;
-                 }
-               else
-                 {
-                   conn->s_flags &= ~_SF_NONBLOCK;
-                 }
-            }
-          else
-            {
-              nerr("ERROR: Non-blocking not supported for this socket\n");
-              ret = -ENOSYS;
-            }
-        }
-        break;
-
-      default:
-        ret = -ENOTTY;
-        break;
-    }
-
-  return ret;
-}
-
-/****************************************************************************
  * Name: netdev_ioctl
  *
  * Description:
@@ -1519,14 +1481,62 @@ static int netdev_file_ioctl(FAR struct socket *psock, int cmd,
 static int netdev_ioctl(FAR struct socket *psock, int cmd,
                         unsigned long arg)
 {
+  int ret = -ENOTTY;
+
   if (psock->s_sockif && psock->s_sockif->si_ioctl)
     {
-      return psock->s_sockif->si_ioctl(psock, cmd, arg);
+      ret = psock->s_sockif->si_ioctl(psock, cmd, arg);
     }
-  else
+
+  if (ret != OK && ret != -ENOTTY)
     {
-      return -ENOTTY;
+      return ret;
     }
+
+  switch (cmd)
+    {
+      case FIONBIO:
+        {
+          FAR struct socket_conn_s *conn = psock->s_conn;
+          FAR int *nonblock = (FAR int *)(uintptr_t)arg;
+          sockcaps_t sockcaps;
+
+          /* Non-blocking is the only configurable option.  And it applies
+           * only Unix domain sockets and to read operations on TCP/IP
+           * and UDP/IP sockets when read-ahead is enabled.
+           */
+
+          DEBUGASSERT(psock->s_sockif != NULL &&
+                      psock->s_sockif->si_sockcaps != NULL);
+          sockcaps = psock->s_sockif->si_sockcaps(psock);
+
+          if ((sockcaps & SOCKCAP_NONBLOCKING) != 0)
+            {
+              if (nonblock && *nonblock)
+                {
+                  conn->s_flags |= _SF_NONBLOCK;
+                }
+              else
+                {
+                  conn->s_flags &= ~_SF_NONBLOCK;
+                }
+
+              ret = OK;
+            }
+          else
+            {
+              nerr("ERROR: Non-blocking not supported for this socket\n");
+              ret = -ENOSYS;
+            }
+        }
+
+        break;
+
+      default:
+        break;
+    }
+
+  return ret;
 }
 
 /****************************************************************************
@@ -1667,13 +1677,6 @@ int psock_vioctl(FAR struct socket *psock, int cmd, va_list ap)
   /* Check for socket specific ioctl command */
 
   ret = netdev_ioctl(psock, cmd, arg);
-
-  /* Check for file ioctl command */
-
-  if (ret == -ENOTTY)
-    {
-      ret = netdev_file_ioctl(psock, cmd, arg);
-    }
 
   /* Check for a standard network IOCTL command. */
 

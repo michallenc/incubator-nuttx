@@ -163,13 +163,13 @@
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
 #  if defined(CONFIG_USART0_IFLOWCONTROL) || \
       defined(CONFIG_USART1_IFLOWCONTROL) || \
-      defined(CONFIG_USART1_IFLOWCONTROL)
+      defined(CONFIG_USART2_IFLOWCONTROL)
 #    warning XDMAC support is required for RTS hardware flow control
 #    undef CONFIG_USART0_IFLOWCONTROL
 #    undef CONFIG_USART1_IFLOWCONTROL
 #    undef CONFIG_USART2_IFLOWCONTROL
 #    undef CONFIG_SERIAL_IFLOWCONTROL
-#endif
+#  endif
 #endif
 
 /* Serial Console ***********************************************************/
