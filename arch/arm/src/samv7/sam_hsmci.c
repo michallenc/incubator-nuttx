@@ -33,6 +33,8 @@
 #include <debug.h>
 #include <errno.h>
 
+#include <stdio.h>
+
 #include <nuttx/arch.h>
 #include <nuttx/clock.h>
 #include <nuttx/wdog.h>
@@ -814,6 +816,7 @@ static inline void sam_enableints(struct sam_dev_s *priv)
 {
   /* Enable all interrupts associated with the waited-for event */
 
+  printf("enabling %lx\n", priv->xfrmask | priv->waitmask);
   sam_putreg(priv, priv->xfrmask | priv->waitmask, SAM_HSMCI_IER_OFFSET);
 }
 
@@ -1667,6 +1670,11 @@ static void sam_reset(struct sdio_dev_s *dev)
   sam_putreg(priv, HSMCI_DTOR_DTOCYC_MAX | HSMCI_DTOR_DTOMUL_MAX,
              SAM_HSMCI_DTOR_OFFSET);
 
+  /* Set the Completion SIgnal Timeout Register */
+
+  sam_putreg(priv, HSMCI_CSTOR_CSTOCYC(7) | HSMCI_CSTOR_CSTOMUL_1048576,
+             SAM_HSMCI_CSTOR_OFFSET);
+
   /* Set the Mode Register for ID mode frequency (probably 400KHz) */
 
   sam_clock(dev, CLOCK_IDMODE);
@@ -1962,6 +1970,7 @@ static int sam_sendcmd(struct sdio_dev_s *dev,
     /* No response */
 
     case MMCSD_NO_RESPONSE:
+      printf("no response expected\n");
       priv->cmdrmask = HSMCI_CMDRESP_INTS;
       regval |= HSMCI_CMDR_RSPTYP_NONE;
 
@@ -1986,6 +1995,7 @@ static int sam_sendcmd(struct sdio_dev_s *dev,
 
     case MMCSD_R3_RESPONSE:
     case MMCSD_R7_RESPONSE:
+      printf("R3/R7 response\n");
       priv->cmdrmask = HSMCI_CMDRESP_NOCRC_INTS;
       regval |= HSMCI_CMDR_RSPTYP_48BIT | HSMCI_CMDR_MAXLAT;
       break;
@@ -2397,7 +2407,7 @@ static int sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
     case MMCSD_NO_RESPONSE:
     case MMCSD_R3_RESPONSE:
     case MMCSD_R7_RESPONSE:
-      timeout = HSMCI_CMDTIMEOUT;
+      timeout = HSMCI_LONGTIMEOUT;
       break;
 
     default:
@@ -2429,9 +2439,15 @@ static int sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
                     " SR: %08" PRIx32 "\n",
                     cmd, priv->cmdrmask, sr);
 
+              //printf("getreg = %lx\n", sam_getreg(priv, SAM_HSMCI_CSTOR_OFFSET));
+
+              //usleep(100);
+
               if ((pending & HSMCI_RESPONSE_TIMEOUT_ERRORS) != 0)
                 {
                   /* Yes.. return a timeout error */
+
+                  printf("timeout erors\n");
 
                   priv->wkupevent = SDIOWAIT_CMDDONE |
                                     SDIOWAIT_RESPONSEDONE |
@@ -2782,6 +2798,7 @@ static sdio_eventset_t sam_eventwait(struct sdio_dev_s *dev)
    * may happen immediately here before entering the loop.
    */
 
+  printf("enable ints\n");
   sam_enableints(priv);
 
   /* Loop until the event (or the timeout occurs). Race conditions are
