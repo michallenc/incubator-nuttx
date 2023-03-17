@@ -2268,7 +2268,7 @@ uintptr_t up_get_intstackbase(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_RTC) && !defined(CONFIG_RTC_EXTERNAL)
+#if defined(CONFIG_RTC)
 int up_rtc_initialize(void);
 #endif
 
