@@ -42,20 +42,6 @@
 
 /* Configuration ************************************************************/
 
-/*
-#define HAVE_HSMCI           1
-#define HAVE_AUTOMOUNTER     1
-#define HAVE_USB             1
-#define HAVE_USBDEV          1
-#define HAVE_USBMONITOR      1
-#define HAVE_NETWORK         1
-#define HAVE_MACADDR         1
-#define HAVE_MTDCONFIG       1
-#define HAVE_PROGMEM_CHARDEV 1
-#define HAVE_I2CTOOL         1
-#define HAVE_MRF24J40        1
-#define HAVE_XBEE            1*/
-
 #define HAVE_HSMCI              1
 #define HAVE_AUTOMOUNTER        1
 #define HAVE_W25QXXXJV          1
@@ -154,6 +140,15 @@
 
 #if defined(HAVE_W25QXXXJV_NXFFS) || defined(HAVE_W25QXXXJV_SMARTFS)
 #  undef HAVE_W25QXXXJV_CHARDEV
+#endif
+
+/* External RTC MCP794XX */
+
+#ifdef CONFIG_RTC_MCP794XX
+/* The MCP794XX RTC communicates on TWI0, I2C address 0x6F */
+
+#  define MCP794XX_TWI_BUS     0
+#  define MCP794XX_I2C_ADDRESS 0x6f
 #endif
 
 /* USB Device */
@@ -258,12 +253,12 @@
                        GPIO_PIN10)  /* PD_10 */
 #define GPIO_ADDR2    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
                        GPIO_PIN12)  /* PD_12 */
-#define GPIO_ADDR3    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOA | \
-                       GPIO_PIN3)  /* PA_03 */
+#define GPIO_ADDR3    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
+                       GPIO_PIN13)  /* PD_13 */
 #define GPIO_ADDR4    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOA | \
                        GPIO_PIN5)  /* PA_05 */
-#define GPIO_ADDR5    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
-                       GPIO_PIN11)  /* PD_11 */
+#define GPIO_ADDR5    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOA | \
+                       GPIO_PIN2)  /* PA_02 */
 #define GPIO_ADDR6    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \
                        GPIO_PIN14)  /* PD_14 */
 #define GPIO_ADDR7    (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOD | \

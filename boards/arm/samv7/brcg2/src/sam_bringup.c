@@ -52,10 +52,16 @@
 #include <nuttx/drivers/ramdisk.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
-#include <nuttx/i2c/i2c_master.h>
 
 #include "sam_twihs.h"
 #include "brcg2.h"
+
+#ifdef CONFIG_RTC_MCP794XX
+#  include <nuttx/clock.h>
+#  include <nuttx/i2c/i2c_master.h>
+#  include <nuttx/timers/mcp794xx.h>
+#  include "sam_twihs.h"
+#endif
 
 #ifdef HAVE_HSMCI
 #  include "board_hsmci.h"
@@ -91,12 +97,27 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Private Functions
+ * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Public Functions
+ * Name: up_rtc_initialize
+ *
+ * Description:
+ *   This is a dummy function to avoid a build error. Function
+ *   up_rtc_initialize is not use if CONFIG_RTC_EXTERNAL is defined
+ *   however it is still declared and called from clock initialization.
+ *
+ *   There was a try to declare and call up_rtc_initialize only if
+ *   CONFIG_RTC_EXTERNAL is not true but this was not accepted by NuttX
+ *   community. Therefore we use this dummy function definition.
+ *
  ****************************************************************************/
+
+int up_rtc_initialize(void)
+{
+  return 0;
+}
 
 /****************************************************************************
  * Name: sam_bringup
@@ -109,6 +130,40 @@
 int sam_bringup(void)
 {
   int ret;
+#ifdef CONFIG_RTC_MCP794XX
+  struct i2c_master_s *i2c;
+#endif
+
+#ifdef CONFIG_RTC_MCP794XX
+  /* Get an instance of the TWIHS0 I2C interface */
+
+  i2c = sam_i2cbus_initialize(MCP794XX_TWI_BUS);
+  if (i2c == NULL)
+    {
+      syslog(LOG_ERR, "ERROR: sam_i2cbus_initialize(%d) failed\n",
+             MCP794XX_TWI_BUS);
+      printf("i2c failed\n");
+    }
+  else
+    {
+      /* Use the I2C interface to initialize the DSXXXX timer */
+
+      ret = mcp794xx_rtc_initialize(i2c, MCP794XX_I2C_ADDRESS);
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "ERROR: dsxxxx_rtc_initialize() failed: %d\n",
+                 ret);
+          printf("rtc init failed\n");
+        }
+      else
+        {
+          /* Synchronize the system time to the RTC time */
+
+          printf("sync time\n");
+          clock_synchronize(NULL);
+        }
+    }
+#endif
 
 #ifdef CONFIG_FS_PROCFS
   /* Mount the procfs file system */
