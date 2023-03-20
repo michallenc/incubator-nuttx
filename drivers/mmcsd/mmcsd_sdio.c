@@ -3382,7 +3382,13 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
 
   if (ret != OK)
     {
-      printf("ERROR: CMD1 RECVR3: %d\n", ret);
+      ferr("ERROR: CMD1 RECVR3: %d\n", ret);
+
+      /* CMD1 did not succeed, card is not MMC. This sleep let
+       * the communication to recover before another send.
+       */
+
+      nxsig_usleep(MMCSD_IDLE_DELAY);
     }
   else
     {

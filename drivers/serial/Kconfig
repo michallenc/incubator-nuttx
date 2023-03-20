@@ -169,9 +169,10 @@ config SERIAL_TERMIOS
 	depends on ARCH_HAVE_SERIAL_TERMIOS
 	default n
 	---help---
-		Serial driver supports termios.h interfaces (tcsetattr, tcflush, etc.).
-		If this is not defined, then the terminal settings (baud, parity, etc).
-		are not configurable at runtime; serial streams cannot be flushed, etc..
+		If this is not defined, then the terminal hardware settings
+		(baud, parity, flow control) are not configurable at runtime.
+		Note: other software settings (echo, \r\n<->\n, break, tcflush)
+		are always supported.
 
 config TTY_LAUNCH
 	bool "Enable feature TTY launch program"
@@ -714,6 +715,7 @@ endif # PSEUDOTERM
 menuconfig UART_BTH4
 	bool "BT H4 uart pseudo device"
 	default n
+	depends on DRIVERS_BLUETOOTH
 	---help---
 		Enable support for Bluetooth H4 UART Pseudo Device(eg. /dev/ttyHCI).
 		This instantiates a serial-like interface over an existing bluetooth
