@@ -372,6 +372,7 @@ int sam_bringup(void)
 #ifdef HAVE_AUTOMOUNTER
   /* Initialize the auto-mounter */
 
+  printf("automount\n");
   sam_automount_initialize();
 #endif
 

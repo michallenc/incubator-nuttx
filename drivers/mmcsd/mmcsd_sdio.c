@@ -3375,15 +3375,14 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
 
   printf("send CMD1\n");
   mmcsd_sendcmdpoll(priv, MMC_CMD1, MMCSD_VDD_33_34 | mmccapacity);
-  //usleep(100);
-  //nxsig_usleep(MMCSD_IDLE_DELAY);
+
   ret = SDIO_RECVR3(priv->dev, MMC_CMD1, &response);
 
   /* Was the operating range set successfully */
 
   if (ret != OK)
     {
-      //printf("ERROR: CMD1 RECVR3: %d\n", ret);
+      printf("ERROR: CMD1 RECVR3: %d\n", ret);
     }
   else
     {

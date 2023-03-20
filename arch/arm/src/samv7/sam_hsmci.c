@@ -816,7 +816,6 @@ static inline void sam_enableints(struct sam_dev_s *priv)
 {
   /* Enable all interrupts associated with the waited-for event */
 
-  printf("enabling %lx\n", priv->xfrmask | priv->waitmask);
   sam_putreg(priv, priv->xfrmask | priv->waitmask, SAM_HSMCI_IER_OFFSET);
 }
 
@@ -2441,8 +2440,6 @@ static int sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
 
               //printf("getreg = %lx\n", sam_getreg(priv, SAM_HSMCI_CSTOR_OFFSET));
 
-              //usleep(100);
-
               if ((pending & HSMCI_RESPONSE_TIMEOUT_ERRORS) != 0)
                 {
                   /* Yes.. return a timeout error */
@@ -2572,6 +2569,7 @@ static int sam_recvshort(struct sdio_dev_s *dev,
 
   if ((priv->wkupevent & SDIOWAIT_TIMEOUT) != 0)
     {
+      printf("recv3: timeout\n");
       ret = -EINVAL;
     }
 
@@ -2579,6 +2577,7 @@ static int sam_recvshort(struct sdio_dev_s *dev,
 
   else if ((priv->wkupevent & SDIOWAIT_ERROR) != 0)
     {
+      printf("recv3: other\n");
       ret = -EIO;
     }
 
@@ -2798,7 +2797,6 @@ static sdio_eventset_t sam_eventwait(struct sdio_dev_s *dev)
    * may happen immediately here before entering the loop.
    */
 
-  printf("enable ints\n");
   sam_enableints(priv);
 
   /* Loop until the event (or the timeout occurs). Race conditions are

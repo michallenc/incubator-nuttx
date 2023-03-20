@@ -35,6 +35,8 @@
 #include <nuttx/clock.h>
 #include <nuttx/fs/automount.h>
 
+#include <stdio.h>
+
 #include "board_hsmci.h"
 #include "sam_automount.h"
 
@@ -245,7 +247,7 @@ void sam_automount_initialize(void)
 {
   void *handle;
 
-  finfo("Initializing automounter(s)\n");
+  printf("Initializing automounter(s)\n");
 
 #ifdef CONFIG_SAMV7_HSMCI0_AUTOMOUNT
   /* Initialize the HSMCI0 auto-mounter */
@@ -253,7 +255,7 @@ void sam_automount_initialize(void)
   handle = automount_initialize(&g_hsmci0config.lower);
   if (handle == NULL)
     {
-      ferr("ERROR: Failed to initialize auto-mounter for HSMCI0\n");
+      printf("ERROR: Failed to initialize auto-mounter for HSMCI0\n");
     }
 #endif /* CONFIG_SAMV7_HSMCI0_AUTOMOUNT */
 }
