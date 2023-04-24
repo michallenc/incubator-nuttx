@@ -25,13 +25,15 @@
 #include <nuttx/config.h>
 #include <sys/types.h>
 
+#include <assert.h>
+#include <debug.h>
+#include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <debug.h>
 
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/sched.h>
 
 #include "fs_rammap.h"
 
@@ -239,7 +241,7 @@ int rammap(FAR struct file *filep, FAR struct mm_map_entry_s *entry,
   entry->priv.i = kernel;
   entry->munmap = unmap_rammap;
 
-  ret = mm_map_add(entry);
+  ret = mm_map_add(get_current_mm(), entry);
   if (ret < 0)
     {
       goto errout_with_region;

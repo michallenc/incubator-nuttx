@@ -49,6 +49,13 @@ config ARCH_CHIP_FVP_ARMV8R
 	select ARCH_CORTEX_R82
 	---help---
 		ARM FVP virt platform (ARMv8r)
+
+config ARCH_CHIP_ARM64_CUSTOM
+	bool "Custom ARM64 chip"
+	select ARCH_CHIP_CUSTOM
+	---help---
+		Select this option if there is no directory for the chip under arch/arm64/src/.
+
 endchoice
 
 config ARCH_ARMV8A
@@ -114,7 +121,7 @@ config ARCH_EARLY_PRINT
 		different platform, if NuttX runing at wrong ELs or state it will
 		be not normal anymore. So we need to print something in arm64_head.S
 		to debug this situation.
-		Enabling this option will need to implement up_earlyserialinit and
+		Enabling this option will need to implement arm64_earlyserialinit and
 		arm64_lowputc functions just you see in qemu, if you not sure,
 		keeping the option disable.
 
@@ -122,37 +129,37 @@ config ARCH_CORTEX_A53
 	bool
 	default n
 	select ARCH_ARMV8A
-	select ARM_HAVE_NEON
 	select ARCH_HAVE_TRUSTZONE
 	select ARCH_DCACHE
 	select ARCH_ICACHE
 	select ARCH_HAVE_MMU
 	select ARCH_HAVE_FPU
 	select ARCH_HAVE_TESTSET
+	select ARM_HAVE_NEON
 
 config ARCH_CORTEX_A57
 	bool
 	default n
 	select ARCH_ARMV8A
-	select ARM_HAVE_NEON
 	select ARCH_HAVE_TRUSTZONE
 	select ARCH_DCACHE
 	select ARCH_ICACHE
 	select ARCH_HAVE_MMU
 	select ARCH_HAVE_FPU
 	select ARCH_HAVE_TESTSET
+	select ARM_HAVE_NEON
 
 config ARCH_CORTEX_A72
 	bool
 	default n
 	select ARCH_ARMV8A
-	select ARM_HAVE_NEON
 	select ARCH_HAVE_TRUSTZONE
 	select ARCH_DCACHE
 	select ARCH_ICACHE
 	select ARCH_HAVE_MMU
 	select ARCH_HAVE_FPU
 	select ARCH_HAVE_TESTSET
+	select ARM_HAVE_NEON
 
 config ARCH_CORTEX_R82
 	bool
@@ -161,7 +168,9 @@ config ARCH_CORTEX_R82
 	select ARCH_DCACHE
 	select ARCH_ICACHE
 	select ARCH_HAVE_MPU
+	select ARCH_HAVE_FPU
 	select ARCH_HAVE_TESTSET
+	select ARM_HAVE_NEON
 
 config ARCH_FAMILY
 	string
@@ -195,6 +204,17 @@ config ARM_GIC_VERSION
 	---help---
 		Version of Generic Interrupt Controller (GIC) supported by the
 		architecture
+
+if ARM_GIC_VERSION = 2
+
+config ARM_GIC_EOIMODE
+	bool
+	default n
+	---help---
+		Enable GICC_CTLR.EOImode, this will separates the priority drop and interrupt
+		deactivation operations.
+
+endif
 
 if ARCH_CHIP_A64
 source "arch/arm64/src/a64/Kconfig"

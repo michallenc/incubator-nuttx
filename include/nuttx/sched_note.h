@@ -109,13 +109,13 @@
 /* Helper macros for dump instrumentation filter */
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION_DUMP
-#  define NOTE_FILTER_DUMPMASK_SET(tag, s) \
+#  define NOTE_FILTER_TAGMASK_SET(tag, s) \
   ((s)->tag_mask[(tag) / 8] |= (1 << ((tag) % 8)))
-#  define NOTE_FILTER_DUMPMASK_CLR(tag, s) \
+#  define NOTE_FILTER_TAGMASK_CLR(tag, s) \
   ((s)->tag_mask[(tag) / 8] &= ~(1 << ((tag) % 8)))
-#  define NOTE_FILTER_DUMPMASK_ISSET(tag, s) \
+#  define NOTE_FILTER_TAGMASK_ISSET(tag, s) \
   ((s)->tag_mask[(tag) / 8] & (1 << ((tag) % 8)))
-#  define NOTE_FILTER_DUMPMASK_ZERO(s) \
+#  define NOTE_FILTER_TAGMASK_ZERO(s) \
   memset((s), 0, sizeof(struct note_filter_tag_s));
 #endif
 
@@ -143,9 +143,9 @@
           sched_note_printf_ip(tag, SCHED_NOTE_IP, "B|%d|%s", gettid(), str)
 #  define sched_note_endex(tag, str) \
           sched_note_printf_ip(tag, SCHED_NOTE_IP, "E|%d|%s", gettid(), str)
-#  define sched_note_begin(tag, ip) \
+#  define sched_note_begin(tag) \
           sched_note_string_ip(tag, SCHED_NOTE_IP, "B")
-#  define sched_note_end(tag, ip) \
+#  define sched_note_end(tag) \
           sched_note_string_ip(tag, SCHED_NOTE_IP, "E")
 #else
 #  define sched_note_string(tag, buf)
@@ -686,7 +686,7 @@ void sched_note_filter_irq(FAR struct note_filter_irq_s *oldf,
 #endif
 
 #if defined(CONFIG_SCHED_INSTRUMENTATION_FILTER) && \
-    defined(CONFIG_SCHED_INSTRUMENTATION_IRQHANDLER)
+    defined(CONFIG_SCHED_INSTRUMENTATION_DUMP)
 void sched_note_filter_tag(FAR struct note_filter_tag_s *oldf,
                            FAR struct note_filter_tag_s *newf);
 #endif

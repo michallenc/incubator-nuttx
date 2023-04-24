@@ -211,6 +211,18 @@ config ARCH_BOARD_QUICKFEATHER
 		MC3635 accelerometer, DPS310 pressure sensor, IM69D130 PDM microphone,
 		internal programmable FPGA fabric.
 
+config ARCH_BOARD_ESP32_AUDIO_KIT
+	bool "Ai-Thinker ESP32 Audio Kit"
+	depends on ARCH_CHIP_ESP32_A1S
+	select ARCH_HAVE_LEDS
+	select ARCH_HAVE_BUTTONS
+	select ARCH_HAVE_IRQBUTTONS if ESP32_GPIO_IRQ
+	---help---
+		The Ai-Thinker ESP32-Audio-Kit is a board with the ESP32-A1S module
+		powered by ESP32-D0WD-V3 with 16MB of SPI Flash and 8MB PSRAM, and an
+		audio codec on it. There are two versions of ESP32-A1S module: ES8388
+		codec and other with AC101. Currently only ES8388 is supported.
+
 config ARCH_BOARD_ESP32_DEVKITC
 	bool "Espressif ESP32 DevkitC board V4"
 	depends on ARCH_CHIP_ESP32WROOM32 || ARCH_CHIP_ESP32WROOM32_8MB || ARCH_CHIP_ESP32WROOM32_16MB || ARCH_CHIP_ESP32WROVER || ARCH_CHIP_ESP32SOLO1
@@ -252,6 +264,20 @@ config ARCH_BOARD_ESP32_LYRAT
 		ESP32-LyraT is an open-source development board for Espressif Systems' Audio
 		Development Framework (ADF). It is designed for smart speakers and smart-home
 		applications. This port is for board version 4.3.
+
+config ARCH_BOARD_ESP32_PICO_KIT
+	bool "Espressif ESP32-PICO-KIT V4"
+	depends on ARCH_CHIP_ESP32PICOD4
+	select ARCH_HAVE_BUTTONS
+	select ARCH_HAVE_IRQBUTTONS if ESP32_GPIO_IRQ
+	---help---
+		ESP32-PICO-KIT is an ESP32-based mini development board produced by Espressif.
+		The core of this board is ESP32-PICO-D4, a System-in-Package module with complete
+		Wi-Fi and Bluetooth functionalities. Compared to other ESP32 modules, ESP32-PICO-D4
+		integrates the following peripheral components in one single package, which otherwise
+		would need to be installed separately: Crystal Oscillator, Flash Memory, Filter Capacitors
+		and RF matching links.
+
 
 config ARCH_BOARD_ESP32_SPARROWKIT
 	bool "Espressif ESP-SPARROW-KIT"
@@ -410,6 +436,16 @@ config ARCH_BOARD_ESP32S3_EYE
 		The ESP32-S3-EYE is a small-sized AI development board produced by Espressif
 		featuring the ESP32-S3 CPU with a 2-Megapixel camera, an LCD display,
 		a microphone, an 8 MB Octal PSRAM and an 8 MB flash.
+
+config ARCH_BOARD_ESP32S3_MEADOW
+	bool "WildernessLabs ESP32S3-Meadow Board"
+	depends on ARCH_CHIP_ESP32S3WROOM1
+	select ARCH_HAVE_LEDS
+	select ARCH_HAVE_BUTTONS
+	select ARCH_HAVE_IRQBUTTONS if ESP32S3_GPIO_IRQ
+	---help---
+		The ESP32-S3-Meadow is a small-sized board produced by WildernessLabs
+		featuring the ESP32-S3 CPU with 32MiB Octal SPI PSRAM and 64 MiB flash.
 
 config ARCH_BOARD_ESP32C6_GENERIC
 	bool "Espressif ESP32-C6 Generic DevKit"
@@ -913,6 +949,13 @@ config ARCH_BOARD_MCU123_LPC214X
 		lpc214x development board. This OS is also built with the arm-nuttx-elf
 		toolchain*.  The port supports serial, timer0, spi, and usb.
 
+config ARCH_BOARD_MEGA1284P_XPLAINED
+	bool "Atmel MEGA-1284P-XPLAINED"
+	depends on ARCH_CHIP_ATMEGA1284P
+	select ARCH_HAVE_LEDS
+	---help---
+		This is the configuration to support Atmel MEGA-1284P-XPLAINED board.
+
 config ARCH_BOARD_METRO_M4
 	bool "Adafruit M4 Metro"
 	depends on ARCH_CHIP_SAMD51J19
@@ -1052,6 +1095,7 @@ config ARCH_BOARD_NRF5340_DK
 	depends on ARCH_CHIP_NRF53
 	select ARCH_HAVE_LEDS
 	select ARCH_HAVE_BUTTONS
+	select ARCH_HAVE_IRQBUTTONS
 	---help---
 		This option selects the nRF5340 Development Kit (PCA10095)
 
@@ -2793,10 +2837,12 @@ config ARCH_BOARD
 	default "ekk-lm3s9b96"              if ARCH_BOARD_EKKLM3S9B96
 	default "emw3162"                   if ARCH_BOARD_EMW3162
 	default "quickfeather"              if ARCH_BOARD_QUICKFEATHER
+	default "esp32-audio-kit"           if ARCH_BOARD_ESP32_AUDIO_KIT
 	default "esp32-devkitc"             if ARCH_BOARD_ESP32_DEVKITC
 	default "ttgo_eink5_v2"             if ARCH_BOARD_TTGO_T5V2_ESP32
 	default "esp32-ethernet-kit"        if ARCH_BOARD_ESP32_ETHERNETKIT
 	default "esp32-lyrat"               if ARCH_BOARD_ESP32_LYRAT
+	default "esp32-pico-kit"            if ARCH_BOARD_ESP32_PICO_KIT
 	default "esp32-sparrow-kit"         if ARCH_BOARD_ESP32_SPARROWKIT
 	default "esp32-wrover-kit"          if ARCH_BOARD_ESP32_WROVERKIT
 	default "esp32c3-devkit"            if ARCH_BOARD_ESP32C3_DEVKIT
@@ -2807,6 +2853,7 @@ config ARCH_BOARD
 	default "franzininho-wifi"          if ARCH_BOARD_FRANZININHO_WIFI
 	default "esp32s3-devkit"            if ARCH_BOARD_ESP32S3_DEVKIT
 	default "esp32s3-eye"               if ARCH_BOARD_ESP32S3_EYE
+	default "esp32s3-meadow"            if ARCH_BOARD_ESP32S3_MEADOW
 	default "esp32c6-devkit"            if ARCH_BOARD_ESP32C6_DEVKIT
 	default "esp32c6-generic"           if ARCH_BOARD_ESP32C6_GENERIC
 	default "esp32h2-generic"           if ARCH_BOARD_ESP32H2_GENERIC
@@ -2859,6 +2906,7 @@ config ARCH_BOARD
 	default "mbed"                      if ARCH_BOARD_MBED
 	default "mcb1700"                   if ARCH_BOARD_MCB1700
 	default "mcu123-lpc214x"            if ARCH_BOARD_MCU123_LPC214X
+	default "mega1284p-xplained"        if ARCH_BOARD_MEGA1284P_XPLAINED
 	default "metro-m4"                  if ARCH_BOARD_METRO_M4
 	default "micropendous3"             if ARCH_BOARD_MICROPENDOUS3
 	default "mirtoo"                    if ARCH_BOARD_MIRTOO
@@ -3695,6 +3743,9 @@ endif
 if ARCH_BOARD_AVR32DEV1
 source "boards/avr/at32uc3/avr32dev1/Kconfig"
 endif
+if ARCH_BOARD_MEGA1284P_XPLAINED
+source "boards/avr/atmega/mega1284p-xplained/Kconfig"
+endif
 if ARCH_BOARD_MICROPENDOUS3
 source "boards/avr/at90usb/micropendous3/Kconfig"
 endif
@@ -3803,6 +3854,9 @@ endif
 if ARCH_BOARD_ESP32S3_EYE
 source "boards/xtensa/esp32s3/esp32s3-eye/Kconfig"
 endif
+if ARCH_BOARD_ESP32S3_MEADOW
+source "boards/xtensa/esp32s3/esp32s3-meadow/Kconfig"
+endif
 if ARCH_BOARD_ESP32C6_DEVKIT
 source "boards/risc-v/esp32c6/esp32c6-devkit/Kconfig"
 endif
@@ -3833,6 +3887,9 @@ endif
 if ARCH_BOARD_RX65N_GRROSE
 source "boards/renesas/rx65n/rx65n-grrose/Kconfig"
 endif
+if ARCH_BOARD_ESP32_AUDIO_KIT
+source "boards/xtensa/esp32/esp32-audio-kit/Kconfig"
+endif
 if ARCH_BOARD_ESP32_DEVKITC
 source "boards/xtensa/esp32/esp32-devkitc/Kconfig"
 endif
@@ -3841,6 +3898,9 @@ source "boards/xtensa/esp32/ttgo_eink5_v2/Kconfig"
 endif
 if ARCH_BOARD_ESP32_ETHERNETKIT
 source "boards/xtensa/esp32/esp32-ethernet-kit/Kconfig"
+endif
+if ARCH_BOARD_ESP32_PICO_KIT
+source "boards/xtensa/esp32/esp32-pico-kit/Kconfig"
 endif
 if ARCH_BOARD_ESP32_LYRAT
 source "boards/xtensa/esp32/esp32-lyrat/Kconfig"

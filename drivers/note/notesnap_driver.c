@@ -42,7 +42,7 @@ struct notesnap_chunk_s
 #endif
   pid_t pid;
 #ifdef CONFIG_SCHED_INSTRUMENTATION_PERFCOUNT
-  uint32_t count;
+  unsigned long count;
 #else
   struct timespec time;
 #endif
@@ -71,11 +71,13 @@ static void notesnap_suspend(FAR struct note_driver_s *drv,
                              FAR struct tcb_s *tcb);
 static void notesnap_resume(FAR struct note_driver_s *drv,
                             FAR struct tcb_s *tcb);
-#  ifdef CONFIG_SMP
+#endif
+#ifdef CONFIG_SMP
 static void notesnap_cpu_start(FAR struct note_driver_s *drv,
                                FAR struct tcb_s *tcb, int cpu);
 static void notesnap_cpu_started(FAR struct note_driver_s *drv,
                                  FAR struct tcb_s *tcb);
+#  ifdef CONFIG_SCHED_INSTRUMENTATION_SWITCH
 static void notesnap_cpu_pause(FAR struct note_driver_s *drv,
                                FAR struct tcb_s *tcb, int cpu);
 static void notesnap_cpu_paused(FAR struct note_driver_s *drv,
@@ -122,9 +124,11 @@ static const struct note_driver_ops_s g_notesnap_ops =
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SWITCH
   notesnap_suspend,
   notesnap_resume,
-#  ifdef CONFIG_SMP
+#endif
+#ifdef CONFIG_SMP
   notesnap_cpu_start,
   notesnap_cpu_started,
+#  ifdef CONFIG_SCHED_INSTRUMENTATION_SWITCH
   notesnap_cpu_pause,
   notesnap_cpu_paused,
   notesnap_cpu_resume,
@@ -395,7 +399,7 @@ void notesnap_dump_with_stream(FAR struct lib_outstream_s *stream)
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION_PERFCOUNT
       struct timespec time;
-      uint32_t elapsed = note->count < lastcount ?
+      unsigned long elapsed = note->count < lastcount ?
                          note->count + UINT32_MAX - lastcount :
                          note->count - lastcount;
       up_perf_convert(elapsed, &time);

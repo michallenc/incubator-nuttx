@@ -236,13 +236,12 @@ else
 
   ifeq ($(GCCVER),12.2.1)
     ARCHOPTIMIZATION += --param=min-pagesize=0
+    ifeq ($(CONFIG_ARCH_RAMFUNCS),y)
+      LDFLAGS += --no-warn-rwx-segments
+    endif
   endif
 
 endif
-
-# Zig compiler
-
-ZIG := zig
 
 ifeq ($(CONFIG_ARCH_TOOLCHAIN_CLANG),y)
   ARCHOPTIMIZATION += -fshort-enums
@@ -338,3 +337,11 @@ endif
 ifeq ($(CONFIG_ARCH_COVERAGE),y)
   EXTRA_LIBS += $(wildcard $(shell $(CC) $(ARCHCPUFLAGS) --print-file-name=libgcov.a))
 endif
+
+# Zig toolchain
+
+include $(TOPDIR)/tools/Zig.defs
+
+# Rust toolchain
+
+include $(TOPDIR)/tools/Rust.defs

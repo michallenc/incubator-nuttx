@@ -34,6 +34,18 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* Configuration ************************************************************/
+
+/* procfs File System */
+
+#ifdef CONFIG_FS_PROCFS
+#  ifdef CONFIG_NSH_PROC_MOUNTPOINT
+#    define NRF53_PROCFS_MOUNTPOINT CONFIG_NSH_PROC_MOUNTPOINT
+#  else
+#    define NRF53_PROCFS_MOUNTPOINT "/proc"
+#  endif
+#endif
+
 /* LED definitions **********************************************************/
 
 /* Definitions to configure LED GPIO as outputs */
@@ -104,6 +116,18 @@ int nrf53_timer_driver_setup(const char *devpath, int timer);
 
 #ifdef CONFIG_PWM
 int nrf53_pwm_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: nrf53_adc_setup
+ *
+ * Description:
+ *   Initialize ADC driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ADC
+int nrf53_adc_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

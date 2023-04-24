@@ -20,7 +20,8 @@
 
 # Include header paths
 
-INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/driver/include
+INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/nuttx/include
+INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/nuttx/$(CHIP_SERIES)/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/efuse/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/efuse/private_include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/efuse/$(CHIP_SERIES)/include
@@ -37,7 +38,7 @@ INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/compo
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_rom/$(CHIP_SERIES)
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/include
-INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/include/private/esp_private
+INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/include/private
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/public_compat
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/$(CHIP_SERIES)/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/include
@@ -47,7 +48,6 @@ INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/compo
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/riscv/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/soc/include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/soc/$(CHIP_SERIES)/include
-INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)/chip/$(ESP_HAL_3RDPARTY_UNPACK)/nuttx/$(CHIP_SERIES)/include
 
 # Linker scripts
 
@@ -67,11 +67,12 @@ CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/efuse/$(CHIP_SERIES)/es
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/efuse/$(CHIP_SERIES)/esp_efuse_utility.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/cpu.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/esp_clk.c
+CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/hw_random.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/periph_ctrl.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/regi2c_ctrl.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/clk_tree_common.c
-CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/cpu_region_protect.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/clk_tree.c
+CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/cpu_region_protect.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/rtc_clk.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/rtc_init.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/rtc_sleep.c
@@ -80,9 +81,12 @@ CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(C
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_hw_support/port/$(CHIP_SERIES)/systimer.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/brownout.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/soc/$(CHIP_SERIES)/clk.c
+CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/esp_system/port/soc/$(CHIP_SERIES)/system_internal.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/brownout_hal.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/efuse_hal.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/systimer_hal.c
+CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/timer_hal.c
+CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/timer_hal_iram.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/uart_hal.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/uart_hal_iram.c
 CHIP_CSRCS += chip/$(ESP_HAL_3RDPARTY_UNPACK)/components/hal/wdt_hal_iram.c

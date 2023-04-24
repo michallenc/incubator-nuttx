@@ -128,9 +128,10 @@ next_subdir:
            */
 
           subdirname = basename((FAR char *)oldpath);
-          asprintf(&subdir, "%s/%s", newpath, subdirname);
-          if (subdir == NULL)
+          ret = asprintf(&subdir, "%s/%s", newpath, subdirname);
+          if (ret < 0)
             {
+              subdir = NULL;
               ret = -ENOMEM;
               goto errout;
             }
@@ -244,7 +245,7 @@ errout:
   RELEASE_SEARCH(&newdesc);
   if (subdir != NULL)
     {
-      kmm_free(subdir);
+      lib_free(subdir);
     }
 
   return ret;
@@ -369,10 +370,11 @@ next_subdir:
                 }
               else
                 {
-                  asprintf(&subdir, "%s/%s", newrelpath,
-                           subdirname);
-                  if (subdir == NULL)
+                  ret = asprintf(&subdir, "%s/%s", newrelpath,
+                                 subdirname);
+                  if (ret < 0)
                     {
+                      subdir = NULL;
                       ret = -ENOMEM;
                       goto errout_with_newinode;
                     }
@@ -429,7 +431,7 @@ errout_with_newsearch:
   RELEASE_SEARCH(&newdesc);
   if (subdir != NULL)
     {
-      kmm_free(subdir);
+      lib_free(subdir);
     }
 
   return ret;

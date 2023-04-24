@@ -37,18 +37,26 @@
 
 /* Signal set management definitions and macros. */
 
-#define NULL_SIGNAL_SET ((sigset_t)0x00000000)
-#define ALL_SIGNAL_SET  ((sigset_t)0xffffffff)
-#define MIN_SIGNO       1
-#define MAX_SIGNO       31
+#define MIN_SIGNO       1               /* Lowest valid signal number */
+#define MAX_SIGNO       63              /* Highest valid signal number */
 #define GOOD_SIGNO(s)   ((((unsigned)(s)) <= MAX_SIGNO))
-#define SIGNO2SET(s)    ((sigset_t)1 << (s))
 
-/* All signals are "real time" signals */
+/* Definitions for "standard" signals */
 
-#define SIGRTMIN        MIN_SIGNO       /* First real time signal */
+#define SIGSTDMIN       1               /* First standard signal number */
+#define SIGSTDMAX       31              /* Last standard signal number */
+
+/* Definitions for "real time" signals */
+
+#define SIGRTMIN        (SIGSTDMAX + 1) /* First real time signal */
 #define SIGRTMAX        MAX_SIGNO       /* Last real time signal */
 #define _NSIG           (MAX_SIGNO + 1) /* Biggest signal number + 1 */
+
+/* sigset_t is represented as an array of 32-b unsigned integers.
+ * _SIGSET_NELEM is the allocated isze of the array
+ */
+
+#define _SIGSET_NELEM   ((_NSIG + 31) >> 5)
 
 /* NuttX does not support all standard signal actions.  NuttX supports what
  * are referred to as "real time" signals.  The default action of all NuttX
@@ -128,190 +136,38 @@
  * These are the semi-standard signal definitions:
  */
 
-#ifndef CONFIG_SIG_HUP
-#  define SIGHUP        1
-#else
-#  define SIGHUP        CONFIG_SIG_HUP
-#endif
-
-#ifndef CONFIG_SIG_INT
-#  define SIGINT        2
-#else
-#  define SIGINT        CONFIG_SIG_INT
-#endif
-
-#ifndef CONFIG_SIG_QUIT
-#  define SIGQUIT       3
-#else
-#  define SIGQUIT       CONFIG_SIG_QUIT
-#endif
-
-#ifndef CONFIG_SIG_ILL
-#  define SIGILL        4
-#else
-#  define SIGILL        CONFIG_SIG_ILL
-#endif
-
-#ifndef CONFIG_SIG_TRAP
-#  define SIGTRAP       5
-#else
-#  define SIGTRAP      CONFIG_SIG_TRAP
-#endif
-
-#ifndef CONFIG_SIG_ABRT
-#  define SIGABRT       6
-#else
-#  define SIGABRT      CONFIG_SIG_ABRT
-#endif
-
-#ifndef CONFIG_SIG_BUS
-#  define SIGBUS        7
-#else
-#  define SIGBUS        CONFIG_SIG_BUS
-#endif
-
-#ifndef CONFIG_SIG_FPE
-#  define SIGFPE        8
-#else
-#  define SIGFPE        CONFIG_SIG_FPE
-#endif
-
-#ifndef CONFIG_SIG_KILL
-#  define SIGKILL       9
-#else
-#  define SIGKILL       CONFIG_SIG_KILL
-#endif
-
-#ifndef CONFIG_SIG_USR1
-#  define SIGUSR1       10  /* User signal 1 */
-#else
-#  define SIGUSR1       CONFIG_SIG_USR1
-#endif
-
-#ifndef CONFIG_SIG_SEGV
-#  define SIGSEGV       11
-#else
-#  define SIGSEGV       CONFIG_SIG_SEGV
-#endif
-
-#ifndef CONFIG_SIG_USR2
-#  define SIGUSR2       12  /* User signal 2 */
-#else
-#  define SIGUSR2       CONFIG_SIG_USR2
-#endif
-
-#ifndef CONFIG_SIG_PIPE
-#  define SIGPIPE       13
-#else
-#  define SIGPIPE       CONFIG_SIG_PIPE
-#endif
-
-#ifndef CONFIG_SIG_ALRM
-#  define SIGALRM       14  /* Default signal used with POSIX timers (used only */
+#define SIGHUP          1
+#define SIGINT          2
+#define SIGQUIT         3
+#define SIGILL          4
+#define SIGTRAP         5
+#define SIGABRT         6
+#define SIGBUS          7
+#define SIGFPE          8
+#define SIGKILL         9
+#define SIGUSR1         10  /* User signal 1 */
+#define SIGSEGV         11
+#define SIGUSR2         12  /* User signal 2 */
+#define SIGPIPE         13
+#define SIGALRM         14  /* Default signal used with POSIX timers (used only */
                             /* no other signal is provided) */
-#else
-#  define SIGALRM       CONFIG_SIG_ALRM
-#endif
+#define SIGTERM         15
+#define SIGCHLD         17
+#define SIGCONT         18
+#define SIGSTOP         19
+#define SIGTSTP         20
+#define SIGTTIN         21
+#define SIGTTOU         22
+#define SIGURG          23
+#define SIGXCPU         24
+#define SIGXFSZ         25
+#define SIGVTALRM       26
+#define SIGPROF         27
+#define SIGPOLL         29
 
-#ifndef CONFIG_SIG_TERM
-#  define SIGTERM       15
-#else
-#  define SIGTERM       CONFIG_SIG_TERM
-#endif
+#define SIGIO           SIGPOLL
 
-#ifndef CONFIG_SIG_CHLD
-#  define SIGCHLD       17
-#else
-#  define SIGCHLD       CONFIG_SIG_CHLD
-#endif
-
-#ifndef CONFIG_SIG_CONT
-#  define SIGCONT       18
-#else
-#  define SIGCONT       CONFIG_SIG_CONT
-#endif
-
-#ifndef CONFIG_SIG_STOP
-#  define SIGSTOP       19
-#else
-#  define SIGSTOP       CONFIG_SIG_STOP
-#endif
-
-#ifndef CONFIG_SIG_TSTP
-#  define SIGTSTP       20
-#else
-#  define SIGTSTP       CONFIG_SIG_TSTP
-#endif
-
-#ifndef CONFIG_SIG_TTIN
-#  define SIGTTIN       21
-#else
-#  define SIGTTIN       CONFIG_SIG_TTIN
-#endif
-
-#ifndef CONFIG_SIG_TTOU
-#  define SIGTTOU       22
-#else
-#  define SIGTTOU       CONFIG_SIG_TTOU
-#endif
-
-#ifndef CONFIG_SIG_URG
-#  define SIGURG        23
-#else
-#  define SIGURG        CONFIG_SIG_URG
-#endif
-
-#ifndef CONFIG_SIG_XCPU
-#  define SIGXCPU       24
-#else
-#  define SIGXCPU       CONFIG_SIG_XCPU
-#endif
-
-#ifndef CONFIG_SIG_XFSZ
-#  define SIGXFSZ       25
-#else
-#  define SIGXFSZ       CONFIG_SIG_XFSZ
-#endif
-
-#ifndef CONFIG_SIG_VTALRM
-#  define SIGVTALRM     26
-#else
-#  define SIGVTALRM     CONFIG_SIG_VTALRM
-#endif
-
-#ifndef CONFIG_SIG_PROF
-#  define SIGPROF       27
-#else
-#  define SIGPROF       CONFIG_SIG_PROF
-#endif
-
-#ifndef CONFIG_SIG_POLL
-#  define SIGPOLL       29
-#else
-#  define SIGPOLL       CONFIG_SIG_POLL
-#endif
-
-#define   SIGIO         SIGPOLL
-
-/* The following are non-standard signal definitions */
-
-#ifndef CONFIG_DISABLE_PTHREAD
-#  ifndef CONFIG_SIG_SIGCONDTIMEDOUT
-#    define SIGCONDTIMEDOUT 30  /* Used in the implementation of pthread_cond_timedwait */
-#  else
-#    define SIGCONDTIMEDOUT CONFIG_SIG_SIGCONDTIMEDOUT
-#  endif
-#endif
-
-/* SIGWORK is used to wake up various internal NuttX worker threads */
-
-#if defined(CONFIG_SCHED_WORKQUEUE) || defined(CONFIG_PAGING)
-#  ifndef CONFIG_SIG_SIGWORK
-#    define SIGWORK     31  /* Used to wake up the work queue */
-#  else
-#    define SIGWORK     CONFIG_SIG_SIGWORK
-#  endif
-#endif
+#define SIGSYS          31
 
 /* sigprocmask() "how" definitions. Only one of the following can be specified: */
 
@@ -377,11 +233,7 @@
 #  define SIG_HOLD      ((_sa_handler_t)1)   /* Used only with sigset() */
 #endif
 
-#define tkill(tid, signo)            tgkill((pid_t)-1, tid, signo)
-
-#define sigisemptyset(set)           (!*(set))
-#define sigorset(dest, left, right)  (!(*(dest) = *(left) | *(right)))
-#define sigandset(dest, left, right) (!(*(dest) = *(left) & *(right)))
+#define tkill(tid, signo)  tgkill((pid_t)-1, tid, signo)
 
 /********************************************************************************
  * Public Types
@@ -392,10 +244,12 @@
  * special meaning in some circumstances (e.g., kill()).
  */
 
-#ifndef __SIGSET_T_DEFINED
-typedef uint32_t sigset_t;   /* Bit set of 32 signals */
-#define __SIGSET_T_DEFINED 1
-#endif
+struct sigset_s
+{
+  uint32_t _elem[_SIGSET_NELEM];
+};
+
+typedef struct sigset_s sigset_t; /* Bit set of _NSIG signals */
 
 /* Possibly volatile-qualified integer type of an object that can be accessed
  * as an atomic entity, even in the presence of asynchronous interrupts.
@@ -448,10 +302,7 @@ struct siginfo
   FAR void    *si_user;      /* The User info associated with sigaction */
 };
 
-#ifndef __SIGINFO_T_DEFINED
 typedef struct siginfo siginfo_t;
-#define __SIGINFO_T_DEFINED 1
-#endif
 
 /* Non-standard convenience definition of signal handling function types.
  * These should be used only internally within the NuttX signal logic.
@@ -504,13 +355,16 @@ int  raise(int signo);
 int  sigaction(int signo, FAR const struct sigaction *act,
                FAR struct sigaction *oact);
 int  sigaddset(FAR sigset_t *set, int signo);
+int  sigandset(FAR sigset_t *dest, FAR sigset_t *left, FAR sigset_t *right);
 int  sigdelset(FAR sigset_t *set, int signo);
 int  sigemptyset(FAR sigset_t *set);
 int  sigfillset(FAR sigset_t *set);
 int  sighold(int signo);
+int  sigisemptyset(FAR sigset_t *set);
 int  sigismember(FAR const sigset_t *set, int signo);
 int  sigignore(int signo);
 _sa_handler_t signal(int signo, _sa_handler_t func);
+int  sigorset(FAR sigset_t *dest, FAR sigset_t *left, FAR sigset_t *right);
 int  sigpause(int signo);
 int  sigpending(FAR sigset_t *set);
 int  sigprocmask(int how, FAR const sigset_t *set, FAR sigset_t *oset);
@@ -526,37 +380,6 @@ int  sigwaitinfo(FAR const sigset_t *set, FAR struct siginfo *value);
 #undef EXTERN
 #ifdef __cplusplus
 }
-#endif
-
-/********************************************************************************
- * Minimal Type Definitions
- ********************************************************************************/
-
-#else /* __INCLUDE_SIGNAL_H */
-
-/* Avoid circular dependencies by assuring that simple type definitions are
- * available in any inclusion ordering.
- */
-
-/********************************************************************************
- * Included Files
- ********************************************************************************/
-
-#include <stdint.h>
-
-/********************************************************************************
- * Public Types
- ********************************************************************************/
-
-#ifndef __SIGSET_T_DEFINED
-typedef uint32_t sigset_t;
-#  define __SIGSET_T_DEFINED 1
-#endif
-
-#ifndef __SIGINFO_T_DEFINED
-struct siginfo;
-typedef struct siginfo siginfo_t;
-#  define __SIGINFO_T_DEFINED 1
 #endif
 
 #endif /* __INCLUDE_SIGNAL_H */

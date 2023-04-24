@@ -28,6 +28,7 @@
 #include <nuttx/board.h>
 #include <nuttx/irq.h>
 #include <nuttx/tls.h>
+#include <nuttx/signal.h>
 
 #include <nuttx/panic_notifier.h>
 #include <nuttx/reboot_notifier.h>
@@ -286,7 +287,7 @@ static void dump_task(FAR struct tcb_s *tcb, FAR void *arg)
 #endif
          " %3d %-8s %-7s %c%c%c"
          " %-18s"
-         " %08" PRIx32
+         " " SIGSET_FMT
          " %p"
          "   %7zu"
 #ifdef CONFIG_STACK_COLORATION
@@ -310,7 +311,7 @@ static void dump_task(FAR struct tcb_s *tcb, FAR void *arg)
          , tcb->flags & TCB_FLAG_CANCEL_PENDING ? 'P' : '-'
          , tcb->flags & TCB_FLAG_EXIT_PROCESSING ? 'P' : '-'
          , state
-         , tcb->sigprocmask
+         , SIGSET_ELEM(&tcb->sigprocmask)
          , tcb->stack_base_ptr
          , tcb->adj_stack_size
 #ifdef CONFIG_STACK_COLORATION
@@ -422,20 +423,18 @@ void _assert(FAR const char *filename, int linenum, FAR const char *msg)
 {
   FAR struct tcb_s *rtcb = running_task();
   struct utsname name;
-  bool fatal = false;
+  bool fatal = true;
 
   /* Flush any buffered SYSLOG data (from prior to the assertion) */
 
   syslog_flush();
 
 #if CONFIG_BOARD_RESET_ON_ASSERT < 2
-  if (up_interrupt_context() ||
-      (rtcb->flags & TCB_FLAG_TTYPE_MASK) == TCB_FLAG_TTYPE_KERNEL)
+  if (!up_interrupt_context() &&
+      (rtcb->flags & TCB_FLAG_TTYPE_MASK) != TCB_FLAG_TTYPE_KERNEL)
     {
-      fatal = true;
+      fatal = false;
     }
-#else
-  fatal = true;
 #endif
 
   panic_notifier_call_chain(fatal ? PANIC_KERNEL : PANIC_TASK, rtcb);

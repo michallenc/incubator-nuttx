@@ -33,6 +33,7 @@
 #include <nuttx/arch.h>
 
 #include "arm_internal.h"
+#include "sched/sched.h"
 
 /****************************************************************************
  * Public Functions
@@ -73,26 +74,6 @@ uint32_t *arm_syscall(uint32_t *regs)
 
   switch (cmd)
     {
-      /* R0=SYS_save_context:  This is a save context command:
-       *
-       *   int up_saveusercontext(void *saveregs);
-       *
-       * At this point, the following values are saved in context:
-       *
-       *   R0 = SYS_save_context
-       *   R1 = saveregs
-       *
-       * In this case, we simply need to copy the current registers to the
-       * save register space references in the saved R1 and return.
-       */
-
-      case SYS_save_context:
-        {
-          DEBUGASSERT(regs[REG_R1] != 0);
-          memcpy((uint32_t *)regs[REG_R1], regs, XCPTCONTEXT_SIZE);
-        }
-        break;
-
       /* R0=SYS_restore_context:  Restore task context
        *
        * void arm_fullcontextrestore(uint32_t *restoreregs)
@@ -173,6 +154,12 @@ uint32_t *arm_syscall(uint32_t *regs)
 
   if (regs != CURRENT_REGS)
     {
+      /* Record the new "running" task.  g_running_tasks[] is only used by
+       * assertion logic for reporting crashes.
+       */
+
+      g_running_tasks[this_cpu()] = this_task();
+
       restore_critical_section();
       regs = (uint32_t *)CURRENT_REGS;
     }

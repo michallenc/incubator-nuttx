@@ -271,6 +271,8 @@ config NRF52_USBDEV
 	bool "USB Device"
 	default n
 	depends on NRF52_HAVE_USBDEV
+	depends on NRF52_HFCLK_XTAL
+	select USBDEV
 
 config NRF52_COMP
 	bool "COMP"
@@ -383,6 +385,7 @@ config NRF52_FLASH_PREFETCH
 
 config NRF52_PROGMEM
 	bool "FLASH program memory"
+	depends on ALLOW_BSD_COMPONENTS
 	default n
 	select ARCH_HAVE_PROGMEM
 	---help---
@@ -658,6 +661,10 @@ config NRF52_I2C_MASTER_COPY_BUF_SIZE
 
 endmenu
 
+menu "USBDEV Configuration"
+
+endmenu # USBDEV Configuration
+
 menuconfig NRF52_SOFTDEVICE_CONTROLLER
 	bool "SoftDevice Controller"
 	depends on ALLOW_BSDNORDIC_COMPONENTS
@@ -710,8 +717,15 @@ config NRF52_SDC_PERIPHERAL_COUNT
 		determines the number of central roles from the following:
 
 		CENTRAL_ROLES = CONFIG_BLUETOOTH_MAX_CONN - NRF52_SDC_PERIPHERAL_COUNT
+		or
+		CENTRAL_ROLES = NRF52_SDC_MAX_COUNT - NRF52_SDC_PERIPHERAL_COUNT
 
 		So by choosing these two variables you can control both capabilities.
+
+config NRF52_SDC_MAX_COUNT
+	int "Maximum number of roles to support"
+	default 1
+	depends on !NET_BLUETOOTH
 
 config NRF52_SDC_ADVERTISING
 	bool "Support advertising"

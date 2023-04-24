@@ -85,6 +85,7 @@ static struct rname_code_s _rname_table[] =
   {"JAL", R_RISCV_JAL},
   {"RVC_JUMP", R_RISCV_RVC_JUMP},
   {"RVC_BRANCH", R_RISCV_RVC_BRANCH},
+  {"32_PCREL", R_RISCV_32_PCREL},
 };
 
 /****************************************************************************
@@ -540,6 +541,19 @@ int up_relocateadd(const Elf_Rela *rel, const Elf_Sym *sym,
                 offset, offset, val);
         }
         break;
+      case R_RISCV_32_PCREL:
+        {
+          /* P.29 https://github.com/riscv-non-isa/riscv-elf-psabi-doc */
+
+          binfo("%s at %08" PRIxPTR " [%08" PRIx32 "] "
+                "to sym=%p st_value=%08lx\n",
+                _get_rname(relotype),
+                addr, _get_val((uint16_t *)addr),
+                sym, sym->st_value);
+
+          addr = (long)sym->st_value + (long)rel->r_addend - (long)addr;
+        }
+        break;
       case R_RISCV_ADD32:
         {
           *(uint32_t *)addr += (uint32_t)(sym->st_value + rel->r_addend);
@@ -550,6 +564,11 @@ int up_relocateadd(const Elf_Rela *rel, const Elf_Sym *sym,
           *(uint64_t *)addr += (uint64_t)(sym->st_value + rel->r_addend);
         }
         break;
+      case R_RISCV_SUB16:
+        {
+          *(uint16_t *)addr -= (uint16_t)(sym->st_value + rel->r_addend);
+        }
+        break;
       case R_RISCV_SUB32:
         {
           *(uint32_t *)addr -= (uint32_t)(sym->st_value + rel->r_addend);
@@ -558,6 +577,11 @@ int up_relocateadd(const Elf_Rela *rel, const Elf_Sym *sym,
       case R_RISCV_SUB64:
         {
           *(uint64_t *)addr -= (uint64_t)(sym->st_value + rel->r_addend);
+        }
+        break;
+      case R_RISCV_SET16:
+        {
+          *(uint16_t *)addr = (uint16_t)(sym->st_value + rel->r_addend);
         }
         break;
       default:

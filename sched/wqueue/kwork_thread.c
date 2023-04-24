@@ -54,14 +54,14 @@
 #  define CALL_WORKER(worker, arg) \
      do \
        { \
-         uint32_t start; \
-         uint32_t elapsed; \
+         unsigned long start; \
+         unsigned long elapsed; \
          start = up_perf_gettime(); \
          worker(arg); \
          elapsed = up_perf_gettime() - start; \
          if (elapsed > CONFIG_SCHED_CRITMONITOR_MAXTIME_WQUEUE) \
            { \
-             serr("WORKER %p execute too long %"PRIu32"\n", \
+             serr("WORKER %p execute too long %lu\n", \
                    worker, elapsed); \
            } \
        } \
@@ -139,13 +139,6 @@ static int work_thread(int argc, FAR char *argv[])
 
   for (; ; )
     {
-      /* Then process queued work.  work_process will not return until: (1)
-       * there is no further work in the work queue, and (2) semaphore is
-       * posted.
-       */
-
-      nxsem_wait_uninterruptible(&wqueue->sem);
-
       /* And check each entry in the work queue.  Since we have disabled
        * interrupts we know:  (1) we will not be suspended unless we do
        * so ourselves, and (2) there will be no changes to the work queue
@@ -153,9 +146,13 @@ static int work_thread(int argc, FAR char *argv[])
 
       /* Remove the ready-to-execute work from the list */
 
-      work = (FAR struct work_s *)dq_remfirst(&wqueue->q);
-      if (work && work->worker)
+      while ((work = (FAR struct work_s *)dq_remfirst(&wqueue->q)) != NULL)
         {
+          if (work->worker == NULL)
+            {
+              continue;
+            }
+
           /* Extract the work description from the entry (in case the work
            * instance will be re-used after it has been de-queued).
            */
@@ -178,6 +175,13 @@ static int work_thread(int argc, FAR char *argv[])
           CALL_WORKER(worker, arg);
           flags = enter_critical_section();
         }
+
+      /* Then process queued work.  work_process will not return until: (1)
+       * there is no further work in the work queue, and (2) semaphore is
+       * posted.
+       */
+
+      nxsem_wait_uninterruptible(&wqueue->sem);
     }
 
   leave_critical_section(flags);

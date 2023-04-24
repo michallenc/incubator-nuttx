@@ -449,7 +449,7 @@ static int dir_close(FAR struct file *filep)
   /* Release our references on the contained 'root' inode */
 
   inode_release(inode);
-  kmm_free(relpath);
+  lib_free(relpath);
   return ret;
 }
 
@@ -600,7 +600,13 @@ int dir_allocate(FAR struct file *filep, FAR const char *relpath)
     }
 
   inode_getpath(inode, path_prefix);
-  asprintf(&dir->fd_path, "%s%s/", path_prefix, relpath);
+  ret = asprintf(&dir->fd_path, "%s%s/", path_prefix, relpath);
+  if (ret < 0)
+    {
+      dir->fd_path = NULL;
+      return ret;
+    }
+
   filep->f_inode  = &g_dir_inode;
   filep->f_priv   = dir;
   inode_addref(&g_dir_inode);

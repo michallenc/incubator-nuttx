@@ -240,9 +240,7 @@
  */
 
 #define AUDIO_VOLUME_MAX            1000
-#define AUDIO_VOLUME_MAX_FLOAT      1000.0f
 #define AUDIO_VOLUME_MIN            0
-#define AUDIO_VOLUME_MIN_FLOAT      0.0f
 
 /* Audio Balance Limits *****************************************************/
 
@@ -252,11 +250,8 @@
  */
 
 #define AUDIO_BALANCE_RIGHT          1000
-#define AUDIO_BALANCE_RIGHT_FLOAT    1000.0f
 #define AUDIO_BALANCE_CENTER         500
-#define AUDIO_BALANCE_CENTER_FLOAT   500.0f
 #define AUDIO_BALANCE_LEFT           0
-#define AUDIO_BALANCE_LEFT_FLOAT     0.0f
 
 /* Supported Feature Units controls *****************************************/
 
@@ -337,6 +332,7 @@
 #define AUDIO_MSG_WAKEUP            9
 #define AUDIO_MSG_COMMAND          10
 #define AUDIO_MSG_SLIENCE          11
+#define AUDIO_MSG_UNDERRUN         12
 #define AUDIO_MSG_USER             64
 
 /* Audio Pipeline Buffer flags */

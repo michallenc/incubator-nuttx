@@ -90,7 +90,7 @@ sigset_t nxsig_pendingset(FAR struct tcb_s *stcb)
   group = stcb->group;
   DEBUGASSERT(group);
 
-  sigpendset = NULL_SIGNAL_SET;
+  sigemptyset(&sigpendset);
 
   flags = enter_critical_section();
   for (sigpend = (FAR sigpendq_t *)group->tg_sigpendingq.head;

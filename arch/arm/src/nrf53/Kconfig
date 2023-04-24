@@ -23,6 +23,9 @@ config NRF53_APPCORE
 	select ARM_HAVE_DSP
 	select ARCH_HAVE_FPU
 	select NRF53_HAVE_PWM
+	select NRF52_HAVE_GPIOTE1
+	select NRF53_HAVE_SAADC
+	select NRF53_HAVE_UART1
 
 config NRF53_NETCORE
 	bool
@@ -36,7 +39,6 @@ choice
 config ARCH_CHIP_NRF5340_CPUAPP
 	bool "NRF53 App core"
 	select NRF53_APPCORE
-	select ARCH_HAVE_FPU
 
 config ARCH_CHIP_NRF5340_CPUNET
 	bool "NRF53 Net core"
@@ -70,7 +72,19 @@ config NRF53_ENABLE_APPROTECT
 
 # Peripheral support
 
+config NRF53_HAVE_UART1
+	bool
+	default n
+
+config NRF53_HAVE_GPIOTE1
+	bool
+	default n
+
 config NRF53_HAVE_PWM
+	bool
+	default n
+
+config NRF53_HAVE_SAADC
 	bool
 	default n
 
@@ -92,7 +106,15 @@ config NRF53_PWM
 	bool
 	default n
 
+config NRF53_RTC
+	bool
+	default n
+
 menu "NRF53 Peripheral Selection"
+
+config NRF53_GPIOTE
+	bool "GPIOTE (GPIO interrupts)"
+	default n
 
 config NRF53_UART0
 	bool "UART0"
@@ -103,6 +125,7 @@ config NRF53_UART0
 config NRF53_UART1
 	bool "UART1"
 	default n
+	depends on NRF53_HAVE_UART1
 	select UART1_SERIALDRIVER
 	select NRF53_UART
 
@@ -134,6 +157,21 @@ config NRF53_PWM1
 config NRF53_PWM2
 	bool "PWM2"
 	select NRF53_PWM
+	default n
+
+config NRF53_SAADC
+	bool "SAADC"
+	default n
+
+config NRF53_RTC0
+	bool "RTC0"
+	select NRF53_RTC
+	depends on !NRF53_SOFTDEVICE_CONTROLLER
+	default n
+
+config NRF53_RTC1
+	bool "RTC1"
+	select NRF53_RTC
 	default n
 
 endmenu # NRF53 Peripheral Selection
@@ -210,7 +248,28 @@ config NRF53_SYSTIMER_SYSTICK
 		you choose this option, WFE/WFI will not be used
 		in idle loop.
 
+config NRF53_SYSTIMER_RTC
+	bool "RTC"
+	select NRF53_RTC
+	select SCHED_TICKLESS
+	select SCHED_TICKLESS_ALARM
+	select NRF53_USE_LFCLK
+	---help---
+		Use RTC timer in tickless mode.
+
 endchoice
+
+if NRF53_SYSTIMER_RTC
+
+config NRF53_SYSTIMER_RTC_INSTANCE
+	int "RTC timer instance"
+	default 0 if !NRF53_SOFTDEVICE_CONTROLLER
+	default 1 if NRF53_SOFTDEVICE_CONTROLLER
+	range 0 1
+	---help---
+		Which RTC instance to use to drive the system timer
+
+endif
 
 endmenu # System Timer
 
@@ -332,6 +391,85 @@ endif # !NRF53_PWM_MULTICHAN
 
 endmenu # PWM configuration
 
+menu "SAADC Configuration"
+
+if NRF53_SAADC
+
+choice
+	prompt "SAADC trigger selection"
+	default NRF53_SAADC_TASK
+	---help---
+		Choose mode for sample rate control
+
+config NRF53_SAADC_TASK
+	bool "SAADC Task trigger"
+
+config NRF53_SAADC_TIMER
+	bool "SAADC Timer trigger"
+
+endchoice # SAADC trigger selection
+
+if NRF53_SAADC_TIMER
+
+config NRF53_SAADC_TIMER_CC
+	int "SAADC Timer CC"
+	default 0
+	range 80 2047
+
+endif #NRF53_SAADC_TIMER
+
+config NRF53_SAADC_OVERSAMPLE
+	int "SAADC oversample"
+	default 0
+	range 0 8
+	---help---
+		SAADC oversample control
+
+config NRF53_SAADC_RESOLUTION
+	int "SAADC resolution"
+	default 0
+	range 0 3
+	---help---
+		SAADC resolution 0 - 8 bits, 1 - 10 bits, 2 - 12 bits, 3 - 14 bits
+
+config NRF53_SAADC_CHANNELS
+	int "SAADC channels"
+	default 8
+	range 0 8
+	---help---
+		SAADC channels
+
+config NRF53_SAADC_LIMITS
+	bool "SAADC limits enable"
+	default n
+	---help---
+		SAADC limist enable
+
+endif # NRF53_SAADC
+
+endmenu # SAADC Configuration
+
+menu "GPIO Interrupt Configuration"
+
+config NRF53_PER_PIN_INTERRUPTS
+	bool "Per-pin interrupt callbacks"
+	default !DEFAULT_SMALL
+	depends on NRF53_GPIOTE
+	---help---
+		The GPIOTE peripheral supports a limited number of channels which can
+		be set to EVENT mode and thus generate interrupts on pin state changes.
+		Another mechanism offered by the GPIO/GPIOTE peripherals is the PORT
+		event. This event is generated from a signal shared by all pins in
+		the GPIO port.
+
+		This option enables the ability to set per-pin callbacks that will
+		be invoked from the main GPIOTE ISR when a PORT event is generated.
+		As this involves extra storage to store each callback, this option can
+		be disabled to save space. In such case, it is possible to set a callback
+		for the whole PORT event directly.
+
+endmenu # GPIO Interrupt Configuration
+
 menuconfig NRF53_SOFTDEVICE_CONTROLLER
 	bool "SoftDevice Controller"
 	depends on ALLOW_BSDNORDIC_COMPONENTS
@@ -369,8 +507,15 @@ config NRF53_SDC_PERIPHERAL_COUNT
 		determines the number of central roles from the following:
 
 		CENTRAL_ROLES = CONFIG_BLUETOOTH_MAX_CONN - NRF53_SDC_PERIPHERAL_COUNT
+		or
+		CENTRAL_ROLES = NRF52_SDC_MAX_COUNT - NRF52_SDC_PERIPHERAL_COUNT
 
 		So by choosing these two variables you can control both capabilities.
+
+config NRF53_SDC_MAX_COUNT
+	int "Maximum number of roles to support"
+	default 1
+	depends on !NET_BLUETOOTH
 
 config NRF53_SDC_ADVERTISING
 	bool "Support advertising"

@@ -60,6 +60,10 @@ ifeq ($(CONFIG_SENSORS_APDS9960),y)
   CSRCS += apds9960.c
 endif
 
+ifeq ($(CONFIG_SENSORS_APDS9922),y)
+  CSRCS += apds9922.c
+endif
+
 ifeq ($(CONFIG_SENSORS_AK09912),y)
   CSRCS += ak09912.c
 endif
@@ -300,6 +304,10 @@ endif # CONFIG_1WIRE
 
 ifeq ($(CONFIG_SENSORS_MPU60X0),y)
   CSRCS += mpu60x0.c
+endif
+
+ifeq ($(CONFIG_SENSORS_MPU9250),y)
+  CSRCS += mpu9250.c
 endif
 
 # Quadrature encoder upper half

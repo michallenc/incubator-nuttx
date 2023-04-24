@@ -41,6 +41,9 @@
 #if defined(CONFIG_UART_BTH4)
 #  include <nuttx/serial/uart_bth4.h>
 #endif
+#ifdef CONFIG_BLUETOOTH_RPMSG_SERVER
+#  include <nuttx/wireless/bluetooth/bt_rpmsghci.h>
+#endif
 
 #include "arm_internal.h"
 #include "ram_vectors.h"
@@ -60,7 +63,19 @@
 #  error Only for the NET core
 #endif
 
+#ifdef CONFIG_BLUETOOTH_RPMSG_SERVER
+#  if defined(CONFIG_UART_BTH4) || defined(CONFIG_NET_BLUETOOTH)
+#    error Invalid configuration
+#  endif
+#endif
+
 /* Connections configuration ************************************************/
+
+/* If NET_BLUETOOTH not defined */
+
+#ifndef CONFIG_NET_BLUETOOTH
+#  define CONFIG_BLUETOOTH_MAX_CONN CONFIG_NRF53_SDC_MAX_COUNT
+#endif
 
 #if defined(CONFIG_SDC_PERIPHERAL_COUNT) && \
     CONFIG_SDC_PERIPHERAL_COUNT > CONFIG_BLUETOOTH_MAX_CONN
@@ -261,7 +276,7 @@ static int bt_open(struct bt_driver_s *btdev)
 }
 
 /****************************************************************************
- * Name: bt_open
+ * Name: bt_hci_send
  ****************************************************************************/
 
 static int bt_hci_send(struct bt_driver_s *btdev,
@@ -913,9 +928,41 @@ int nrf53_sdc_initialize(void)
       wlerr("bt_netdev_register error: %d\n", ret);
       return ret;
     }
+#elif defined(CONFIG_BLUETOOTH_RPMSG_SERVER)
+  /* Do nothing here */
 #else
 #  error
 #endif
 
   return ret;
 }
+
+#ifdef CONFIG_BLUETOOTH_RPMSG_SERVER
+/****************************************************************************
+ * Name: nrf53_rpmsghci_server_initialize
+ ****************************************************************************/
+
+int nrf53_rpmsghci_server_initialize(const char *name)
+{
+  int ret = OK;
+
+  /* Initialize SDC */
+
+  ret = nrf53_sdc_initialize();
+  if (ret < 0)
+    {
+      wlerr("nrf53_sdc_initialize error: %d\n", ret);
+      return ret;
+    }
+
+  /* Register rpmsg-HCI server */
+
+  ret = rpmshci_server_init(name, &g_bt_driver);
+  if (ret < 0)
+    {
+      wlerr("rpmshci_server_init error: %d\n", ret);
+    }
+
+  return ret;
+}
+#endif
