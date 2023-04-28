@@ -152,14 +152,14 @@ int adjtime(FAR const struct timeval *delta, FAR struct timeval *olddelta)
    * this function call.
    */
 
-  get_timer_period(&period_usec);
+  up_get_timer_period(&period_usec);
 
   /* Determine how much we want to adjust timer period and the number
    * of cycles over which we want to do the adjustment.
    */
 
   count = (USEC_PER_SEC * ADJTIME_PERIOD) / period_usec;
-  incr = adjust_usec / count + .5;
+  incr = adjust_usec / count;
 
   /* Compute maximum possible period increase and check
    * whether previously computed increase exceeds the maximum
@@ -172,7 +172,7 @@ int adjtime(FAR const struct timeval *delta, FAR struct timeval *olddelta)
       /* It does... limit computed increase and increment count. */
 
       incr = incr_limit;
-      count = adjust_usec / incr + .5;
+      count = adjust_usec / incr;
     }
 
   if (is_negative == 1)

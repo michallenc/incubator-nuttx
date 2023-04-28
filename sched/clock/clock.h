@@ -67,8 +67,8 @@ extern struct timespec  g_basetime;
 #endif
 
 #ifdef CONFIG_CLOCK_ADJTIME
-extern long long clk_adj_usec;
-extern long long clk_adj_count;
+extern long long g_clk_adj_usec;
+extern long long g_clk_adj_count;
 #endif
 
 /****************************************************************************

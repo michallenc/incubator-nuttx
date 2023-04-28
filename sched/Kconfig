@@ -199,8 +199,11 @@ config CLOCK_ADJTIME
 		clock. This requires specific architecture support capable of adjusting
 		system timer period.
 
-		Interfaces get_timer_period() and adj_timer_period() has to be defined
-		by architecture level support.
+		Interfaces up_get_timer_period() and up_adj_timer_period() has to be
+		defined by architecture level support.
+
+		This is not a POSIX interface but derives from 4.3BSD, System V.
+		It is also supported for Linux compatibility.
 
 		Currently it is not possible to use adjtime() if SCHED_TICKLESS or
 		CLOCK_TIMEKEEPING is defined.

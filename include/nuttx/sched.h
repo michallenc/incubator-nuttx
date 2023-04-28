@@ -639,6 +639,7 @@ struct tcb_s
   unsigned long crit_max;                /* Max time in critical section    */
   unsigned long run_start;               /* Time when thread begin run      */
   unsigned long run_max;                 /* Max time thread run             */
+  unsigned long run_time;                /* Total time thread run           */
 #endif
 
   /* State save areas *******************************************************/
@@ -845,6 +846,40 @@ int nxsched_release_tcb(FAR struct tcb_s *tcb, uint8_t ttype);
 /* These functions all extract lists from the group structure associated with
  * the currently executing task.
  */
+
+/****************************************************************************
+ * Name: nxsched_get_files_from_tcb
+ *
+ * Description:
+ *   Return a pointer to the file list from task context
+ *
+ * Input Parameters:
+ *   tcb - Address of the new task's TCB
+ *
+ * Returned Value:
+ *   A pointer to the errno.
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+FAR struct filelist *nxsched_get_files_from_tcb(FAR struct tcb_s *tcb);
+
+/****************************************************************************
+ * Name: nxsched_get_files
+ *
+ * Description:
+ *   Return a pointer to the file list for this thread
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   A pointer to the errno.
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
 
 FAR struct filelist *nxsched_get_files(void);
 

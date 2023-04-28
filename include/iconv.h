@@ -1,5 +1,5 @@
 /****************************************************************************
- * include/nuttx/fs/binfs.h
+ * include/iconv.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,30 +18,28 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_FS_BINFS_H
-#define __INCLUDE_NUTTX_FS_BINFS_H
+#ifndef __INCLUDE_ICONV_H
+#define __INCLUDE_ICONV_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#ifdef CONFIG_FS_BINFS
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
+#include <nuttx/compiler.h>
+#include <sys/types.h>
 
 /****************************************************************************
- * Type Definitions
+ * Public Types
  ****************************************************************************/
+
+typedef FAR void *iconv_t;
 
 /****************************************************************************
- * Public Data
+ * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef __cplusplus
+#undef EXTERN
+#if defined(__cplusplus)
 #define EXTERN extern "C"
 extern "C"
 {
@@ -49,22 +47,14 @@ extern "C"
 #define EXTERN extern
 #endif
 
-/* The "bindir" is file system that supports access to the builtin
- * applications.
- * It is typically mounted under /bin.
- */
-
-struct mountpt_operations;
-EXTERN const struct mountpt_operations binfs_operations;
-
-/****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
+iconv_t iconv_open(FAR const char *to, FAR const char *from);
+size_t iconv(iconv_t cd, FAR char **in, FAR size_t *inb,
+             FAR char **out, FAR size_t *outb);
+int iconv_close(iconv_t cd);
 
 #undef EXTERN
-#ifdef __cplusplus
+#if defined(__cplusplus)
 }
 #endif
 
-#endif /* CONFIG_FS_BINFS */
-#endif /* __INCLUDE_NUTTX_FS_BINFS_H */
+#endif /* __INCLUDE_ICONV_H */

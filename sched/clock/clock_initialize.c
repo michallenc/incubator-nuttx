@@ -60,8 +60,8 @@ struct timespec   g_basetime;
 #endif
 
 #ifdef CONFIG_CLOCK_ADJTIME
-long long clk_adj_usec;
-long long clk_adj_count;
+long long g_clk_adj_usec;
+long long g_clk_adj_count;
 #endif
 
 /****************************************************************************
@@ -229,8 +229,8 @@ void clock_initialize(void)
 #endif
 
 #if defined(CONFIG_CLOCK_ADJTIME)
-  clk_adj_count = 0;
-  clk_adj_usec = 0;
+  g_clk_adj_count = 0;
+  g_clk_adj_usec = 0;
 #endif
 
 #endif
@@ -419,8 +419,8 @@ skip:
  *
  * Description:
  *   This function is called from adjtime() defined in clock_adjtime.c if
- *   CONFIG_CLOCK_ADJTIME is enabled. It sets global variables clk_adj_usec
- *   and clk_adj_count which are used for clock adjustment.
+ *   CONFIG_CLOCK_ADJTIME is enabled. It sets global variables g_clk_adj_usec
+ *   and g_clk_adj_count which are used for clock adjustment.
  *
  * Input Parameters:
  *   adj_usec  - period adjustment in usec
@@ -434,17 +434,17 @@ void clock_set_adjust(long long adj_usec, long long adj_count,
 {
   /* Get old adjust values. */
 
-  *adj_usec_old  = clk_adj_usec;
-  *adj_count_old = clk_adj_count;
+  *adj_usec_old  = g_clk_adj_usec;
+  *adj_count_old = g_clk_adj_count;
 
   /* Set new adjust values. */
 
-  clk_adj_usec  = adj_usec;
-  clk_adj_count = adj_count;
+  g_clk_adj_usec  = adj_usec;
+  g_clk_adj_count = adj_count;
 
   /* And change timer period. */
 
-  adj_timer_period(clk_adj_usec);
+  up_adj_timer_period(g_clk_adj_usec);
 }
 #endif
 
@@ -468,19 +468,19 @@ void clock_timer(void)
 #ifdef CONFIG_CLOCK_ADJTIME
   /* Do we apply timer adjustment? */
 
-  if (clk_adj_count > 0)
+  if (g_clk_adj_count > 0)
     {
       /* Yes, decrement the count each tick. */
 
-      clk_adj_count--;
+      g_clk_adj_count--;
 
       /* Check if clock adjusment is finished. */
 
-      if (clk_adj_count == 0)
+      if (g_clk_adj_count == 0)
         {
           /* Yes... reset timer period. */
 
-          adj_timer_period(0);
+          up_adj_timer_period(0);
         }
     }
 #endif

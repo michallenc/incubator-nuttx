@@ -1458,7 +1458,7 @@ void up_secure_irq_all(bool secure);
 #endif
 
 /****************************************************************************
- * Function:  adj_timer_period
+ * Function:  up_adj_timer_period
  *
  * Description:
  *   Adjusts timer period. This call is used when adjusting timer period as
@@ -1471,10 +1471,10 @@ void up_secure_irq_all(bool secure);
  ****************************************************************************/
 
 #ifdef CONFIG_CLOCK_ADJTIME
-void adj_timer_period(long long period_inc_usec);
+void up_adj_timer_period(long long period_inc_usec);
 
 /****************************************************************************
- * Function:  get_timer_period
+ * Function:  up_get_timer_period
  *
  * Description:
  *   This function returns the timer period in usec.
@@ -1484,7 +1484,7 @@ void adj_timer_period(long long period_inc_usec);
  *
  ****************************************************************************/
 
-void get_timer_period(long long *period_usec);
+void up_get_timer_period(long long *period_usec);
 #endif
 
 /****************************************************************************
