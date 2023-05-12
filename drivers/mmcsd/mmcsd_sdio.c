@@ -2636,14 +2636,13 @@ static int mmcsd_mmcinitialize(FAR struct mmcsd_state_s *priv)
    * identification state / card-identification mode.
    */
 
-  //printf("in mmcsinit\n");
   finfo("Initialising MMC card.\n");
 
   mmcsd_sendcmdpoll(priv, MMCSD_CMD2, 0);
   ret = SDIO_RECVR2(priv->dev, MMCSD_CMD2, cid);
   if (ret != OK)
     {
-      printf("ERROR: SDIO_RECVR2 for MMC CID failed: %d\n", ret);
+      ferr("ERROR: SDIO_RECVR2 for MMC CID failed: %d\n", ret);
       return ret;
     }
 
@@ -3277,8 +3276,6 @@ static int mmcsd_sdinitialize(FAR struct mmcsd_state_s *priv)
   uint32_t scr[2];
   int ret;
 
-  printf("in sd\n");
-
   /* At this point, clocking has been supplied to the card, both CMD0 and
    * ACMD41 (with OCR=0) have been sent successfully, the card is no longer
    * busy and (presumably) in the IDLE state so there is good evidence
@@ -3462,7 +3459,7 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
 
   if (!SDIO_PRESENT(priv->dev))
     {
-      printf("No card present\n");
+      ferr("No card present\n");
       return -ENODEV;
     }
 
@@ -3485,7 +3482,6 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
 
   /* Then send CMD0 just once is standard procedure */
 
-  printf("send CMD0\n");
   mmcsd_sendcmdpoll(priv, MMCSD_CMD0, 0);
   nxsig_usleep(MMCSD_IDLE_DELAY);
 
@@ -3494,7 +3490,6 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
    * then the card is definitely of MMC type
    */
 
-  printf("send CMD1\n");
   mmcsd_sendcmdpoll(priv, MMC_CMD1, MMCSD_VDD_33_34 | mmccapacity);
 
   ret = SDIO_RECVR3(priv->dev, MMC_CMD1, &response);
@@ -3574,10 +3569,6 @@ static int mmcsd_cardidentify(FAR struct mmcsd_state_s *priv)
           /* CMD8 was sent successfully... Get the R7 response */
 
           ret = SDIO_RECVR7(priv->dev, SD_CMD8, &response);
-        }
-      else
-        {
-          printf("sd send failed\n");
         }
 
       /* Were both the command sent and response received correctly? */
@@ -3852,13 +3843,11 @@ static int mmcsd_probe(FAR struct mmcsd_state_s *priv)
       ret = mmcsd_cardidentify(priv);
       if (ret != OK)
         {
-          printf("ERROR: Failed to initialize card: %d\n", ret);
+          ferr("ERROR: Failed to initialize card: %d\n", ret);
         }
       else
         {
           /* Then initialize the driver according to the card type */
-
-          //printf("type is %d\n", priv->type);
 
           switch (priv->type)
             {
@@ -3893,7 +3882,6 @@ static int mmcsd_probe(FAR struct mmcsd_state_s *priv)
               case MMCSD_CARDTYPE_MMC | MMCSD_CARDTYPE_BLOCK:
                 finfo("MMC card with block addressing.\n");
 #ifdef CONFIG_MMCSD_MMCSUPPORT
-                printf("try to init mmc\n");
                 ret = mmcsd_mmcinitialize(priv);
                 break;
 #endif
@@ -4051,7 +4039,7 @@ static int mmcsd_hwinitialize(FAR struct mmcsd_state_s *priv)
       ret = mmcsd_probe(priv);
       if (ret != OK)
         {
-          printf("Slot not empty, but initialization failed: %d\n", ret);
+          ferr("Slot not empty, but initialization failed: %d\n", ret);
 
           /* NOTE: The failure to initialize a card does not mean that
            * initialization has failed! A card could be installed in the slot

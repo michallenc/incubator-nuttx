@@ -1969,7 +1969,6 @@ static int sam_sendcmd(struct sdio_dev_s *dev,
     /* No response */
 
     case MMCSD_NO_RESPONSE:
-      printf("no response expected\n");
       priv->cmdrmask = HSMCI_CMDRESP_INTS;
       regval |= HSMCI_CMDR_RSPTYP_NONE;
 
@@ -1994,7 +1993,6 @@ static int sam_sendcmd(struct sdio_dev_s *dev,
 
     case MMCSD_R3_RESPONSE:
     case MMCSD_R7_RESPONSE:
-      printf("R3/R7 response\n");
       priv->cmdrmask = HSMCI_CMDRESP_NOCRC_INTS;
       regval |= HSMCI_CMDR_RSPTYP_48BIT | HSMCI_CMDR_MAXLAT;
       break;
@@ -2438,13 +2436,9 @@ static int sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
                     " SR: %08" PRIx32 "\n",
                     cmd, priv->cmdrmask, sr);
 
-              //printf("getreg = %lx\n", sam_getreg(priv, SAM_HSMCI_CSTOR_OFFSET));
-
               if ((pending & HSMCI_RESPONSE_TIMEOUT_ERRORS) != 0)
                 {
                   /* Yes.. return a timeout error */
-
-                  printf("timeout erors\n");
 
                   priv->wkupevent = SDIOWAIT_CMDDONE |
                                     SDIOWAIT_RESPONSEDONE |
@@ -2569,7 +2563,6 @@ static int sam_recvshort(struct sdio_dev_s *dev,
 
   if ((priv->wkupevent & SDIOWAIT_TIMEOUT) != 0)
     {
-      printf("recv3: timeout\n");
       ret = -EINVAL;
     }
 
@@ -2577,7 +2570,6 @@ static int sam_recvshort(struct sdio_dev_s *dev,
 
   else if ((priv->wkupevent & SDIOWAIT_ERROR) != 0)
     {
-      printf("recv3: other\n");
       ret = -EIO;
     }
 
