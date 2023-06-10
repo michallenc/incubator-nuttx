@@ -39,9 +39,9 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_USAGEFAULT
-# define ufalert(format, ...)  _alert(format, ##__VA_ARGS__)
+#  define ufalert(format, ...) _alert(format, ##__VA_ARGS__)
 #else
-# define ufalert(x...)
+#  define ufalert(x...)
 #endif
 
 /****************************************************************************
@@ -111,6 +111,6 @@ int arm_usagefault(int irq, void *context, void *arg)
     }
 
   up_irq_save();
-  PANIC();
+  PANIC_WITH_REGS("panic", context);
   return OK;
 }

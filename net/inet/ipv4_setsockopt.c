@@ -37,9 +37,9 @@
 #include "netfilter/iptables.h"
 #include "igmp/igmp.h"
 #include "inet/inet.h"
-#include "udp/udp.h"
+#include "socket/socket.h"
 
-#ifdef CONFIG_NET_IPv4
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_SOCKOPTS)
 
 /****************************************************************************
  * Public Functions
@@ -175,15 +175,13 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
         }
         break;
 
-#if defined(CONFIG_NET_UDP) && !defined(CONFIG_NET_UDP_NO_STACK)
+#ifdef NET_UDP_HAVE_STACK
       case IP_MULTICAST_TTL:          /* Set/read the time-to-live value of
                                        * outgoing multicast packets */
         {
-          FAR struct udp_conn_s *conn;
-          int ttl;
+          FAR struct socket_conn_s *conn;
 
-          if (psock->s_type != SOCK_DGRAM ||
-              value == NULL || value_len == 0)
+          if (value == NULL || value_len == 0)
             {
               ret = -EINVAL;
               break;
@@ -198,7 +196,7 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
             }
           else
             {
-              conn = (FAR struct udp_conn_s *)psock->s_conn;
+              conn = psock->s_conn;
               conn->ttl = ttl;
               ret = OK;
             }
@@ -226,20 +224,20 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
       case IP_MULTICAST_ALL:          /* Modify the delivery policy of
                                        * multicast messages bound to
                                        * INADDR_ANY */
-#warning Missing logic
+
+        /* #warning Missing logic */
+
         nwarn("WARNING: Unimplemented IPv4 option: %d\n", option);
         ret = -ENOSYS;
         break;
 #endif /* CONFIG_NET_IGMP */
 
-#if defined(CONFIG_NET_UDP) && !defined(CONFIG_NET_UDP_NO_STACK)
       case IP_PKTINFO:
         {
-          FAR struct udp_conn_s *conn;
+          FAR struct socket_conn_s *conn;
           int enable;
 
-          if (psock->s_type != SOCK_DGRAM ||
-              value == NULL || value_len == 0)
+          if (value == NULL || value_len == 0)
             {
               ret = -EINVAL;
               break;
@@ -247,24 +245,24 @@ int ipv4_setsockopt(FAR struct socket *psock, int option,
 
           enable = (value_len >= sizeof(int)) ?
             *(FAR int *)value : (int)*(FAR unsigned char *)value;
-          conn = (FAR struct udp_conn_s *)psock->s_conn;
+
+          conn = psock->s_conn;
           if (enable)
             {
-              conn->flags |= _UDP_FLAG_PKTINFO;
+              _SO_SETOPT(conn->s_options, option);
             }
           else
             {
-              conn->flags &= ~_UDP_FLAG_PKTINFO;
+              _SO_CLROPT(conn->s_options, option);
             }
 
           ret = OK;
         }
         break;
-#endif
+
       case IP_TOS:
         {
-          FAR struct socket_conn_s *conn =
-                           (FAR struct socket_conn_s *)psock->s_conn;
+          FAR struct socket_conn_s *conn = psock->s_conn;
           int tos;
 
           tos = (value_len >= sizeof(int)) ?

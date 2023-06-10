@@ -214,7 +214,7 @@ config ESP32S3_ULP_COPROC_RESERVE_MEM
 	range 32 8176 if ESP32S3_ULP_COPROC_ENABLED
 	default 0 if !ESP32S3_ULP_COPROC_ENABLED
 	range 0 0 if !ESP32S3_ULP_COPROC_ENABLED
-	help
+	---help---
 		Bytes of memory to reserve for ULP coprocessor firmware & data.
 		Data is reserved at the beginning of RTC slow memory.
 
@@ -301,17 +301,23 @@ config ESP32S3_SPI2
 	default n
 	select ESP32S3_SPI
 	select SPI
+	select ESP32S3_GPIO_IRQ if SPI_SLAVE
 
 config ESP32S3_SPI3
 	bool "SPI 3"
 	default n
 	select ESP32S3_SPI
 	select SPI
+	select ESP32S3_GPIO_IRQ if SPI_SLAVE
 
 config ESP32S3_DMA
 	bool "General DMA (GDMA)"
 	default n
 	select ARCH_DMA
+
+config ESP32S3_RTC
+	bool "Real Time Clock (RTC)"
+	default y
 
 config ESP32S3_UART0
 	bool "UART 0"
@@ -531,6 +537,7 @@ config ESP32S3_SPIRAM_SPEED_80M
 
 config ESP32S3_SPIRAM_SPEED_120M
 	bool "120MHz clock speed"
+	depends on ESP32S3_SPIRAM_MODE_QUAD
 
 endchoice # ESP32S3_SPIRAM_SPEED
 
@@ -591,6 +598,11 @@ config ESP32S3_SPI_UDCS
 	---help---
 		Use user-defined CS.
 
+config ESP32S3_SPI_SLAVE_BUFSIZE
+	int "SPI slave buffer size"
+	default 2048
+	depends on SPI_SLAVE
+
 if ESP32S3_SPI2
 
 config ESP32S3_SPI2_DMA
@@ -639,6 +651,13 @@ config ESP32S3_SPI2_MISOPIN
 endif # ESP32S3_SPI2
 
 if ESP32S3_SPI3
+
+config ESP32S3_SPI3_DMA
+	bool "SPI3 use GDMA"
+	default n
+	depends on ESP32S3_DMA
+	---help---
+		Enable support for transfers using the GDMA engine.
 
 config ESP32S3_SPI3_CSPIN
 	int "SPI3 CS Pin"
@@ -862,16 +881,16 @@ config ESP32S3_WIFI_RXBA_AMPDU_WZ
 	default 6
 
 config ESP_WIFI_GCMP_SUPPORT
-    bool "WiFi GCMP Support(GCMP128 and GCMP256)"
-    default n
-    ---help---
-        Select this option to enable GCMP support. GCMP support is compulsory for WiFi Suite-B support.
+	bool "WiFi GCMP Support(GCMP128 and GCMP256)"
+	default n
+	---help---
+		Select this option to enable GCMP support. GCMP support is compulsory for WiFi Suite-B support.
 
 config ESP_WIFI_GMAC_SUPPORT
-    bool "WiFi GMAC Support(GMAC128 and GMAC256)"
-    default n
-    ---help---
-        Select this option to enable GMAC support. GMAC support is compulsory for WiFi 192-bit certification.
+	bool "WiFi GMAC Support(GMAC128 and GMAC256)"
+	default n
+	---help---
+		Select this option to enable GMAC support. GMAC support is compulsory for WiFi 192-bit certification.
 
 config ESP32S3_WIFI_CONNECT_TIMEOUT
 	int "Connect timeout in second"
@@ -884,50 +903,6 @@ config ESP32S3_WIFI_SCAN_RESULT_SIZE
 	default 4096
 	---help---
 		Maximum scan result buffer size.
-
-config ESP32S3_WIFI_SAVE_PARAM
-	bool "Save Wi-Fi Parameters"
-	default n
-	depends on ESP32S3_SPIFLASH
-	---help---
-		If you enable this option, Wi-Fi adapter parameters will be saved
-		into the file system instead of computing them each time.
-
-		These parameters mainly contains:
-			- SSID
-			- Password
-			- BSSID
-			- PMK(compute when connecting)
-			- Author mode
-			- MAC address
-			- Wi-Fi hardware configuration parameters
-
-config ESP32S3_WIFI_FS_MOUNTPT
-	string "Wi-Fi parameters mount point"
-	default "/mnt/esp/wifi"
-	depends on ESP32S3_WIFI_SAVE_PARAM
-	---help---
-		Mount point of Wi-Fi storage file system.
-
-config ESP32S3_WIFI_MTD_ENCRYPT
-	bool "Encrypt Wi-Fi MTD partition"
-	default y
-	depends on ESP32S3_SECURE_FLASH_ENC_ENABLED
-
-config ESP32S3_WIFI_MTD_OFFSET
-	hex "Wi-Fi MTD partition offset"
-	default 0x280000 if !ESP32S3_HAVE_OTA_PARTITION
-	default 0x350000 if ESP32S3_HAVE_OTA_PARTITION
-	depends on ESP32S3_WIFI_SAVE_PARAM
-	---help---
-		This is the base address of the Wi-Fi MTD partition.
-
-config ESP32S3_WIFI_MTD_SIZE
-	hex "Wi-Fi MTD partition size"
-	default 0xb0000
-	depends on ESP32S3_WIFI_SAVE_PARAM
-	---help---
-		This is the size of the Wi-Fi MTD partition.
 
 config ESP32S3_WIFI_STA_DISCONNECT_PM
 	bool "Power Management for station when disconnected"
@@ -1017,6 +992,9 @@ choice ESP32S3_FLASH_MODE
 	config ESP32S3_FLASH_MODE_QOUT
 		bool "Quad Output (QOUT)"
 
+	config ESP32S3_FLASH_MODE_OCT
+		bool "Octal"
+
 endchoice # ESP32S3_FLASH_MODE
 
 choice ESP32S3_FLASH_FREQ
@@ -1038,6 +1016,25 @@ choice ESP32S3_FLASH_FREQ
 		bool "20 MHz"
 
 endchoice # ESP32S3_FLASH_FREQ
+
+config ESP32S3_FLASH_FREQ
+	int
+	default 120 if ESP32S3_FLASH_FREQ_120M
+	default 80 if ESP32S3_FLASH_FREQ_80M
+	default 40 if ESP32S3_FLASH_FREQ_40M
+	default 20 if ESP32S3_FLASH_FREQ_20M
+
+choice ESP32S3_FLASH_SAMPLE_MODE
+	prompt "Flash Sampling Mode"
+	default ESP32S3_FLASH_SAMPLE_MODE_DTR if ESP32S3_FLASH_MODE_OCT
+	default ESP32S3_FLASH_SAMPLE_MODE_STR if !ESP32S3_FLASH_MODE_OCT
+
+	config ESP32S3_FLASH_SAMPLE_MODE_DTR
+		depends on ESP32S3_FLASH_MODE_OCT
+		bool "DTR Mode"
+	config ESP32S3_FLASH_SAMPLE_MODE_STR
+		bool "STR Mode"
+endchoice
 
 config ESP32S3_HAVE_OTA_PARTITION
 	bool

@@ -29,10 +29,10 @@
 #include <nuttx/compiler.h>
 
 #ifdef CONFIG_ARCH_DEBUG_H
-# include <arch/debug.h>
+#  include <arch/debug.h>
 #endif
 #ifdef CONFIG_ARCH_CHIP_DEBUG_H
-# include <arch/chip/debug.h>
+#  include <arch/chip/debug.h>
 #endif
 
 #include <syslog.h>
@@ -815,12 +815,12 @@
 #  ifdef CONFIG_DEBUG_INFO
 #    define infodumpbuffer(m,b,n) lib_dumpbuffer(m,b,n)
 #  else
-#   define infodumpbuffer(m,b,n)
+#    define infodumpbuffer(m,b,n)
 #  endif
 #else
-#  define errdumpbuffer(m,b,n)
-#  define infodumpbuffer(m,b,n)
-# endif
+#    define errdumpbuffer(m,b,n)
+#    define infodumpbuffer(m,b,n)
+#  endif
 
 /* Subsystem specific debug */
 

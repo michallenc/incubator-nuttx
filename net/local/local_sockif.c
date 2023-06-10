@@ -379,7 +379,7 @@ static int local_getsockname(FAR struct socket *psock,
       return OK;
     }
 
-  conn = (FAR struct local_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
   /* Save the address family */
 
@@ -618,7 +618,7 @@ static int local_connect(FAR struct socket *psock,
         {
           /* Perform the datagram connection logic */
 
-#warning Missing logic
+          /* #warning Missing logic */
 
           return -ENOSYS;
         }
@@ -751,7 +751,7 @@ static int local_ioctl(FAR struct socket *psock, int cmd, unsigned long arg)
   FAR struct local_conn_s *conn;
   int ret = OK;
 
-  conn = (FAR struct local_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
   switch (cmd)
     {

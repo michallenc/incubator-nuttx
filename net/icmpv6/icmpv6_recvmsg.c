@@ -36,6 +36,7 @@
 #include "devif/devif.h"
 #include "socket/socket.h"
 #include "icmpv6/icmpv6.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_ICMPv6_SOCKET
 
@@ -60,6 +61,7 @@ struct icmpv6_recvfrom_s
                                          * from */
   FAR uint8_t *recv_buf;                /* Location to return the response */
   uint16_t recv_buflen;                 /* Size of the response */
+  FAR struct msghdr *msg;               /* Input message header */
   int16_t recv_result;                  /* >=0: receive size on success;
                                          * <0: negated errno on fail */
 };
@@ -73,8 +75,8 @@ struct icmpv6_recvfrom_s
  *
  * Description:
  *   This function is called with the network locked to perform the actual
- *   ECHO request and/or ECHO reply actions when polled by the lower, device
- *   interfacing layer.
+ *   ICMPv6 message actions when polled by the lower, device interfacing
+ *   layer.
  *
  * Input Parameters:
  *   dev        The structure of the network driver that generated the
@@ -95,9 +97,7 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
 {
   FAR struct icmpv6_recvfrom_s *pstate = pvpriv;
   FAR struct socket *psock;
-  FAR struct icmpv6_conn_s *conn;
   FAR struct ipv6_hdr_s *ipv6;
-  FAR struct icmpv6_echo_reply_s *icmpv6;
 
   ninfo("flags: %04x\n", flags);
 
@@ -112,39 +112,21 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
           goto end_wait;
         }
 
-      /* Is this a response on the same device that we sent the request out
-       * on?
-       */
-
       psock = pstate->recv_sock;
       DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
-      conn  = psock->s_conn;
-      if (dev != conn->dev)
-        {
-          ninfo("Wrong device\n");
-          return flags;
-        }
 
-      /* Check if we have just received a ICMPv6 ECHO reply. */
+      /* Check if we have just received a ICMPv6 message. */
 
       if ((flags & ICMPv6_NEWDATA) != 0)    /* No incoming data */
         {
+#ifdef CONFIG_NET_SOCKOPTS
+          FAR struct icmpv6_conn_s *conn = psock->s_conn;
+#endif
           unsigned int recvsize;
 
-          /* Check if it is for us.
-           * REVISIT:  What if there are IPv6 extension headers present?
-           */
+          ninfo("Received ICMPv6 message\n");
 
-          icmpv6 = IPBUF(IPv6_HDRLEN);
-          if (conn->id != icmpv6->id)
-            {
-              ninfo("Wrong ID: %u vs %u\n", icmpv6->id, conn->id);
-              return flags;
-            }
-
-          ninfo("Received ICMPv6 reply\n");
-
-          /* What should we do if the received reply is larger that the
+          /* What should we do if the received message is larger that the
            * buffer that the caller of sendto provided?  Truncate?  Error
            * out?
            */
@@ -155,7 +137,7 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
               recvsize = pstate->recv_buflen;
             }
 
-          /* Copy the ICMPv6 ECHO reply to the user provided buffer
+          /* Copy the ICMPv6 message to the user provided buffer
            * REVISIT:  What if there are IPv6 extension headers present?
            */
 
@@ -171,18 +153,19 @@ static uint16_t recvfrom_eventhandler(FAR struct net_driver_s *dev,
           ipv6 = IPBUF(0);
           net_ipv6addr_hdrcopy(&pstate->recv_from, ipv6->srcipaddr);
 
-          /* Decrement the count of outstanding requests.  I suppose this
-           * could have already been decremented of there were multiple
-           * threads calling sendto() or recvfrom().  If there finds, we
-           * may have to beef up the design.
-           */
-
-          DEBUGASSERT(conn->nreqs > 0);
-          conn->nreqs--;
-
           /* Indicate that the data has been consumed */
 
-          flags     &= ~ICMPv6_NEWDATA;
+          flags &= ~ICMPv6_NEWDATA;
+#ifdef CONFIG_NET_SOCKOPTS
+          if (_SO_GETOPT(conn->sconn.s_options, IPV6_RECVHOPLIMIT))
+            {
+              int hoplimit = ipv6->ttl;
+
+              cmsg_append(pstate->msg, SOL_IPV6, IPV6_HOPLIMIT,
+                          &hoplimit, sizeof(hoplimit));
+            }
+#endif
+
           dev->d_len = 0;
           goto end_wait;
         }
@@ -228,9 +211,8 @@ end_wait:
  ****************************************************************************/
 
 static inline ssize_t icmpv6_readahead(FAR struct icmpv6_conn_s *conn,
-                                     FAR void *buf, size_t buflen,
-                                     FAR struct sockaddr_in6 *from,
-                                     FAR socklen_t *fromlen)
+                                       FAR void *buf, size_t buflen,
+                                       FAR struct msghdr *msg)
 {
   FAR struct iob_s *iob;
   ssize_t ret = -ENODATA;
@@ -245,10 +227,21 @@ static inline ssize_t icmpv6_readahead(FAR struct icmpv6_conn_s *conn,
 
       /* Then get address */
 
-      if (from != NULL)
+      if (msg->msg_name != NULL)
         {
-          memcpy(from, iob->io_data, sizeof(struct sockaddr_in6));
+          memcpy(msg->msg_name, iob->io_data, sizeof(struct sockaddr_in6));
         }
+
+#ifdef CONFIG_NET_SOCKOPTS
+      if (_SO_GETOPT(conn->sconn.s_options, IPV6_RECVHOPLIMIT))
+        {
+          int hoplimit;
+
+          hoplimit = iob->io_data[sizeof(struct sockaddr_in6)];
+          cmsg_append(msg, SOL_IPV6, IPV6_HOPLIMIT,
+                      &hoplimit, sizeof(hoplimit));
+        }
+#endif
 
       /* Copy to user */
 
@@ -280,7 +273,7 @@ static inline ssize_t icmpv6_readahead(FAR struct icmpv6_conn_s *conn,
  * Description:
  *   Implements the socket recvfrom interface for the case of the AF_INET
  *   data gram socket with the IPPROTO_ICMP6 protocol.  icmpv6_recvmsg()
- *   receives ICMPv6 ECHO replies for the a socket.
+ *   receives ICMPv6 message for the a socket.
  *
  *   If msg_name is not NULL, and the underlying protocol provides the source
  *   address, this source address is filled in. The argument 'msg_namelen' is
@@ -310,7 +303,7 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   FAR socklen_t *fromlen = &msg->msg_namelen;
   FAR struct sockaddr_in6 *inaddr;
   FAR struct icmpv6_conn_s *conn;
-  FAR struct net_driver_s *dev;
+  FAR struct net_driver_s *dev = NULL;
   struct icmpv6_recvfrom_s state;
   ssize_t ret;
 
@@ -337,25 +330,18 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   net_lock();
 
-  /* We cannot receive a response from a device until a request has been
-   * sent to the devivce.
-   */
-
   conn = psock->s_conn;
-  if (conn->nreqs < 1)
+  if (psock->s_type != SOCK_RAW)
     {
-      ret = -EPROTO;
-      goto errout;
-    }
+      /* Get the device that was used to send the ICMPv6 request. */
 
-  /* Get the device that was used to send the ICMPv6 request. */
-
-  dev = conn->dev;
-  DEBUGASSERT(dev != NULL);
-  if (dev == NULL)
-    {
-      ret = -EPROTO;
-      goto errout;
+      dev = conn->dev;
+      DEBUGASSERT(dev != NULL);
+      if (dev == NULL)
+        {
+          ret = -EPROTO;
+          goto errout;
+        }
     }
 
   /* Check if there is buffered read-ahead data for this socket.  We may have
@@ -364,8 +350,7 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   if (!IOB_QEMPTY(&conn->readahead))
     {
-      ret = icmpv6_readahead(conn, buf, len,
-                             (FAR struct sockaddr_in6 *)from, fromlen);
+      ret = icmpv6_readahead(conn, buf, len, msg);
     }
   else if (_SS_ISNONBLOCK(conn->sconn.s_flags) ||
            (flags & MSG_DONTWAIT) != 0)
@@ -385,6 +370,7 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       state.recv_result = -ENOMEM;  /* Assume allocation failure */
       state.recv_buf    = buf;      /* Location to return the response */
       state.recv_buflen = len;      /* Size of the response */
+      state.msg         = msg;      /* Input message header */
 
       /* Set up the callback */
 
@@ -442,11 +428,10 @@ ssize_t icmpv6_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
        */
 
 errout:
-      if (conn->nreqs < 1)
+      if (ret < 0)
         {
-          conn->id    = 0;
-          conn->nreqs = 0;
-          conn->dev   = NULL;
+          conn->id  = 0;
+          conn->dev = NULL;
 
           iob_free_queue(&conn->readahead);
         }

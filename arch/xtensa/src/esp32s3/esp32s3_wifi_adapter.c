@@ -78,12 +78,6 @@
 
 #define PHY_RF_MASK   ((1 << PHY_BT_MODULE) | (1 << PHY_WIFI_MODULE))
 
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-#  define NVS_FS_PREFIX CONFIG_ESP32S3_WIFI_FS_MOUNTPT
-#  define NVS_DIR_BASE  NVS_FS_PREFIX"/wifi."
-#  define NVS_FILE_MODE 0777
-#endif
-
 #define WIFI_CONNECT_TIMEOUT  CONFIG_ESP32S3_WIFI_CONNECT_TIMEOUT
 
 #define TIMER_INITIALIZED_VAL (0x5aa5a55a)
@@ -2717,13 +2711,9 @@ static int32_t esp_nvs_set_i8(uint32_t handle,
                               const char *key,
                               int8_t value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  return esp_nvs_set_blob(handle, key, &value, sizeof(int8_t));
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2746,15 +2736,9 @@ static int32_t esp_nvs_get_i8(uint32_t handle,
                               const char *key,
                               int8_t *out_value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  size_t len = sizeof(int8_t);
-
-  return esp_nvs_get_blob(handle, key, out_value, &len);
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2777,13 +2761,9 @@ static int32_t esp_nvs_set_u8(uint32_t handle,
                               const char *key,
                               uint8_t value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  return esp_nvs_set_blob(handle, key, &value, sizeof(uint8_t));
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2806,15 +2786,9 @@ static int32_t esp_nvs_get_u8(uint32_t handle,
                               const char *key,
                               uint8_t *out_value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  size_t len = sizeof(uint8_t);
-
-  return esp_nvs_get_blob(handle, key, out_value, &len);
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2837,13 +2811,9 @@ static int32_t esp_nvs_set_u16(uint32_t handle,
                                const char *key,
                                uint16_t value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  return esp_nvs_set_blob(handle, key, &value, sizeof(uint16_t));
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2866,15 +2836,9 @@ static int32_t esp_nvs_get_u16(uint32_t handle,
                                const char *key,
                                uint16_t *out_value)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  size_t len = sizeof(uint16_t);
-
-  return esp_nvs_get_blob(handle, key, out_value, &len);
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2897,37 +2861,9 @@ static int32_t esp_nvs_open(const char *name,
                             uint32_t open_mode,
                             uint32_t *out_handle)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  int ret;
-  struct nvs_adpt *nvs_adpt;
-  int tmp;
-  char *index_name;
-
-  tmp = sizeof(struct nvs_adpt);
-  nvs_adpt = kmm_malloc(tmp);
-  if (!nvs_adpt)
-    {
-      wlerr("Failed to alloc %d memory\n", tmp);
-      return -1;
-    }
-
-  ret = asprintf(&index_name, "%s", name);
-  if (ret < 0)
-    {
-      wlerr("Failed to create NVS index_name string\n");
-      kmm_free(nvs_adpt);
-      return -1;
-    }
-
-  nvs_adpt->index_name = index_name;
-  *out_handle = (uint32_t)nvs_adpt;
-
-  return 0;
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -2946,14 +2882,7 @@ static int32_t esp_nvs_open(const char *name,
 
 static void esp_nvs_close(uint32_t handle)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  struct nvs_adpt *nvs_adpt = (struct nvs_adpt *)handle;
-
-  lib_free(nvs_adpt->index_name);
-  kmm_free(nvs_adpt);
-#else
   DEBUGPANIC();
-#endif
 }
 
 /****************************************************************************
@@ -2991,57 +2920,9 @@ static int32_t esp_nvs_set_blob(uint32_t handle,
                                 const void *value,
                                 size_t length)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  struct file file;
-  int ret;
-  char *dir;
-  struct nvs_adpt *nvs_adpt = (struct nvs_adpt *)handle;
-  char *index_name = nvs_adpt->index_name;
-
-  ret = asprintf(&dir, NVS_DIR_BASE"%s.%s", index_name, key);
-  if (ret < 0)
-    {
-      wlerr("Failed to create NVS dir string\n");
-      return -1;
-    }
-
-  ret = nx_unlink(dir);
-  if (ret)
-    {
-      if (ret != -ENOENT)
-        {
-          wlerr("Failed to unlink %s error=%d\n", dir, ret);
-          lib_free(dir);
-          return -1;
-        }
-    }
-
-  ret = file_open(&file, dir, O_WRONLY | O_CREAT, NVS_FILE_MODE);
-  if (ret < 0)
-    {
-      wlerr("Failed to set open %s\n", dir);
-      lib_free(dir);
-      return -1;
-    }
-
-  ret = file_write(&file, value, length);
-  if (ret < 0)
-    {
-      wlerr("Failed to write to %s\n", dir);
-      lib_free(dir);
-      file_close(&file);
-      return -1;
-    }
-
-  lib_free(dir);
-  file_close(&file);
-
-  return 0;
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -3066,56 +2947,9 @@ static int32_t esp_nvs_get_blob(uint32_t handle,
                                 void *out_value,
                                 size_t *length)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  struct file file;
-  int ret;
-  char *dir;
-  struct nvs_adpt *nvs_adpt = (struct nvs_adpt *)handle;
-  char *index_name = nvs_adpt->index_name;
-
-  ret = asprintf(&dir, NVS_DIR_BASE"%s.%s", index_name, key);
-  if (ret < 0)
-    {
-      wlerr("Failed to create NVS dir string\n");
-      return -1;
-    }
-
-  ret = file_open(&file, dir, O_RDONLY);
-  if (ret < 0)
-    {
-      if (ret == -ENOENT)
-        {
-          wlinfo("No file %s\n", dir);
-          lib_free(dir);
-          return ESP_ERR_NVS_NOT_FOUND;
-        }
-      wlerr("Failed to get open %s\n", dir);
-      lib_free(dir);
-      return -1;
-    }
-
-  ret = file_read(&file, out_value, *length);
-  if (ret <= 0)
-    {
-      wlerr("Failed to write to %s\n", dir);
-      lib_free(dir);
-      file_close(&file);
-      return -1;
-    }
-  else
-    {
-      *length = ret;
-    }
-
-  lib_free(dir);
-  file_close(&file);
-
-  return 0;
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -3135,35 +2969,9 @@ static int32_t esp_nvs_get_blob(uint32_t handle,
 
 static int32_t esp_nvs_erase_key(uint32_t handle, const char *key)
 {
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  int ret;
-  char *dir;
-  struct nvs_adpt *nvs_adpt = (struct nvs_adpt *)handle;
-  char *index_name = nvs_adpt->index_name;
-
-  ret = asprintf(&dir, NVS_DIR_BASE"%s.%s", index_name, key);
-  if (ret < 0)
-    {
-      wlerr("Failed to create NVS dir string\n");
-      return -1;
-    }
-
-  ret = nx_unlink(dir);
-  if (ret < 0)
-    {
-      wlerr("Failed to delete NVS file %s\n", dir);
-      lib_free(dir);
-      return -1;
-    }
-
-  lib_free(dir);
-
-  return 0;
-#else
   DEBUGPANIC();
 
   return -1;
-#endif
 }
 
 /****************************************************************************
@@ -4030,6 +3838,11 @@ static int esp_wifi_auth_trans(uint32_t wifi_auth)
         auth_mode = IW_AUTH_WPA_VERSION_WPA2;
         break;
 
+      case WIFI_AUTH_WPA3_PSK:
+      case WIFI_AUTH_WPA2_WPA3_PSK:
+        auth_mode = IW_AUTH_WPA_VERSION_WPA3;
+        break;
+
       default:
         wlerr("Failed to transfer wireless authmode: %d", wifi_auth);
         break;
@@ -4629,11 +4442,7 @@ int esp_wifi_adapter_init(void)
 
   sq_init(&g_wifi_evt_queue);
 
-#ifdef CONFIG_ESP32S3_WIFI_SAVE_PARAM
-  wifi_cfg.nvs_enable = 1;
-#else
   wifi_cfg.nvs_enable = 0;
-#endif
 
 #ifdef CONFIG_ESP32S3_WIFI_TX_AMPDU
   wifi_cfg.ampdu_tx_enable = 1;
@@ -4940,17 +4749,17 @@ int esp_wifi_sta_password(struct iwreq *iwr, bool set)
   DEBUGASSERT(ext != NULL);
 
   pdata = ext->key;
-  len   = ext->key_len;
-
-  if (set && len > PWD_MAX_LEN)
-    {
-      return -EINVAL;
-    }
 
   wifi_cfg = g_sta_wifi_cfg;
 
   if (set)
     {
+      len = ext->key_len;
+      if (len > PWD_MAX_LEN)
+        {
+          return -EINVAL;
+        }
+
       memset(wifi_cfg.sta.password, 0x0, PWD_MAX_LEN);
 
       if (ext->alg != IW_ENCODE_ALG_NONE)
@@ -4989,6 +4798,7 @@ int esp_wifi_sta_password(struct iwreq *iwr, bool set)
     }
   else
     {
+      len = iwr->u.encoding.length - sizeof(*ext);
       size = strnlen((char *)wifi_cfg.sta.password, PWD_MAX_LEN);
       if (len < size)
         {
@@ -4996,8 +4806,8 @@ int esp_wifi_sta_password(struct iwreq *iwr, bool set)
         }
       else
         {
-          len = size;
-          memcpy(pdata, wifi_cfg.sta.password, len);
+          ext->key_len = size;
+          memcpy(pdata, wifi_cfg.sta.password, ext->key_len);
         }
 
       if (g_sta_connected)
@@ -5408,6 +5218,10 @@ int esp_wifi_sta_auth(struct iwreq *iwr, bool set)
                     wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
                     break;
 
+                  case IW_AUTH_WPA_VERSION_WPA3:
+                    wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA3_PSK;
+                    break;
+
                   default:
                     wlerr("Invalid wpa version %" PRId32 "\n",
                           iwr->u.param.value);
@@ -5431,12 +5245,8 @@ int esp_wifi_sta_auth(struct iwreq *iwr, bool set)
                     break;
 
                   case IW_AUTH_CIPHER_TKIP:
-                    wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
-                    break;
-
                   case IW_AUTH_CIPHER_CCMP:
                   case IW_AUTH_CIPHER_AES_CMAC:
-                    wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
                     break;
 
                   default:
@@ -6194,37 +6004,10 @@ int esp_wifi_softap_password(struct iwreq *iwr, bool set)
       /* Clear the password field and copy the user password to it */
 
       memset(wifi_cfg.ap.password, 0x0, PWD_MAX_LEN);
-      if (len)
+
+      if (ext->alg != IW_ENCODE_ALG_NONE)
         {
-          memcpy(wifi_cfg.ap.password, pdata, len);
-          switch (ext->alg)
-            {
-              case IW_ENCODE_ALG_NONE:
-                wifi_cfg.ap.authmode = WIFI_AUTH_OPEN;
-                break;
-
-              case IW_ENCODE_ALG_WEP:
-                wifi_cfg.ap.authmode = WIFI_AUTH_WEP;
-                break;
-
-              case IW_ENCODE_ALG_TKIP:
-                wifi_cfg.ap.authmode = WIFI_AUTH_WPA_PSK;
-                break;
-
-              case IW_ENCODE_ALG_CCMP:
-                wifi_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
-                break;
-
-              case IW_ENCODE_ALG_PMK:
-              case IW_ENCODE_ALG_AES_CMAC:
-                wifi_cfg.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
-                break;
-
-              default:
-                wlerr("Failed to transfer wireless authmode: %d",
-                      ext->alg);
-                return -EINVAL;
-            }
+          memcpy(wifi_cfg.sta.password, pdata, len);
         }
 
       if (g_softap_started)
@@ -6505,12 +6288,8 @@ int esp_wifi_softap_auth(struct iwreq *iwr, bool set)
                     break;
 
                   case IW_AUTH_CIPHER_TKIP:
-                    wifi_cfg.ap.authmode = WIFI_AUTH_WPA_PSK;
-                    break;
-
                   case IW_AUTH_CIPHER_CCMP:
                   case IW_AUTH_CIPHER_AES_CMAC:
-                    wifi_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
                     break;
 
                   default:

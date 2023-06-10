@@ -46,9 +46,15 @@
  * Public Functions
  ****************************************************************************/
 
-void arm64_init_signal_process(struct tcb_s *tcb)
+void arm64_init_signal_process(struct tcb_s *tcb, struct regs_context *regs)
 {
-  struct regs_context  *pctx = (struct regs_context *)tcb->xcp.regs;
+/****************************************************************************
+ * if regs != NULL We are interrupting the context,
+ * we should modify the regs
+ ****************************************************************************/
+
+  struct regs_context  *pctx = (regs != NULL) ? regs :
+  (struct regs_context *)tcb->xcp.regs;
   struct regs_context  *psigctx;
   char   *stack_ptr = (char *)pctx->sp_elx;
 
@@ -120,6 +126,8 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
 
   if (!tcb->xcp.sigdeliver)
     {
+      tcb->xcp.sigdeliver = sigdeliver;
+
       /* First, handle some special cases when the signal is being delivered
        * to task that is currently executing on this CPU.
        */
@@ -137,6 +145,7 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                */
 
               sigdeliver(tcb);
+              tcb->xcp.sigdeliver = NULL;
             }
 
           /* CASE 2:  We are in an interrupt handler AND the interrupted
@@ -158,15 +167,14 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                * the signals have been delivered.
                */
 
-              tcb->xcp.sigdeliver     = sigdeliver;
-
               /* create signal process context */
 
-              tcb->xcp.saved_reg = tcb->xcp.regs;
+              tcb->xcp.saved_reg = (uint64_t *)CURRENT_REGS;
 #ifdef CONFIG_ARCH_FPU
               tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
-              arm64_init_signal_process(tcb);
+              arm64_init_signal_process(tcb,
+              (struct regs_context *)CURRENT_REGS);
 
               /* trigger switch to signal process */
 
@@ -186,14 +194,13 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
            * have been delivered.
            */
 
-          tcb->xcp.sigdeliver      = sigdeliver;
 #ifdef CONFIG_ARCH_FPU
           tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
           /* create signal process context */
 
           tcb->xcp.saved_reg = tcb->xcp.regs;
-          arm64_init_signal_process(tcb);
+          arm64_init_signal_process(tcb, NULL);
         }
     }
 }
@@ -211,6 +218,8 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
 
   if (!tcb->xcp.sigdeliver)
     {
+      tcb->xcp.sigdeliver = sigdeliver;
+
       /* First, handle some special cases when the signal is being delivered
        * to task that is currently executing on any CPU.
        */
@@ -233,6 +242,7 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                */
 
               sigdeliver(tcb);
+              tcb->xcp.sigdeliver = NULL;
             }
 
           /* CASE 2:  The task that needs to receive the signal is running.
@@ -268,15 +278,13 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                    * been delivered.
                    */
 
-                  tcb->xcp.sigdeliver      = sigdeliver;
-
 #ifdef CONFIG_ARCH_FPU
                   tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
                   /* create signal process context */
 
                   tcb->xcp.saved_reg = tcb->xcp.regs;
-                  arm64_init_signal_process(tcb);
+                  arm64_init_signal_process(tcb, NULL);
                 }
               else
                 {
@@ -288,15 +296,14 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
                    * has been delivered.
                    */
 
-                  tcb->xcp.sigdeliver      = (void *)sigdeliver;
-
                   /* create signal process context */
 
-                  tcb->xcp.saved_reg = tcb->xcp.regs;
+                  tcb->xcp.saved_reg = (uint64_t *)CURRENT_REGS;
 #ifdef CONFIG_ARCH_FPU
                   tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
-                  arm64_init_signal_process(tcb);
+                  arm64_init_signal_process(tcb,
+                  (struct regs_context *)CURRENT_REGS);
 
                   /* trigger switch to signal process */
 
@@ -338,8 +345,6 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
            * have been delivered.
            */
 
-          tcb->xcp.sigdeliver      = sigdeliver;
-
 #ifdef CONFIG_ARCH_FPU
           tcb->xcp.saved_fpu_regs = tcb->xcp.fpu_regs;
 #endif
@@ -347,7 +352,7 @@ void up_schedule_sigaction(struct tcb_s *tcb, sig_deliver_t sigdeliver)
 
           /* create signal process context */
 
-          arm64_init_signal_process(tcb);
+          arm64_init_signal_process(tcb, NULL);
 
           /* Increment the IRQ lock count so that when the task is restarted,
            * it will hold the IRQ spinlock.

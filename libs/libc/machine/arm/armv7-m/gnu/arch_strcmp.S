@@ -29,10 +29,36 @@
  *
  ****************************************************************************/
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_STRING
+
 /* Very similar to the generic code, but uses Thumb2 as implemented
    in ARMv7-M.  */
 
 #include "arm_asm.h"
+
+#ifdef __ARM_BIG_ENDIAN
+#define S2LO lsl
+#define S2LOEQ lsleq
+#define S2HI lsr
+#define MSB 0x000000ff
+#define LSB 0xff000000
+#define BYTE0_OFFSET 24
+#define BYTE1_OFFSET 16
+#define BYTE2_OFFSET 8
+#define BYTE3_OFFSET 0
+#else /* not  __ARM_BIG_ENDIAN */
+#define S2LO lsr
+#define S2LOEQ lsreq
+#define S2HI lsl
+#define BYTE0_OFFSET 0
+#define BYTE1_OFFSET 8
+#define BYTE2_OFFSET 16
+#define BYTE3_OFFSET 24
+#define MSB 0xff000000
+#define LSB 0x000000ff
+#endif /* not  __ARM_BIG_ENDIAN */
 
 /* Parameters and result.  */
 #define src1		r0
@@ -45,6 +71,14 @@
 #define tmp2		r5
 #define tmp1		r12
 #define syndrome	r12	/* Overlaps tmp1 */
+
+	.macro def_fn f p2align=0
+	.text
+	.p2align \p2align
+	.global \f
+	.type \f, %function
+\f:
+	.endm
 
 	.thumb
 	.syntax unified
@@ -389,3 +423,5 @@ def_fn strcmp
 	.cantunwind
 	.fnend
 	.size strcmp, . - strcmp
+
+#endif

@@ -318,7 +318,7 @@ static int can_bind(FAR struct socket *psock,
   /* Save the address information in the connection structure */
 
   canaddr = (FAR struct sockaddr_can *)addr;
-  conn    = (FAR struct can_conn_s *)psock->s_conn;
+  conn    = psock->s_conn;
 
   /* Bind CAN device to socket */
 
@@ -366,7 +366,7 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
   int ret = OK;
 
   DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
-  conn = (FAR struct can_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
   info = conn->pollinfo;
 
   /* FIXME add NETDEV_DOWN support */
@@ -388,18 +388,18 @@ static int can_poll_local(FAR struct socket *psock, FAR struct pollfd *fds,
 
       /* Initialize the poll info container */
 
-      info->psock  = psock;
-      info->fds    = fds;
-      info->cb     = cb;
+      info->psock = psock;
+      info->fds   = fds;
+      info->cb    = cb;
 
       /* Initialize the callback structure.  Save the reference to the info
        * structure as callback private data so that it will be available
        * during callback processing.
        */
 
-      cb->flags    = NETDEV_DOWN;
-      cb->priv     = (FAR void *)info;
-      cb->event    = can_poll_eventhandler;
+      cb->flags   = NETDEV_DOWN;
+      cb->priv    = (FAR void *)info;
+      cb->event   = can_poll_eventhandler;
 
       if ((fds->events & POLLOUT) != 0)
         {
@@ -494,7 +494,7 @@ static int can_close(FAR struct socket *psock)
     {
       /* Yes... inform user-space daemon of socket close. */
 
-#warning Missing logic
+      /* #warning Missing logic */
 
       /* Free the connection structure */
 

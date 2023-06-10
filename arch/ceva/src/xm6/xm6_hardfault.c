@@ -56,9 +56,9 @@
 #define REG_DBG_QMAN_ID                         0x0d88
 
 #ifdef CONFIG_DEBUG_HARDFAULT
-# define hfalert(format, ...)  _alert(format, ##__VA_ARGS__)
+#  define hfalert(format, ...) _alert(format, ##__VA_ARGS__)
 #else
-# define hfalert(x...)
+#  define hfalert(x...)
 #endif
 
 #define hfdumpreg1(reg)                           \
@@ -106,6 +106,6 @@ int ceva_hardfault(int irq, void *context, void *arg)
   hfdumpreg4(MAPAR,      MAPSR,         DBG_GEN,     DBG_GEN_2);
   hfdumpreg4(DBG_DUNMPD, HIST_OVERFLOW, DBG_DESC_ID, DBG_QMAN_ID);
 
-  PANIC();
+  PANIC_WITH_REGS("panic", context);
   return OK;
 }

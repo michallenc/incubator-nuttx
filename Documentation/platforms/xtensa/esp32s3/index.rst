@@ -127,7 +127,8 @@ Wi-Fi        Yes   WPA3-SAE supported
 Wi-Fi
 -----
 
-.. tip:: Boards usually expose a ``wifi`` defconfig which enables Wi-Fi
+.. tip:: Boards usually expose a ``wifi`` defconfig which enables Wi-Fi. On ESP32-S3,
+   SMP is enabled to enhance Wi-Fi performance.
 
 A standard network interface will be configured and can be initialized such as::
 
@@ -140,13 +141,16 @@ In this case a connection to AP with SSID ``myssid`` is done, using ``mypasswd``
 password. IP address is obtained via DHCP using ``renew`` command. You can check
 the result by running ``ifconfig`` afterwards.
 
+.. tip:: Please refer to :ref:`ESP32 Wi-Fi Station Mode <esp32_wi-fi_sta>`
+  for more information.
+
 Wi-Fi SoftAP
 ------------
 
-It is possible to use ESP32 as an Access Point (SoftAP).
+It is possible to use ESP32-S3 as an Access Point (SoftAP).
 
 .. tip:: Boards usually expose a ``sta_softap`` defconfig which enables Wi-Fi
-   (STA + SoftAP)
+   (STA + SoftAP). On ESP32-S3, SMP is enabled to enhance Wi-Fi performance.
 
 If you are using this board config profile you can run these commands to be able
 to connect your smartphone or laptop to your board::
@@ -159,6 +163,10 @@ to connect your smartphone or laptop to your board::
 In this case, you are creating the access point ``nuttxapp`` in your board and to
 connect to it on your smartphone you will be required to type the password ``mypasswd``
 using WPA2.
+
+.. tip:: Please refer to :ref:`ESP32 Wi-Fi SoftAP Mode <esp32_wi-fi_softap>`
+  for more information.
+
 The ``dhcpd_start`` is necessary to let your board to associate an IP to your smartphone.
 
 Memory Map

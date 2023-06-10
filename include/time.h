@@ -1,4 +1,4 @@
-/********************************************************************************
+/****************************************************************************
  * include/time.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -16,14 +16,14 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ********************************************************************************/
+ ****************************************************************************/
 
 #ifndef __INCLUDE_TIME_H
 #define __INCLUDE_TIME_H
 
-/********************************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
@@ -31,14 +31,14 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-/********************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ********************************************************************************/
+ ****************************************************************************/
 
 /* Clock tick of the system (frequency Hz).
  *
- * NOTE: This symbolic name CLK_TCK has been removed from the standard.  It is
- * replaced with CLOCKS_PER_SEC.  Both are defined here.
+ * NOTE: This symbolic name CLK_TCK has been removed from the standard.
+ *       It is replaced with CLOCKS_PER_SEC.  Both are defined here.
  *
  * The default value is 100Hz, but this default setting can be overridden by
  * defining the clock interval in microseconds as CONFIG_USEC_PER_TICK in the
@@ -46,11 +46,11 @@
  */
 
 #ifdef CONFIG_USEC_PER_TICK
-# define CLK_TCK                  (1000000/CONFIG_USEC_PER_TICK)
-# define CLOCKS_PER_SEC           (1000000/CONFIG_USEC_PER_TICK)
+#  define CLK_TCK                 (1000000/CONFIG_USEC_PER_TICK)
+#  define CLOCKS_PER_SEC          (1000000/CONFIG_USEC_PER_TICK)
 #else
-# define CLK_TCK                  (100)
-# define CLOCKS_PER_SEC           (100)
+#  define CLK_TCK                 (100)
+#  define CLOCKS_PER_SEC          (100)
 #endif
 
 /* CLOCK_REALTIME refers to the standard time source.  For most
@@ -102,9 +102,9 @@
 #define timelocal                 mktime
 #define strftime_l(s, m, f, t, l) strftime(s, m, f, t)
 
-/********************************************************************************
+/****************************************************************************
  * Public Types
- ********************************************************************************/
+ ****************************************************************************/
 
 /* Scalar types */
 
@@ -162,9 +162,9 @@ struct itimerspec
 
 struct sigevent;
 
-/********************************************************************************
+/****************************************************************************
  * Public Data
- ********************************************************************************/
+ ****************************************************************************/
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -192,9 +192,9 @@ extern "C"
 EXTERN FAR char *tzname[2];
 #endif
 
-/********************************************************************************
+/****************************************************************************
  * Public Function Prototypes
- ********************************************************************************/
+ ****************************************************************************/
 
 clock_t clock(void);
 

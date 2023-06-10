@@ -70,7 +70,6 @@
 /* Definitions for the UDP connection struct flag field */
 
 #define _UDP_FLAG_CONNECTMODE (1 << 0) /* Bit 0:  UDP connection-mode */
-#define _UDP_FLAG_PKTINFO     (1 << 1) /* Bit 1:  UDP PKTINFO */
 
 #define _UDP_ISCONNECTMODE(f) (((f) & _UDP_FLAG_CONNECTMODE) != 0)
 
@@ -116,7 +115,6 @@ struct udp_conn_s
   uint16_t rport;         /* Remote port number (network byte order) */
   uint8_t  flags;         /* See _UDP_FLAG_* definitions */
   uint8_t  domain;        /* IP domain: PF_INET or PF_INET6 */
-  uint8_t  ttl;           /* Default time-to-live */
   uint8_t  crefs;         /* Reference counts on this instance */
 
 #if CONFIG_NET_RECV_BUFSIZE > 0

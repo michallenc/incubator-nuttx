@@ -471,7 +471,7 @@ static ssize_t pty_read(FAR struct file *filep, FAR char *buffer, size_t len)
       ntotal = file_read(&dev->pd_src, buffer, len);
     }
 
-  if (dev->pd_lflag & ECHO)
+  if ((dev->pd_lflag & ECHO) && (ntotal > 0))
     {
       pty_write(filep, buffer, ntotal);
     }
@@ -714,6 +714,7 @@ static int pty_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
           dev->pd_iflag = termiosp->c_iflag;
           dev->pd_oflag = termiosp->c_oflag;
+          dev->pd_lflag = termiosp->c_lflag;
           ret = OK;
         }
         break;

@@ -28,7 +28,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /* Do not include STM32 L4 header files here */
@@ -570,8 +570,8 @@
  *   -- ----- --------- -----
  */
 
- # define GPIO_USART6_RX GPIO_USART6_RX_2
- # define GPIO_USART6_TX GPIO_USART6_TX_2
+ #  define GPIO_USART6_RX GPIO_USART6_RX_2
+ #  define GPIO_USART6_TX GPIO_USART6_TX_2
 #endif
 
 /* USART3:

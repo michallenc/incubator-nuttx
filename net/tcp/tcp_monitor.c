@@ -147,8 +147,7 @@ static uint16_t tcp_monitor_event(FAR struct net_driver_s *dev,
       else if ((flags & TCP_CONNECTED) != 0)
         {
 #if 0 /* REVISIT: Assertion fires.  Why? */
-          FAR struct tcp_conn_s *conn =
-            (FAR struct tcp_conn_s *)psock->s_conn;
+          FAR struct tcp_conn_s *conn = psock->s_conn;
 
           /* Make sure that this is the device bound to the connection */
 
@@ -250,7 +249,7 @@ int tcp_start_monitor(FAR struct socket *psock)
   bool nonblock_conn;
 
   DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
   net_lock();
 
@@ -270,6 +269,18 @@ int tcp_start_monitor(FAR struct socket *psock)
       /* Invoke the TCP_CLOSE connection event now */
 
       tcp_shutdown_monitor(conn, TCP_CLOSE);
+
+      /* If the peer close the connection before we call accept,
+       * in order to allow user to read the readahead data,
+       * return OK.
+       */
+
+      if (conn->tcpstateflags == TCP_CLOSED ||
+          conn->tcpstateflags == TCP_LAST_ACK)
+        {
+          net_unlock();
+          return OK;
+        }
 
       /* And return -ENOTCONN to indicate the monitor was not started
        * because the socket was already disconnected.

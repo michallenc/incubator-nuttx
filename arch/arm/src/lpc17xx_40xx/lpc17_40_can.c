@@ -51,11 +51,11 @@
 #include <nuttx/config.h>
 
 #if defined(CONFIG_CAN)
-# define CHRDEV_CAN
+#  define CHRDEV_CAN
 #endif
 
 #if defined(CONFIG_NET_CAN)
-# define SOCKET_CAN
+#  define SOCKET_CAN
 #endif
 
 #include <stdio.h>
@@ -72,15 +72,15 @@
 #include <nuttx/arch.h>
 
 #if defined(CHRDEV_CAN)
-# include <nuttx/can/can.h>
+#  include <nuttx/can/can.h>
 #endif
 
 #if defined(SOCKET_CAN)
-# include <nuttx/can.h>
-# include <nuttx/net/netdev.h>
-# include <nuttx/net/can.h>
-# include <nuttx/wqueue.h>
-# include <string.h>
+#  include <nuttx/can.h>
+#  include <nuttx/net/netdev.h>
+#  include <nuttx/net/can.h>
+#  include <nuttx/wqueue.h>
+#  include <string.h>
 #endif
 
 #include "arm_internal.h"
@@ -343,13 +343,13 @@ static struct up_dev_s g_can1priv =
   .baud    = CONFIG_LPC17_40_CAN1_BAUD,
   .base    = LPC17_40_CAN1_BASE,
 };
-# if defined(CHRDEV_CAN)
+#  if defined(CHRDEV_CAN)
 static struct lpc17_40_can_s g_can1dev =
 {
   .cd_ops  = &g_canops,
   .cd_priv = &g_can1priv,
 };
-# endif
+#  endif
 #endif
 
 #ifdef CONFIG_LPC17_40_CAN2
@@ -360,13 +360,13 @@ static struct up_dev_s g_can2priv =
   .baud    = CONFIG_LPC17_40_CAN2_BAUD,
   .base    = LPC17_40_CAN2_BASE,
 };
-# if defined(CHRDEV_CAN)
+#  if defined(CHRDEV_CAN)
 static struct lpc17_40_can_s g_can2dev =
 {
   .cd_ops  = &g_canops,
   .cd_priv = &g_can2priv,
 };
-# endif
+#  endif
 #endif
 
 #if defined(SOCKET_CAN)

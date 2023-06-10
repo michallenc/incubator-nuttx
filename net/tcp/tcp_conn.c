@@ -737,6 +737,7 @@ FAR struct tcp_conn_s *tcp_alloc(uint8_t domain)
   if (conn)
     {
       memset(conn, 0, sizeof(struct tcp_conn_s));
+      conn->sconn.ttl     = IP_TTL_DEFAULT;
       conn->tcpstateflags = TCP_ALLOCATED;
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
       conn->domain        = domain;
@@ -1116,6 +1117,7 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
 #endif
 
       conn->sconn.s_tos      = listener->sconn.s_tos;
+      conn->sconn.ttl        = listener->sconn.ttl;
 #if CONFIG_NET_RECV_BUFSIZE > 0
       conn->rcv_bufs         = listener->rcv_bufs;
 #endif
@@ -1145,6 +1147,12 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
       conn->isn              = 0;
       conn->sent             = 0;
       conn->sndseq_max       = 0;
+#endif
+
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+      /* Initialize the variables of congestion control */
+
+      tcp_cc_init(conn);
 #endif
 
       /* rcvseq should be the seqno from the incoming packet + 1. */
@@ -1191,6 +1199,15 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
 
 int tcp_bind(FAR struct tcp_conn_s *conn, FAR const struct sockaddr *addr)
 {
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+  if (conn->domain != addr->sa_family)
+    {
+      nerr("ERROR: Invalid address type: %d != %d\n", conn->domain,
+           addr->sa_family);
+      return -EINVAL;
+    }
+#endif
+
 #ifdef CONFIG_NET_IPv4
 #ifdef CONFIG_NET_IPv6
   if (conn->domain == PF_INET)
@@ -1445,6 +1462,12 @@ int tcp_connect(FAR struct tcp_conn_s *conn, FAR const struct sockaddr *addr)
   conn->isn        = 0;
   conn->sent       = 0;
   conn->sndseq_max = 0;
+#endif
+
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+  /* Initialize the variables of congestion control. */
+
+  tcp_cc_init(conn);
 #endif
 
   /* Initialize the list of TCP read-ahead buffers */

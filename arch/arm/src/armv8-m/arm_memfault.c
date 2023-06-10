@@ -38,9 +38,9 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_MEMFAULT
-# define mfalert(format, ...)  _alert(format, ##__VA_ARGS__)
+#  define mfalert(format, ...) _alert(format, ##__VA_ARGS__)
 #else
-# define mfalert(x...)
+#  define mfalert(x...)
 #endif
 
 /****************************************************************************
@@ -99,6 +99,6 @@ int arm_memfault(int irq, void *context, void *arg)
     }
 
   up_irq_save();
-  PANIC();
+  PANIC_WITH_REGS("panic", context);
   return OK; /* Won't get here */
 }

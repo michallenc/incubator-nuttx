@@ -1756,14 +1756,14 @@ int up_timer_tick_start(clock_t ticks);
  * Name: up_getusrsp
  *
  * Input Parameters:
- *   None
+ *   regs - regs to get sp
  *
  * Returned Value:
  *   User stack pointer.
  *
  ****************************************************************************/
 
-uintptr_t up_getusrsp(void);
+uintptr_t up_getusrsp(FAR void *regs);
 
 /****************************************************************************
  * TLS support
@@ -2559,6 +2559,25 @@ void up_perf_init(FAR void *arg);
 unsigned long up_perf_gettime(void);
 unsigned long up_perf_getfreq(void);
 void up_perf_convert(unsigned long elapsed, FAR struct timespec *ts);
+
+/****************************************************************************
+ * Name: up_show_cpuinfo
+ *
+ * Description:
+ *   This function will be called when reading /proc/cpufinfo.
+ *   This function should be implemented by each arch to show its cpuinfo.
+ *
+ * Input Parameters:
+ *   buf          - The address of the user's receive buffer.
+ *   buf_size     - The size (in bytes) of the user's receive buffer.
+ *   file_off     - The /proc/cpuinfo file offset.
+ *
+ * Returned Value:
+ *   The number of bytes actually transferred into the user's receive buffer.
+ *
+ ****************************************************************************/
+
+ssize_t up_show_cpuinfo(FAR char *buf, size_t buf_size, off_t file_off);
 
 /****************************************************************************
  * Name: up_saveusercontext

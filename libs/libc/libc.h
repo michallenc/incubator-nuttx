@@ -27,15 +27,17 @@
 
 #include <nuttx/config.h>
 
-#include <sys/types.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <semaphore.h>
+#ifndef __ASSEMBLY__
+#  include <sys/types.h>
+#  include <stdbool.h>
+#  include <stdio.h>
+#  include <stdlib.h>
+#  include <limits.h>
+#  include <semaphore.h>
 
-#include <nuttx/lib/lib.h>
-#include <nuttx/streams.h>
+#  include <nuttx/lib/lib.h>
+#  include <nuttx/streams.h>
+#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -48,10 +50,16 @@
  */
 
 #ifndef CONFIG_LIBC_HOMEDIR
-# define CONFIG_LIBC_HOMEDIR "/"
+#  define CONFIG_LIBC_HOMEDIR "/"
 #endif
 
 #define LIB_BUFLEN_UNKNOWN INT_MAX
+
+#if defined(CONFIG_BUILD_FLAT) || \
+    ((!defined(CONFIG_LIBC_PREVENT_STRING_USER) && !defined(__KERNEL__))  || \
+     (!defined(CONFIG_LIBC_PREVENT_STRING_KERNEL) && defined(__KERNEL__)))
+#  define LIBC_BUILD_STRING
+#endif
 
 /****************************************************************************
  * Public Types
@@ -60,6 +68,8 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
+
+#ifndef __ASSEMBLY__
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -83,7 +93,8 @@ FAR char *__dtoa(double d, int mode, int ndigits, FAR int *decpt,
 
 /* Defined in lib_getfullpath.c */
 
-int lib_getfullpath(int dirfd, FAR const char *path, FAR char *fullpath);
+int lib_getfullpath(int dirfd, FAR const char *path,
+                    FAR char *fullpath, size_t fulllen);
 
 /* Defined in lib_fopen.c */
 
@@ -155,5 +166,7 @@ void lib_cxx_initialize(void);
 #if defined(__cplusplus)
 }
 #endif
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* __LIBS_LIBC_LIBC_H */

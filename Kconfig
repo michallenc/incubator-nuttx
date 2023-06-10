@@ -1973,7 +1973,7 @@ config STACK_CANARIES
 
 config STACK_USAGE
 	bool "Generate stack usage information"
-	help
+	---help---
 		Generate an extra file that specifies the maximum amount of stack used,
 		on a per-function basis. Please use https://github.com/HBehrens/puncover
 		or tools/showstack.sh to generate the more useful report.
@@ -2006,7 +2006,7 @@ config FRAME_POINTER
 
 endmenu # Debug Options
 
-menuconfig  TRACE
+menuconfig TRACE
 	bool "Enable tracepoints"
 	default n
 	depends on SCHED_INSTRUMENTATION_DUMP
