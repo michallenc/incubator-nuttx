@@ -3424,6 +3424,23 @@ config SAMV7_USBHS_REGDEBUG
 
 endmenu # USB High Speed Device Controller driver (DCD) options
 
+menu "USB High Speed Host Controller driver (HCD) options"
+	depends on SAMV7_USBHOSTHS
+
+config SAMV7_USBHOSTHS_LOWPOWER
+	bool "Low-power mode"
+	default n
+	---help---
+		The USBHS can work in two modes:
+
+		- Normal mode where High speed, Full speed and Low speed are
+			available.
+		- Low-power mode where only Full speed and Low speed are available.
+
+		This options selects the low-power mode.
+
+endmenu # USB High Speed Host Controller driver (HCD) options
+
 if SAMV7_MCAN
 
 config SAMV7_MCAN_QUEUE_MODE
