@@ -197,6 +197,9 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg);
 
 static int sam_wait(struct usbhost_connection_s *conn,
          struct usbhost_hubport_s **hport);
+static int sam_ioc_setup(struct sam_rhport_s *rhport,
+         struct sam_epinfo_s *epinfo);
+static int sam_ioc_wait(struct sam_epinfo_s *epinfo);
 static int sam_enumerate(struct usbhost_connection_s *conn,
          struct usbhost_hubport_s *hport);
 
@@ -393,7 +396,7 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
 
   /* Access should be exclusive -> lock mutex */
 
-  nxrmutex_lock(priv->lock);
+  nxrmutex_lock(&priv->lock);
 
   if (pending & USBHS_HSTINT_HWUPI != 0)
     {
@@ -529,6 +532,87 @@ static int sam_wait(struct usbhost_connection_s *conn,
           return ret;
         }
     }
+}
+
+/****************************************************************************
+ * Name: sam_ioc_setup
+ *
+ * Description:
+ *   Set the request for the IOC event well BEFORE enabling the transfer (as
+ *   soon as we are absolutely committed to the to avoid transfer).  We do
+ *   this to minimize race conditions.  This logic would have to be expanded
+ *   if we want to have more than one packet in flight at a time!
+ *
+ * Assumption:  The caller holds tex EHCI lock
+ *
+ ****************************************************************************/
+
+static int sam_ioc_setup(struct sam_rhport_s *rhport,
+                         struct sam_epinfo_s *epinfo)
+{
+  irqstate_t flags;
+  int ret = -ENODEV;
+
+  DEBUGASSERT(rhport && epinfo && !epinfo->iocwait);
+#ifdef CONFIG_USBHOST_ASYNCH
+  DEBUGASSERT(epinfo->callback == NULL);
+#endif
+
+  /* Is the device still connected? */
+
+  flags = enter_critical_section();
+  if (rhport->connected)
+    {
+      /* Then set iocwait to indicate that we expect to be informed when
+       * either (1) the device is disconnected, or (2) the transfer
+       * completed.
+       */
+
+      epinfo->iocwait  = true;   /* We want to be awakened by IOC interrupt */
+      epinfo->status   = 0;      /* No status yet */
+      epinfo->xfrd     = 0;      /* Nothing transferred yet */
+      epinfo->result   = -EBUSY; /* Transfer in progress */
+#ifdef CONFIG_USBHOST_ASYNCH
+      epinfo->callback = NULL;   /* No asynchronous callback */
+      epinfo->arg      = NULL;
+#endif
+      ret              = OK;     /* We are good to go */
+    }
+
+  leave_critical_section(flags);
+  return ret;
+}
+
+/****************************************************************************
+ * Name: sam_ioc_wait
+ *
+ * Description:
+ *   Wait for the IOC event.
+ *
+ * Assumption:  The caller does *NOT* hold the EHCI lock.  That would
+ * cause a deadlock when the bottom-half, worker thread needs to take the
+ * semaphore.
+ *
+ ****************************************************************************/
+
+static int sam_ioc_wait(struct sam_epinfo_s *epinfo)
+{
+  int ret = OK;
+
+  /* Wait for the IOC event.  Loop to handle any false alarm semaphore
+   * counts.  Return an error if the task is canceled.
+   */
+
+  while (epinfo->iocwait)
+    {
+      ret = nxsem_wait_uninterruptible(&epinfo->iocsem);
+      if (ret < 0)
+        {
+          break;
+        }
+    }
+
+  return ret < 0 ? ret : epinfo->result;
 }
 
 /****************************************************************************
@@ -681,6 +765,94 @@ static int sam_ep0configure(struct usbhost_driver_s *drvr,
 }
 
 /****************************************************************************
+ * Name: sam_epalloc
+ *
+ * Description:
+ *   Allocate and configure one endpoint.
+ *
+ * Input Parameters:
+ *   drvr - The USB host driver instance obtained as a parameter from the
+ *     call to the class create() method.
+ *   epdesc - Describes the endpoint to be allocated.
+ *   ep - A memory location provided by the caller in which to receive the
+ *      allocated endpoint descriptor.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure.
+ *
+ * Assumptions:
+ *   This function will *not* be called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_epalloc(struct usbhost_driver_s *drvr,
+                       const struct usbhost_epdesc_s *epdesc,
+                       usbhost_ep_t *ep)
+{
+  struct sam_epinfo_s *epinfo;
+  struct usbhost_hubport_s *hport;
+
+  /* Sanity check. */
+
+  DEBUGASSERT(drvr != 0 && epdesc != NULL && epdesc->hport != NULL &&
+              ep != NULL);
+  hport = epdesc->hport;
+  
+  epinfo = kmm_zalloc(sizeof(struct sam_epinfo_s));
+  if (!epinfo)
+    {
+      return -ENOMEM;
+    }
+
+  /* Initialize endpoint */
+  
+  epinfo->epno      = epdesc->addr;
+  epinfo->dirin     = epdesc->in;
+  epinfo->maxpacket = epdesc->mxpacketsize;
+  epinfo->xfrtype   = epdesc->xfrtype;
+  epinfo->speed     = hport->speed;
+  nxsem_init(&epinfo->iocsem, 0, 0);
+
+  *ep = (usbhost_ep_t)epinfo;
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_epfree
+ *
+ * Description:
+ *   Free and endpoint previously allocated by DRVR_EPALLOC.
+ *
+ * Input Parameters:
+ *   drvr - The USB host driver instance obtained as a parameter from the
+ *           call to the class create() method.
+ *   ep   - The endpint to be freed.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
+ *
+ * Assumptions:
+ *   This function will *not* be called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
+{
+  struct sam_epinfo_s *epinfo = (struct sam_epinfo_s *)ep;
+
+  /* There should not be any pending, transfers */
+
+  DEBUGASSERT(drvr && epinfo && epinfo->iocwait == 0);
+
+  /* Free the container */
+
+  kmm_free(epinfo);
+  return OK;
+}
+
+/****************************************************************************
  * Name: sam_alloc
  *
  * Description:
@@ -733,6 +905,220 @@ static int sam_alloc(struct usbhost_driver_s *drvr,
     }
 
   return ret;
+}
+
+/****************************************************************************
+ * Name: sam_free
+ *
+ * Description:
+ *   Some hardware supports special memory in which request and descriptor
+ *   data can be accessed more efficiently.  This method provides a
+ *   mechanism to free that request/descriptor memory.  If the underlying
+ *   hardware does not support such "special" memory, this functions may
+ *   simply map to kmm_free().
+ *
+ * Input Parameters:
+ *   drvr   - The USB host driver instance obtained as a parameter from the
+ *            call to the class create() method.
+ *   buffer - The address of the allocated buffer memory to be freed.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
+ *
+ * Assumptions:
+ *   - Never called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_free(struct usbhost_driver_s *drvr, uint8_t *buffer)
+{
+  DEBUGASSERT(drvr && buffer);
+
+  /* No special action is require to free the transfer/descriptor buffer
+   * memory
+   */
+
+  kmm_free(buffer);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_ioalloc
+ *
+ * Description:
+ *   Some hardware supports special memory in which larger IO buffers can
+ *   be accessed more efficiently.  This method provides a mechanism to
+ *   allocate the request/descriptor memory.  If the underlying hardware
+ *   does not support such "special" memory, this functions may simply map
+ *   to kumm_malloc.
+ *
+ *   This interface differs from DRVR_ALLOC in that the buffers are variable-
+ *   sized.
+ *
+ * Input Parameters:
+ *   drvr   - The USB host driver instance obtained as a parameter from the
+ *            call to the class create() method.
+ *   buffer - The address of a memory location provided by the caller in
+ *            which to return the allocated buffer memory address.
+ *   buflen - The size of the buffer required.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
+ *
+ * Assumptions:
+ *   This function will *not* be called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_ioalloc(struct usbhost_driver_s *drvr,
+                       uint8_t **buffer, size_t buflen)
+{
+  DEBUGASSERT(drvr && buffer && buflen > 0);
+
+  /* The only special requirements for I/O buffers are that (1) they be
+   * aligned to a cache line boundary, (2) they are a multiple of the cache
+   * line size in length, and (3) they might need to be user accessible
+   * (depending on how the class driver implements its buffering).
+   */
+
+  buflen  = (buflen + DCACHE_LINEMASK) & ~DCACHE_LINEMASK;
+  *buffer = kumm_memalign(ARMV7A_DCACHE_LINESIZE, buflen);
+  return *buffer ? OK : -ENOMEM;
+}
+
+/****************************************************************************
+ * Name: sam_iofree
+ *
+ * Description:
+ *   Some hardware supports special memory in which IO data can  be accessed
+ *   more efficiently.  This method provides a mechanism to free that IO
+ *   buffer memory.  If the underlying hardware does not support such
+ *   "special" memory, this functions may simply map to kumm_free().
+ *
+ * Input Parameters:
+ *   drvr   - The USB host driver instance obtained as a parameter from the
+ *            call to the class create() method.
+ *   buffer - The address of the allocated buffer memory to be freed.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
+ *
+ * Assumptions:
+ *   This function will *not* be called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_iofree(struct usbhost_driver_s *drvr, uint8_t *buffer)
+{
+  DEBUGASSERT(drvr && buffer);
+
+  /* No special action is require to free the I/O buffer memory */
+
+  kumm_free(buffer);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_ctrlin and sam_ctrlout
+ *
+ * Description:
+ *   Process a IN or OUT request on the control endpoint.  These methods
+ *   will enqueue the request and wait for it to complete.  Only one
+ *   transfer may be queued; Neither these methods nor the transfer() method
+ *   can be called again until the control transfer functions returns.
+ *
+ *   These are blocking methods; these functions will not return until the
+ *   control transfer has completed.
+ *
+ * Input Parameters:
+ *   drvr   - The USB host driver instance obtained as a parameter from the
+ *            call to the class create() method.
+ *   ep0    - The control endpoint to send/receive the control request.
+ *   req    - Describes the request to be sent.  This request must lie in
+ *            memory created by DRVR_ALLOC.
+ *   buffer - A buffer used for sending the request and for returning any
+ *            responses.  This buffer must be large enough to hold the
+ *            length value in the request description. buffer must have been
+ *            allocated using DRVR_ALLOC.
+ *
+ *   NOTE: On an IN transaction, req and buffer may refer to the same
+ *   allocated memory.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure
+ *
+ * Assumptions:
+ *   - Called from a single thread so no mutual exclusion is required.
+ *   - Never called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+                      const struct usb_ctrlreq_s *req,
+                      uint8_t *buffer)
+{
+  struct sam_rhport_s *rhport = (struct sam_rhport_s *)drvr;
+  struct sam_epinfo_s *ep0info = (struct sam_epinfo_s *)ep0;
+  struct sam_usbhosths_s *priv = &g_usbhosths;
+  uint16_t len;
+  ssize_t nbytes;
+  int ret;
+
+#ifdef CONFIG_ENDIAN_BIG
+  len = (uint16_t)req->len[0] << 8 | (uint16_t)req->len[1];
+#else
+  len = (uint16_t)req->len[1] << 8 | (uint16_t)req->len[0];
+#endif
+
+  /* Get exclusive access */
+  
+  ret = nxrmutex_lock(&priv->lock);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  ret = sam_ioc_setup(rhport, ep0info);
+  if (ret != OK)
+    {
+      goto errout_with_lock;
+    }
+
+  /* Now initiate the transfer */
+
+  ret = sam_async_setup(rhport, ep0info, req, buffer, len);
+  if (ret < 0)
+    {
+      uerr("ERROR: sam_async_setup failed: %d\n", ret);
+      goto errout_with_iocwait;
+    }
+
+  /* And wait for the transfer to complete */
+
+  nbytes = sam_transfer_wait(ep0info);
+  nxrmutex_unlock(&g_ehci.lock);
+  return nbytes >= 0 ? OK : (int)nbytes;
+
+errout_with_iocwait:
+  ep0info->iocwait = false;
+errout_with_lock:
+  nxrmutex_unlock(&g_ehci.lock);
+  return ret;
+}
+
+static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+                       const struct usb_ctrlreq_s *req,
+                       const uint8_t *buffer)
+{
+  /* sam_ctrlin can handle both directions.  We just need to work around the
+   * differences in the function signatures.
+   */
+
+  return sam_ctrlin(drvr, ep0, req, (uint8_t *)buffer);
 }
 
 /****************************************************************************
