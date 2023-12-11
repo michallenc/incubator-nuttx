@@ -76,107 +76,104 @@
  * Private Type Definitions
  ****************************************************************************/
 
-/* State of an endpoint */
-
-enum sam_epstate_e
-{
-                              /* --- All Endpoints --- */
-
-  USBHS_EPSTATE_DISABLED = 0, /* Endpoint is disabled */
-  USBHS_EPSTATE_STALLED,      /* Endpoint is stalled */
-  USBHS_EPSTATE_IDLE,         /* Endpoint is idle */
-  USBHS_EPSTATE_SENDING,      /* Endpoint is sending data */
-  USBHS_EPSTATE_SENDING_DMA,  /* Endpoint is sending data via DMA */
-  USBHS_EPSTATE_NBUSYBK,      /* Endpoint DMA complete, waiting for
-                               * NBUSYBK==0
-                               */
-  USBHS_EPSTATE_RECEIVING,    /* Endpoint is receiving data */
-                              /* --- Endpoint 0 Only --- */
-  USBHS_EPSTATE_EP0DATAOUT,   /* Endpoint 0 is receiving SETUP OUT data */
-  USBHS_EPSTATE_EP0STATUSIN,  /* Endpoint 0 is sending SETUP status */
-  USBHS_EPSTATE_EP0ADDRESS    /* Address change is pending completion of
-                               * status
-                               */
-};
-
 /* This structure describes one endpoint. */
 
-struct sam_epinfo_s
+struct sam_pipe_s
 {
-  uint8_t epno:7;              /* Endpoint number */
-  uint8_t dirin:1;             /* 1:IN endpoint 0:OUT endpoint */
-  uint8_t devaddr:7;           /* Device address */
-  uint8_t toggle:1;            /* Next data toggle */
-#ifndef CONFIG_USBHOST_INT_DISABLE
-  uint8_t interval;            /* Polling interval */
-#endif
-  uint8_t status;              /* Retained token status bits */
-  volatile bool iocwait;       /* TRUE: Thread is waiting for TX completion */
-  uint16_t maxpacket:11;       /* Maximum packet size */
-  uint16_t xfrtype:2;          /* See USB_EP_ATTR_XFER_* definitions
-                                * in usb.h
-                                */
-  uint16_t speed:2;            /* See USB_*_SPEED definitions in ehci.h */
-  int result;                  /* The result of the transfer */
-  uint32_t xfrd;               /* On completion, will hold the number of
-                                * bytes transferred
-                                */
-  sem_t iocsem;                /* Semaphore used to wait for transfer
-                                * completion
-                                */
+  struct usbhost_pipedesc_s *descb[3]; /* Pointers to this pipe descriptors */
+  volatile uint8_t pipestate;          /* State of the pipe (see enum usb_h_pipe_state) */
+  volatile uint8_t pipestatus;         /* Status of the pipe */
+  volatile int8_t  pipestatus_general; /* Status of the pipe */
+  volatile int8_t pipestate_general;
+  int16_t result;                      /* The result of the transfer */
+  uint32_t size;                       /* Expected transfer size */
+  uint32_t count;                      /* Transfer count */
+  uint8_t *data;                       /* Pointer to transfer data */
+  int16_t pkt_timeout;                 /* Timeout between packets (500ms for data and 50ms for status), -1 if disabled */
+  uint8_t zlp:1;                       /* Transfer ZLP support */
+
+  uint8_t           stalled:1;    /* true: Endpoint is stalled */
+  uint8_t           pending:1;    /* true: IN Endpoint stall is pending */
+  uint8_t           halted:1;     /* true: Endpoint feature halted */
+  uint8_t           zlpsent:1;    /* Zero length packet has been sent */
+  uint8_t           txbusy:1;     /* Write request queue is busy (recursion avoidance kludge) */
+  uint8_t           rxactive:1;   /* read request is active (for top of queue) */
+  bool              inuse;           /* True: This pipe is "in use" */
+  bool              in;              /* True: IN endpoint */
+  uint8_t           idx;             /* Pipe index */
+  uint8_t           epno;            /* Device endpoint number (0-127) */
+  uint8_t           eptype;          /* See _EPTYPE_* definitions */
+  uint8_t           funcaddr;        /* Device function address */
+  uint8_t           speed;           /* Device speed */
+  uint8_t           interval;        /* Interrupt/isochronous EP polling interval */
+  uint16_t          maxpacket;       /* Max packet size */
+
+  sem_t waitsem;               /* Channel wait semaphore */
+  volatile bool waiter;        /* True: Thread is waiting for a channel event */
+
 #ifdef CONFIG_USBHOST_ASYNCH
   usbhost_asynch_t callback;   /* Transfer complete callback */
   void *arg;                   /* Argument that accompanies the callback */
 #endif
-
-  /* These fields are used in the split-transaction protocol. */
-
-  uint8_t hubaddr;             /* USB device address of the high-speed
-                                * hub below which a full/low-speed device
-                                * is attached.
-                                */
-  uint8_t hubport;             /* The port on the above high-speed hub. */
-};
-
-struct sam_rhport_s
-{
-  /* Common device fields.  This must be the first thing defined in the
-   * structure so that it is possible to simply cast from struct usbhost_s
-   * to struct sam_rhport_s.
-   */
-
-  struct usbhost_driver_s drvr;
-
-  /* Root hub port status */
-
-  volatile bool connected;     /* Connected to device */
-  struct sam_epinfo_s ep0;     /* EP0 endpoint info */
-
-  /* This is the hub port description understood by class drivers */
-
-  struct usbhost_roothubport_s hport;
 };
 
 struct sam_usbhosths_s
 {
+  /* Common device fields.  This must be the first thing defined in the
+   * structure so that it is possible to simply cast from struct usbhost_s
+   * to struct sam_usbhosths_s.
+   */
+
+  struct usbhost_driver_s drvr;
+
+  /* This is the hub port description understood by class drivers */
+
+  struct usbhost_roothubport_s rhport;
+
   uint32_t base;
   uint32_t irq;
   uint32_t ier;
-  volatile bool pscwait;
-  volatile bool resetwait;
-  bool lowpower;
-  struct work_s work;
-  rmutex_t lock;
+
+  /* Overall driver status */
+
+  uint8_t           hoststate; /* State of the device (see enum sam_hoststate_e) */
+  uint8_t           prevstate; /* Previous state of the device before SUSPEND */
+  uint16_t          epavail;   /* Bitset of available endpoints */
+  mutex_t           lock;      /* Support mutually exclusive access */
+  bool              connected; /* Connected to device */
+  bool              change;    /* Connection change */
+  bool              pscwait;   /* True: Thread is waiting for a port event */
+  bool              resetwait;
+  bool              lowpower;
+  uint8_t           smstate;   /* The state of the USB host state machine */
+  uint8_t           irqset;    /* Set of enabled interrupts */
+  uint8_t           xfrtype;   /* See enum _hxfrdn_e */
+  sem_t             pscsem;    /* Semaphore to wait for a port event */
   sem_t resetsem;
-  sem_t pscsem;
+  struct work_s work;
+
+  uint16_t pipes_unfreeze; /* Pipes to unfreeze after wakeup */
+  int8_t suspend_start;    /* Delayed suspend time in ms */
+  int8_t resume_start;     /* Delayed resume time in ms */
+  int8_t n_ctrl_req_user;  /* Control transfer request user count */
+  int8_t n_sof_user;       /* SOF user count (callback, suspend, resume, ctrl request) */
+  uint8_t pipe_pool_size;  /* Pipe pool size in number of pipes */
 
   /* Address generation data */
 
   struct usbhost_devaddr_s devgen;
 
-  /* Root Hub port*/
+  /* The pipe list */
 
-  struct sam_rhport_s rhport;
+  aligned_data(4)
+  struct sam_pipe_s pipelist[SAM_USBHS_NENDPOINTS];
+
+  /* Pipe descriptors 2 banks for each pipe */
+
+  /* CTRL */
+
+  usbhost_ep_t ep0; /* Root hub port EP0 description */
+  aligned_data(4) uint8_t ctrl_buffer[SAM_EP0_MAXPACKET];
 }
 
 /****************************************************************************
@@ -188,10 +185,28 @@ static inline uint32_t sam_getreg(struct sam_usbhosths_s *priv,
 static inline void sam_putreg(struct sam_usbhosths_s *priv, uint32_t offset,
                               uint32_t regval);
 
+static inline void sam_add_sof_user(struct sam_usbhosths_s *priv);
+
 static int sam_usbhs_disconnect_device(struct sam_usbhosths_s *priv);
 static int sam_usbhs_connect_device(struct sam_usbhosths_s *priv);
 static int sam_usbhs_interrupt_top(int irq, void *context, void *arg);
 static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg);
+
+/* Control transfers */
+
+static int  sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
+                               struct sam_pipe_s *pipe,
+                               const struct usb_ctrlreq_s *req);
+static int  sam_ctrl_senddata(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe,
+                              uint8_t *buffer, unsigned int buflen);
+static int  sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe,
+                              uint8_t *buffer, unsigned int buflen);
+static int  sam_in_setup(struct sam_usbhosths_s *priv,
+                         struct sam_pipe_s *pipe);
+static int  sam_out_setup(struct sam_usbhosths_s *priv,
+                          struct sam_pipe_s *pipe);
 
 /* USB Host Controller Operations *******************************************/
 
@@ -286,6 +301,20 @@ static inline void sam_putreg(struct sam_usbhosths_s *priv, uint32_t offset,
                               uint32_t regval)
 {
   putreg32(regval, priv->base + offset);
+}
+
+/****************************************************************************
+ * Name: sam_add_sof_user
+ *
+ * Description:
+ *   Add one SOF IRQ user and enable SOF interrupt
+ *
+ ****************************************************************************/
+
+static inline void sam_add_sof_user(struct sam_usbhosths_s *priv)
+{
+  priv->n_sof_user++;
+  sam_putreg16(USBHS_HSTINT_HSOFI, SAM_USBHS_HSTIER_OFFSET);
 }
 
 /****************************************************************************
@@ -614,6 +643,179 @@ static int sam_ioc_wait(struct sam_epinfo_s *epinfo)
 
   return ret < 0 ? ret : epinfo->result;
 }
+
+/****************************************************************************
+ * Name: sam_pipe_waitsetup
+ *
+ * Description:
+ *   Set the request for the transfer complete event well
+ *   BEFORE enabling the transfer (as soon as we are
+ *   absolutely committed to the to avoid transfer).
+ *   We do this to minimize race conditions.
+ *   This logic would have to be expanded
+ *   if we want to have more than one packet in flight at a time!
+ *
+ * Assumptions:
+ *  Called from a normal thread context BEFORE the transfer has been started.
+ *
+ ****************************************************************************/
+
+static int sam_pipe_waitsetup(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe)
+{
+  irqstate_t flags = enter_critical_section();
+  int        ret   = -ENODEV;
+
+  DEBUGASSERT(priv != NULL && pipe != NULL);
+
+  /* Is the device still connected? */
+
+  if (priv->connected)
+    {
+      /* Yes.. then set waiter to indicate that we expect
+       * to be informed when either (1) the device is disconnected,
+       * or (2) the transfer completed.
+       */
+
+      pipe->waiter   = true;
+  #ifdef CONFIG_USBHOST_ASYNCH
+      pipe->callback = NULL;
+      pipe->arg      = NULL;
+  #endif
+      ret            = OK;
+    }
+
+  leave_critical_section(flags);
+  return ret;
+}
+
+/****************************************************************************
+ * Name: sam_ctrl_sendsetup
+ *
+ * Description:
+ *   Send an IN/OUT SETUP packet.
+ *
+ * Assumptions:
+ *   This function is called only from the CTRLIN and CTRLOUT interfaces.
+ *
+ ****************************************************************************/
+
+static int  sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
+                               struct sam_pipe_s *pipe,
+                               const struct usb_ctrlreq_s *req);
+{
+  clock_t start;
+  clock_t elapsed;
+  int ret;
+  int i;
+
+  /* Loop while the device reports NAK (and a timeout is not exceeded */
+
+  start = clock_systime_ticks();
+  do
+    {
+      /* Send the SETUP packet */
+
+      pipe->data = (uint8_t *)req;
+      pipe->size = USB_SIZEOF_CTRLREQ;
+      pipe->count = 0;
+      pipe->result = EBUSY;
+      uinfo("pipe%d buffer:%p buflen:%d\n",
+                                 pipe->idx,
+                                 pipe->data,
+                                 pipe->size);
+      sam_pktdump("sam_ctrl_sendsetup", pipe->data, pipe->size);
+
+      /* Set up for the wait BEFORE starting the transfer */
+
+      ret = sam_pipe_waitsetup(priv, pipe);
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_DEVDISCONN2, 0);
+          return ret;
+        }
+
+      pipe->pipestate_general = USB_H_PIPE_S_SETUP;
+      sam_add_sof_user(priv);
+      priv->n_ctrl_req_user++;
+
+      /* Make sure the peripheral address is correct */
+
+      pipe->descb[0]->ctrlpipe &= ~USBHOST_CTRLPIPE_PDADDR_MASK;
+      pipe->descb[0]->ctrlpipe |= USBHOST_CTRLPIPE_PDADDR(pipe->funcaddr);
+
+      /* Write packet */
+
+      sam_putreg8(USBHOST_PINTFLAG_TXSTP, SAM_USBHOST_PINTFLAG(pipe->idx));
+      for (i = 0; i < USB_SIZEOF_CTRLREQ; i++)
+          priv->ctrl_buffer[i] = pipe->data[i];
+
+      pipe->descb[0]->addr = (uint32_t)pipe->data;
+      pipe->descb[0]->pktsize &= ~(USBHOST_PKTSIZE_MPKTSIZE_MASK |
+                                   USBHOST_PKTSIZE_BCNT_MASK);
+      pipe->descb[0]->pktsize |= USBHOST_PKTSIZE_BCNT(USB_SIZEOF_CTRLREQ);
+
+      pipe->descb[0]->ctrlpipe = USBHOST_CTRLPIPE_PDADDR(pipe->funcaddr) |
+                      USBHOST_CTRLPIPE_PEPNUM(pipe->epno & USB_EPNO_MASK);
+      uinfo("pipe%d pktsize=0x%x ctrl=0x%x status=0x%x\n",
+                                    pipe->idx,
+                                    pipe->descb[0]->pktsize,
+                                    pipe->descb[0]->ctrlpipe,
+                                    pipe->descb[0]->statuspipe);
+
+      /* Send the SETUP token (always EP0) */
+
+      sam_modifyreg8(USBHOST_PCFG_PTOKEN_MASK,
+                     USBHOST_PCFG_PTOKEN_SETUP,
+                     SAM_USBHOST_PCFG(pipe->idx));
+      sam_putreg8(USBHOST_PSTATUS_DTGL, SAM_USBHOST_PSTATUSCLR(pipe->idx));
+      sam_putreg8(USBHOST_PSTATUS_BK0RDY, SAM_USBHOST_PSTATUSSET(pipe->idx));
+      sam_putreg8(USBHOST_PINTFLAG_TXSTP, SAM_USBHOST_PINTENSET(pipe->idx));
+      sam_putreg8(USBHOST_PSTATUS_PFREEZE,
+                  SAM_USBHOST_PSTATUSCLR(pipe->idx));
+
+      /* Wait for the transfer to complete */
+
+      ret = sam_pipe_wait(priv, pipe);
+
+      /* Return on success and for all failures other than EAGAIN.  EAGAIN
+       * means that the device NAKed the SETUP command and that we should
+       * try a few more times.  NOTE:  The USB spec says that a peripheral
+       * must always ACK a SETUP packet.
+       */
+
+      if (ret != -EAGAIN)
+        {
+          /* Output some debug information if the transfer failed */
+
+          if (ret < 0)
+            {
+              usbhost_trace1(SAM_TRACE1_TRANSFER_FAILED2, ret);
+            }
+
+          /* Return the result in any event */
+
+          return ret;
+        }
+
+      /* Get the elapsed time (in frames) */
+
+      elapsed = clock_systime_ticks() - start;
+    }
+  while (elapsed < SAM_SETUP_DELAY);
+
+  return -ETIMEDOUT;
+}
+static int  sam_ctrl_senddata(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe,
+                              uint8_t *buffer, unsigned int buflen);
+static int  sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe,
+                              uint8_t *buffer, unsigned int buflen);
+static int  sam_in_setup(struct sam_usbhosths_s *priv,
+                         struct sam_pipe_s *pipe);
+static int  sam_out_setup(struct sam_usbhosths_s *priv,
+                          struct sam_pipe_s *pipe);
 
 /****************************************************************************
  * Name: sam_enumerate
@@ -1061,17 +1263,21 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
                       const struct usb_ctrlreq_s *req,
                       uint8_t *buffer)
 {
-  struct sam_rhport_s *rhport = (struct sam_rhport_s *)drvr;
-  struct sam_epinfo_s *ep0info = (struct sam_epinfo_s *)ep0;
-  struct sam_usbhosths_s *priv = &g_usbhosths;
-  uint16_t len;
+  struct sam_usbhosths_s *priv = (struct sam_usbhosths_s *)dvrv;
+  struct sam_pipe_s *pipe;
+  uint16_t buflen;
   ssize_t nbytes;
+  clock_t start;
+  clock_t elapsed;
+  int retries;
   int ret;
 
+  pipe = &priv->pipelist[(unsigned int)ep0];
+
 #ifdef CONFIG_ENDIAN_BIG
-  len = (uint16_t)req->len[0] << 8 | (uint16_t)req->len[1];
+  buflen = (uint16_t)req->len[0] << 8 | (uint16_t)req->len[1];
 #else
-  len = (uint16_t)req->len[1] << 8 | (uint16_t)req->len[0];
+  buflen = (uint16_t)req->len[1] << 8 | (uint16_t)req->len[0];
 #endif
 
   /* Get exclusive access */
@@ -1082,32 +1288,65 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
       return ret;
     }
 
-  ret = sam_ioc_setup(rhport, ep0info);
-  if (ret != OK)
+  /* Loop, retrying until the retry time expires */
+
+  for (retries = 0; retries < SAM_RETRY_COUNT; retries++)
     {
-      goto errout_with_lock;
+      /* Send the SETUP request (TXSTP) */
+
+      ret = sam_ctrl_sendsetup(priv, pipe, req);
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_SENDSETUP_FAIL2, -ret);
+          continue;
+        }
+
+      /* Get the start time.  Loop again until the timeout expires */
+
+      start = clock_systime_ticks();
+      do
+        {
+          /* Handle the IN data phase (if any) (TRCPT) */
+
+          if (buflen > 0)
+            {
+              ret = sam_ctrl_recvdata(priv, pipe, buffer, buflen);
+              if (ret < 0)
+                {
+                  usbhost_trace1(SAM_TRACE1_RECVDATA_FAIL, -ret);
+                }
+            }
+
+          /* Handle the status OUT phase */
+
+          if (ret == OK)
+            {
+              ret = sam_ctrl_senddata(priv, pipe, NULL, 0);
+              if (ret == OK)
+                {
+                  /* All success transactions exit here */
+
+                  nxmutex_unlock(&priv->lock);
+                  return OK;
+                }
+
+              usbhost_trace1(SAM_TRACE1_SENDSTATUS_FAIL, ret < 0 ?
+                                                       -ret : ret);
+            }
+
+          /* Get the elapsed time (in frames) */
+
+          elapsed = clock_systime_ticks() - start;
+        }
+      while (elapsed < SAM_DATANAK_DELAY);
     }
 
-  /* Now initiate the transfer */
+  /* All failures exit here after all retries
+   * and timeouts have been exhausted
+   */
 
-  ret = sam_async_setup(rhport, ep0info, req, buffer, len);
-  if (ret < 0)
-    {
-      uerr("ERROR: sam_async_setup failed: %d\n", ret);
-      goto errout_with_iocwait;
-    }
-
-  /* And wait for the transfer to complete */
-
-  nbytes = sam_transfer_wait(ep0info);
-  nxrmutex_unlock(&g_ehci.lock);
-  return nbytes >= 0 ? OK : (int)nbytes;
-
-errout_with_iocwait:
-  ep0info->iocwait = false;
-errout_with_lock:
-  nxrmutex_unlock(&g_ehci.lock);
-  return ret;
+  nxmutex_unlock(&priv->lock);
+  return -ETIMEDOUT;
 }
 
 static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
