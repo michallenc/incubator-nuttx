@@ -568,7 +568,7 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
     {
       /* TODO */
     }
-  
+
   if (pending & USBHS_HSTINT_DCONNI != 0)
     {
       sam_usbhs_connect_device(priv);
@@ -583,7 +583,7 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
     {
       /* TODO */
     }
-  
+
   if (pending & USBHS_HSTINT_RSTI)
     {
       /* Clear reset interrupt */
@@ -1200,6 +1200,15 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
       sam_add_sof_user(priv);
       priv->n_ctrl_req_user++;
 
+      /* Fill SETUP token */
+
+      regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG(epno));
+      regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+      regval |= USBHS_HSTPIPCFG_PTOKEN_SETUP;
+      sam_putreg(priv, SAM_USBHS_HSTPIPCFG(epno), regval);
+
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR(epno), USBHS_HSTPIPINT_TXSTPI);
+
       /* Write packet in the FIFO buffer */
 
       fifo = (uint8_t *)
@@ -1354,6 +1363,61 @@ static int sam_ctrl_recvdata(struct sam_usbhost_s *priv,
 
   return ret;
 }
+
+/****************************************************************************
+ * Name: sam_recv_restart
+ *
+ * Description:
+ *   Start/Re-start the transfer on the selected IN or OUT pipe
+ *
+ ****************************************************************************/
+
+static void sam_recv_restart(struct sam_usbhost_s *priv,
+                             struct sam_pipe_s *pipe)
+{
+  /* Send the IN token. */
+
+  uint8_t epno = pipe->idx;
+
+  regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG(epno));
+  regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+  regval |= USBHS_HSTPIPCFG_PTOKEN_IN;
+  sam_putreg(priv, SAM_USBHS_HSTPIPCFG(epno), regval);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPICR(epno), USBHS_HSTPIPINT_RXINI |
+             USBHS_HSTPIPINT_SHRTPCKTI);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIER(epno), USBHS_HSTPIPINT_RXINI);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIDR(epno), USBHS_HSTPIPINT_FIFOCONI |
+             USBHS_HSTPIPINT_PFREEZEI);
+}
+
+/****************************************************************************
+ * Name: sam_recv_start
+ *
+ * Description:
+ *   Start at transfer on the selected IN or OUT pipe.
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+static void sam_recv_start(struct sam_usbhost_s *priv,
+                           struct sam_pipe_s *pipe)
+{
+  /* Set up the initial state of the transfer */
+
+  usbhost_vtrace2(SAM_VTRACE2_STARTTRANSFER2, pipe->idx, pipe->size);
+
+  pipe->result = EBUSY;
+  pipe->count = 0;
+
+  /* Start the transfer. */
+
+  sam_recv_restart(priv, pipe);
+}
+
 
 /****************************************************************************
  * Name: sam_enumerate
@@ -1827,7 +1891,7 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 #endif
 
   /* Get exclusive access */
-  
+
   ret = nxrmutex_lock(&priv->lock);
   if (ret < 0)
     {
@@ -2101,7 +2165,7 @@ static void sam_hw_initialize(struct sam_usbhosths_s *priv)
     }
 
   sam_putreg(priv, SAM_USBHS_HSTCTRL_OFFSET, regval);
-  
+
   /* Unfreeze clocking */
 
   regval = sam_getreg(priv, SAM_USBHS_CTRL_OFFSET);
