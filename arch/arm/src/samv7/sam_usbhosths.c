@@ -1263,6 +1263,289 @@ static void sam_transfer_abort(struct sam_usbhosths_s *priv,
 }
 
 /****************************************************************************
+ * Name: sam_send_continue
+ *
+ * Description:
+ *   Continue the send operation started by sam_send_start().
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+static void sam_send_continue(struct sam_usbhost_s *priv,
+                              struct sam_pipe_s *pipe)
+{
+  uint8_t  *src;
+  uint32_t size;
+  uint32_t count;
+  uint32_t n_tx = 0;
+  uint32_t n_remain;
+  uint32_t regval;
+
+  if (pipe->pipestate_general == USB_H_PIPE_S_STATO)
+    {
+      /* Control status : ZLP OUT done */
+
+      sam_transfer_terminate(priv, pipe, OK);
+      return;
+    }
+  else if (pipe->pipestate_general != USB_H_PIPE_S_DATO)
+    {
+      return;
+    }
+
+  /* Reset packet timeout for control pipes */
+
+  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
+    pipe->pkt_timeout = USB_CTRL_DPKT_TIMEOUT;
+
+  regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG(epno));
+  n_tx = (regval & USBHS_HSTPIPCFG_PSIZE_MASK) >> USBHS_HSTPIPCFG_PSIZE_SHIFT;
+
+  /* ZLP cleared if it's short packet */
+
+  if (n_tx < pipe->maxpacket)
+    {
+      pipe->zlp = 0;
+    }
+
+  src = pipe->data;
+  size = pipe->size;
+  count = pipe->count;
+
+  if (n_tx)
+    {
+      count += n_tx;
+      pipe->count = count;
+    }
+
+  n_remain = size - count;
+
+  /* Now set n_tx to next transfer size */
+
+  n_tx = n_remain > 16320 ? 16320 : n_remain;
+
+  /* For Control, all data is done, to STATUS stage */
+
+  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL &&
+                     pipe->count >= pipe->size &&
+                     !pipe->zlp)
+    {
+      pipe->pipestate = USB_H_PIPE_S_STATI;
+
+      /* Start IN ZLP request */
+
+      pipe->pkt_timeout = USB_CTRL_STAT_TIMEOUT;
+      // TODO sam_putreg8(USBHOST_PSTATUS_DTGL, SAM_USBHOST_PSTATUSSET(pipe->idx));
+      sam_recv_restart(priv, pipe);
+      return;
+    }
+
+  /* All transfer done, including ZLP */
+
+  if (count >= size && !pipe->zlp)
+    {
+      /* At least one bank there, wait to freeze pipe */
+
+      if (pipe->eptype != USB_EP_ATTR_XFER_CONTROL)
+        {
+          /* Busy interrupt when all banks are empty */
+
+          sam_transfer_terminate(priv, pipe, OK);
+        }
+    }
+  else
+    {
+      regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG(epno));
+      regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+      regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
+      sam_putreg(priv, SAM_USBHS_HSTPIPCFG(epno), regval);
+
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR(epno), USBHS_HSTPIPINT_TXOUTI);
+
+      /* Write packet in the FIFO buffer */
+
+      fifo = (uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+
+      for (; pipe->size; pipe->size--)
+        {
+          *fifo++ = *src[count]++;
+        }
+
+      MEMORY_SYNC();
+
+      sam_putreg(priv, SAM_USBHS_HSTPIPIER(epno), USBHS_HSTPIPINT_TXOUTI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR(epno), USBHS_HSTPIPINT_FIFOCONI |
+                  USBHS_HSTPIPINT_PFREEZEI);
+    }
+}
+
+/****************************************************************************
+ * Name: sam_send_start
+ *
+ * Description:
+ *   Start at transfer on the selected IN or OUT pipe.
+ *
+ ****************************************************************************/
+
+static void sam_send_start(struct sam_usbhost_s *priv,
+                           struct sam_pipe_s *pipe)
+{
+  volatile uint8_t *fifo;
+  uint32_t regval;
+  uint8_t psize;
+  uint8_t epno = pipe->idx;
+
+  /* Set up the initial state of the transfer */
+
+  usbhost_vtrace2(SAM_VTRACE2_STARTTRANSFER1, pipe->idx, pipe->size);
+
+  pipe->result = EBUSY;
+  pipe->count = 0;
+
+  regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG(epno));
+  psize = (regval & USBHS_HSTPIPCFG_PSIZE_MASK) >> USBHS_HSTPIPCFG_PSIZE_SHIFT;
+
+  regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+  regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
+  sam_putreg(priv, SAM_USBHS_HSTPIPCFG(epno), regval);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPICR(epno), USBHS_HSTPIPINT_TXOUTI);
+
+  /* Write packet in the FIFO buffer */
+
+  fifo = (uint8_t *)
+    ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+
+  for (; pipe->size; pipe->size--)
+    {
+      *fifo++ = *pipe->data++;
+    }
+
+  MEMORY_SYNC();
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIER(epno), USBHS_HSTPIPINT_TXOUTI);
+  sam_putreg(priv, SAM_USBHS_HSTPIPIDR(epno), USBHS_HSTPIPINT_FIFOCONI |
+              USBHS_HSTPIPINT_PFREEZEI);
+}
+
+/****************************************************************************
+ * Name: sam_out_transfer
+ *
+ * Description:
+ *   Transfer the 'buflen' bytes in 'buffer' through an OUT pipe.
+ *
+ * Assumptions:
+ *   This function is called only from the TRANSFER
+ *   interface.  The lock, for example,
+ *   must be relinquished before waiting.
+ *
+ ****************************************************************************/
+
+static ssize_t sam_out_transfer(struct sam_usbhost_s *priv,
+                                struct sam_pipe_s *pipe,
+                                uint8_t *buffer, size_t buflen)
+{
+  clock_t start;
+  clock_t elapsed;
+  size_t xfrlen;
+  ssize_t xfrd;
+  int ret;
+
+  /* Loop until the transfer completes (i.e., buflen is decremented to zero)
+   * or a fatal error occurs (any error other than a simple NAK)
+   */
+
+  start = clock_systime_ticks();
+  xfrd  = 0;
+
+  while (buflen > 0)
+    {
+      /* Transfer one packet at a time.  The hardware is capable of queueing
+       * multiple OUT packets, but I just haven't figured out how to handle
+       * the case where a single OUT packet in the group is NAKed.
+       */
+
+      xfrlen = MIN(pipe->maxpacket, buflen);
+      pipe->data = buffer;
+      pipe->size = xfrlen;
+      pipe->count = 0;
+      uinfo("pipe%d buffer:%p buflen:%d\n",
+                                 pipe->idx,
+                                 pipe->data,
+                                 pipe->size);
+
+      /* Set up for the wait BEFORE starting the transfer */
+
+      ret = sam_pipe_waitsetup(priv, pipe);
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_DEVDISCONN1, 0);
+          return (ssize_t)ret;
+        }
+
+      /* Set up for the transfer based
+       * on the direction and the endpoint type
+       */
+
+      ret = sam_out_setup(priv, pipe);
+
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_OUTSETUP_FAIL1, -ret);
+          return (ssize_t)ret;
+        }
+
+      /* Wait for the transfer to complete and get the result */
+
+      ret = sam_pipe_wait(priv, pipe);
+
+      /* Handle transfer failures */
+
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_TRANSFER_FAILED1, ret);
+
+          /* Check for a special case:  If (1) the transfer was NAKed and (2)
+           * no SNDFIFO empty or Rx FIFO not-empty event occurred, then we
+           * should be able to just flush the Rx and SNDFIFOs and try again.
+           * We can detect this latter case because then the transfer buffer
+           * pointer and buffer size will be unaltered.
+           */
+
+          elapsed = clock_systime_ticks() - start;
+          if (ret != -EAGAIN ||                /* Not a NAK condition OR */
+              elapsed >= SAM_DATANAK_DELAY ||  /* Timeout has elapsed OR */
+              pipe->count > 0)                 /* Data has been partially transferred */
+            {
+              /* Break out and return the error */
+
+              usbhost_trace1(SAM_TRACE1_PIPEWAIT_FAIL, -ret);
+              return (ssize_t)ret;
+            }
+
+          /* Get the device a little time to catch up.
+           * Then retry the transfer
+           * using the same buffer pointer and length.
+           */
+
+          nxsig_usleep(20 * 1000);
+        }
+      else
+        {
+          /* Successfully transferred. Update the buffer pointer and length */
+
+          buffer += xfrlen;
+          buflen -= xfrlen;
+          xfrd   += pipe->count;
+        }
+    }
+
+  return xfrd;
+}
+
+/****************************************************************************
  * Name: sam_ctrl_sendsetup
  *
  * Description:
