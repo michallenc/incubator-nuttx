@@ -157,25 +157,4 @@ int sam_usbhost_initialize(void)
   return OK;
 }
 
-/****************************************************************************
- * Name: sam_usbhost_vbusdrive
- *
- * Description:
- *   Enable/disable driving of VBUS 5V output.
- *   This function must be provided by each platform that implements the
- *   OHCI or EHCI host interface
- *
- * Input Parameters:
- *   rhport - Selects root hub port to be powered host interface.
- *            See SAM_RHPORT_* definitions above.
- *   enable - true: enable VBUS power; false: disable VBUS power
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void sam_usbhost_vbusdrive(int rhport, bool enable)
-{
-}
 #endif /* defined(CONFIG_SAMV7_USBHOSTHS) && defined(HAVE_USBHOST) */

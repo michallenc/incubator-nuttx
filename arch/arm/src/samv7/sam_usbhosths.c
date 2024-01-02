@@ -46,7 +46,7 @@
 #include "sam_periphclks.h"
 #include "hardware/sam_usbhs.h"
 #include "sam_clockconfig.h"
-#include "sam_usbhost.h"
+#include "sam_usbhosths.h"
 
 #if defined(CONFIG_USBHOST) && defined(CONFIG_SAMV7_USBHOSTHS)
 
@@ -116,11 +116,6 @@ struct sam_pipe_s
 
   sem_t waitsem;               /* Channel wait semaphore */
   volatile bool waiter;        /* True: Thread is waiting for a channel event */
-
-#ifdef CONFIG_USBHOST_ASYNCH
-  usbhost_asynch_t callback;   /* Transfer complete callback */
-  void *arg;                   /* Argument that accompanies the callback */
-#endif
 };
 
 struct sam_usbhosths_s
@@ -184,6 +179,8 @@ struct sam_usbhosths_s
  * Private Function Prototypes
  ****************************************************************************/
 
+/* Register helpers */
+
 static inline uint32_t sam_getreg(struct sam_usbhosths_s *priv,
                                   uint32_t offset);
 static inline void sam_putreg(struct sam_usbhosths_s *priv, uint32_t offset,
@@ -191,12 +188,18 @@ static inline void sam_putreg(struct sam_usbhosths_s *priv, uint32_t offset,
 
 static inline void sam_add_sof_user(struct sam_usbhosths_s *priv);
 
+/* Pipe helpers */
+
+static void sam_reset_pipes(struct sam_usbhost_s *priv, bool warm_reset);
+static void sam_pipe_reset(struct sam_usbhost_s *priv, uint8_t epno);
+static void sam_pipeset_reset(struct sam_usbhost_s *priv, uint16_t epset);
+
 static int sam_usbhs_disconnect_device(struct sam_usbhosths_s *priv);
 static int sam_usbhs_connect_device(struct sam_usbhosths_s *priv);
 
 static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx);
-static int sam_usbhs_interrupt_top(int irq, void *context, void *arg);
 static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg);
+static int sam_usbhs_interrupt_top(int irq, void *context, void *arg);
 
 /* OUT transfers */
 
@@ -211,19 +214,19 @@ static ssize_t sam_out_transfer(struct sam_usbhosths_s *priv,
 
 /* Control transfers */
 
-static int  sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
-                               struct sam_pipe_s *pipe,
-                               const struct usb_ctrlreq_s *req);
-static int  sam_ctrl_senddata(struct sam_usbhosths_s *priv,
+static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
                               struct sam_pipe_s *pipe,
-                              uint8_t *buffer, unsigned int buflen);
-static int  sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
-                              struct sam_pipe_s *pipe,
-                              uint8_t *buffer, unsigned int buflen);
-static int  sam_in_setup(struct sam_usbhosths_s *priv,
+                              const struct usb_ctrlreq_s *req);
+static int sam_ctrl_senddata(struct sam_usbhosths_s *priv,
+                             struct sam_pipe_s *pipe,
+                             uint8_t *buffer, unsigned int buflen);
+static int sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
+                             struct sam_pipe_s *pipe,
+                             uint8_t *buffer, unsigned int buflen);
+static int sam_in_setup(struct sam_usbhosths_s *priv,
+                        struct sam_pipe_s *pipe);
+static int sam_out_setup(struct sam_usbhosths_s *priv,
                          struct sam_pipe_s *pipe);
-static int  sam_out_setup(struct sam_usbhosths_s *priv,
-                          struct sam_pipe_s *pipe);
 
 /* IN transfers */
 
@@ -291,11 +294,6 @@ static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
          const struct usb_ctrlreq_s *req, const uint8_t *buffer);
 static ssize_t sam_transfer(struct usbhost_driver_s *drvr,
          usbhost_ep_t ep, uint8_t *buffer, size_t buflen);
-#ifdef CONFIG_USBHOST_ASYNCH
-static int sam_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
-         uint8_t *buffer, size_t buflen, usbhost_asynch_t callback,
-         void *arg);
-#endif
 static int sam_cancel(struct usbhost_driver_s *drvr, usbhost_ep_t ep);
 static void sam_disconnect(struct usbhost_driver_s *drvr,
                            struct usbhost_hubport_s *hport);
@@ -1058,10 +1056,6 @@ static int sam_pipe_waitsetup(struct sam_usbhosths_s *priv,
        */
 
       pipe->waiter   = true;
-  #ifdef CONFIG_USBHOST_ASYNCH
-      pipe->callback = NULL;
-      pipe->arg      = NULL;
-  #endif
       ret            = OK;
     }
 
@@ -1148,11 +1142,6 @@ static void sam_pipe_wakeup(struct sam_usbhosths_s *priv,
 
       if (pipe->waiter)
         {
-#ifdef CONFIG_USBHOST_ASYNCH
-          /* Yes.. there should not also be a callback scheduled */
-
-          DEBUGASSERT(pipe->callback == NULL);
-#endif
           /* Wake'em up! */
 
           usbhost_vtrace2(pipe->in ? SAM_VTRACE2_PIPEWAKEUP_IN :
@@ -1162,26 +1151,6 @@ static void sam_pipe_wakeup(struct sam_usbhosths_s *priv,
           nxsem_post(&pipe->waitsem);
           pipe->waiter = false;
         }
-
-     #ifdef CONFIG_USBHOST_ASYNCH
-      /* No.. is an asynchronous callback expected
-       * when the transfer completes?
-       */
-
-      else if (pipe->callback)
-        {
-          /* Handle continuation of IN/OUT pipes */
-
-          if (pipe->in)
-            {
-              sam_in_next(priv, pipe);
-            }
-          else
-            {
-              sam_out_next(priv, pipe);
-            }
-        }
-     #endif
     }
 }
 
@@ -3096,6 +3065,212 @@ static ssize_t sam_transfer(struct usbhost_driver_s *drvr,
 }
 
 /****************************************************************************
+ * Name: sam_cancel
+ *
+ * Description:
+ *   Cancel a pending transfer on an endpoint.  Cancelled synchronous or
+ *   asynchronous transfer will complete normally with the error -ESHUTDOWN.
+ *
+ * Input Parameters:
+ *   drvr - The USB host driver instance obtained as a parameter from the
+ *      call to the class create() method.
+ *   ep - The IN or OUT endpoint descriptor for the device endpoint on
+ *      which an asynchronous transfer should be transferred.
+ *
+ * Returned Value:
+ *   On success, zero (OK) is returned. On a failure, a negated errno value
+ *   is returned indicating the nature of the failure.
+ *
+ ****************************************************************************/
+
+static int sam_cancel(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
+{
+  struct sam_usbhost_s *priv = (struct sam_usbhost_s *)drvr;
+  struct sam_pipe_s *pipe;
+  unsigned int idx = (unsigned int)ep;
+  irqstate_t flags;
+
+  uinfo("idx: %u: %d\n", idx);
+
+  DEBUGASSERT(priv && idx < SAM_USB_NENDPOINTS);
+  pipe = &priv->pipelist[idx];
+
+  /* We need to disable interrupts to avoid race conditions with the
+   * asynchronous completion of the transfer being cancelled.
+   */
+
+  flags = enter_critical_section();
+
+  /* Halt the pipe */
+
+  sam_transfer_abort(priv, pipe, CHREASON_CANCELLED);
+  pipe->result = -ESHUTDOWN;
+
+  /* Is there a thread waiting for this transfer to complete? */
+
+  if (pipe->waiter)
+    {
+
+      /* Wake'em up! */
+
+      nxsem_post(&pipe->waitsem);
+      pipe->waiter = false;
+    }
+
+  leave_critical_section(flags);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_disconnect
+ *
+ * Description:
+ *   Called by the class when an error occurs and driver has been
+ *   disconnected. The USB host driver should discard the handle to the
+ *   class instance (it is stale) and not attempt any further interaction
+ *   with the class driver instance (until a new instance is received from
+ *   the create() method). The driver should not called the class
+ *   disconnected() method.
+ *
+ * Input Parameters:
+ *   drvr - The USB host driver instance obtained as a parameter from the
+ *      call to the class create() method.
+ *   hport - The port from which the device is being disconnected.
+ *      Might be a port on a hub.
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   - Only a single class bound to a single device is supported.
+ *   - Never called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static void sam_disconnect(struct usbhost_driver_s *drvr,
+                           struct usbhost_hubport_s *hport)
+{
+  DEBUGASSERT(hport != NULL);
+  hport->devclass = NULL;
+}
+
+/****************************************************************************
+ * Name: sam_reset_pipes
+ *
+ * Description:
+ *   Reset pipes
+ * 
+ * Input Parameters:
+ *  priv       - Pointer to driver instance
+ *  warm_reset - Handles runtime USB reset
+ *
+ ****************************************************************************/
+
+static void sam_reset_pipes(struct sam_usbhost_s *priv, bool warm_reset)
+{
+  struct sam_pipe_s *pipe;
+  uint8_t i;
+
+  /* Reset pipes */
+
+  for (i = 0; i < SAM_USB_NENDPOINTS; i++)
+    {
+      /* Get the pipe structure */
+
+      pipe = &priv->pipelist[i];
+
+      if (warm_reset)
+        {
+          /* Skip free pipes */
+
+          if (pipe->pipestate_general == USB_H_PIPE_S_FREE)
+            {
+              continue;
+            }
+
+          /* Restore physical pipe configurations */
+
+          sam_pipe_configure(priv, i);
+
+          /* Abort transfer (due to reset) */
+
+          if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
+            {
+              /* Force a callback for control endpoints */
+
+              pipe->pipestate_general = USB_H_PIPE_S_SETUP;
+            }
+
+          sam_transfer_terminate(priv, pipe, USB_H_RESET);
+        }
+      else
+        {
+          pipe->pipestate_general = USB_H_PIPE_S_FREE;
+        }
+    }
+}
+
+/****************************************************************************
+ * Name: sam_pipe_reset
+ *
+ * Description:
+ *   Reset and disable one pipe.
+ *
+ ****************************************************************************/
+
+static void sam_pipe_reset(struct sam_usbhost_s *priv, uint8_t epno)
+{
+  struct sam_pipe_s *pipe = &priv->pipelist[epno];
+
+  uinfo("pipe%d\n", pipe->idx);
+
+  /* Disable pipe interrupts */
+
+  sam_putreg(priv, SAM_USBHS_HSTPIP USBHS_HSTPIP_PRST(epno));
+
+  /* Reset pipe status */
+
+  pipe->pipestate = USB_H_PIPE_S_FREE;
+  pipe->stalled   = false;
+  pipe->pending   = false;
+  pipe->halted    = false;
+  pipe->zlpsent   = false;
+  pipe->txbusy    = false;
+  pipe->rxactive  = false;
+}
+
+/****************************************************************************
+ * Name: sam_pipeset_reset
+ *
+ * Description:
+ *   Reset and disable a set of pipes.
+ *
+ ****************************************************************************/
+
+static void sam_pipeset_reset(struct sam_usbhost_s *priv, uint16_t epset)
+{
+  uint32_t bit;
+  int epno;
+
+  uinfo("ENTRY\n");
+
+  /* Reset each pipe in the set */
+
+  for (epno = 0, bit = 1, epset &= SAM_EPSET_ALL;
+       epno < SAM_USB_NENDPOINTS && epset != 0;
+       epno++, bit <<= 1)
+    {
+      /* Is this pipe in the set? */
+
+      if ((epset & bit) != 0)
+        {
+           sam_pipe_reset(priv, epno);
+           epset &= ~bit;
+        }
+    }
+}
+
+/****************************************************************************
  * Name: sam_sw_initialize
  *
  * Description:
@@ -3122,22 +3297,13 @@ static void sam_sw_initialize(struct sam_usbhosths_s *priv)
   drvr->ctrlin         = sam_ctrlin;
   drvr->ctrlout        = sam_ctrlout;
   drvr->transfer       = sam_transfer;
-#ifdef CONFIG_USBHOST_ASYNCH
-  drvr->asynch         = sam_asynch;
-#endif
   drvr->cancel         = sam_cancel;
-#ifdef CONFIG_USBHOST_HUB
-  drvr->connect        = sam_connect;
-#endif
   drvr->disconnect     = sam_disconnect;
 
   /* Initialize the public port representation */
 
   hport                = &priv->rhport.hport;
   hport->drvr          = drvr;
-#ifdef CONFIG_USBHOST_HUB
-  hport->parent        = NULL;
-#endif
   hport->ep0           = priv->ep0;
   hport->speed         = USB_SPEED_FULL;
 
