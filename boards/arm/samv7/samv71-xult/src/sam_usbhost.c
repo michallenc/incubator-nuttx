@@ -39,8 +39,7 @@
 #include <nuttx/usb/usbdev_trace.h>
 
 #include "arm_internal.h"
-#include "sam_pio.h"
-#include "sam_usbhost.h"
+#include "sam_usbhosths.h"
 #include "hardware/sam_usbhs.h"
 #include "samv71-xult.h"
 
@@ -78,8 +77,9 @@ static struct usbhost_connection_s *g_hostconn;
  *
  ****************************************************************************/
 
-static int usbhost_waiter(struct usbhost_connection_s *dev)
+static int usbhost_waiter(int argc, char *argv[])
 {
+  struct usbhost_connection_s *dev = g_hostconn;
   struct usbhost_hubport_s *hport;
 
   uinfo("Running\n");
@@ -125,7 +125,7 @@ int sam_usbhost_initialize(void)
   int ret;
 
 #ifdef CONFIG_USBHOST_MSC
-  /* Register theUSB host Mass Storage Class */
+  /* Register the USB host Mass Storage Class */
 
   ret = usbhost_msc_initialize();
   if (ret != OK)
@@ -134,10 +134,10 @@ int sam_usbhost_initialize(void)
     }
 #endif
 
-  /* Get an instance of the USB EHCI interface */
+  /* Get an instance of the USB HS interface */
 
-  g_ehciconn = sam_usbhosths_initialize(0);
-  if (!g_ehciconn)
+  g_hostconn = sam_usbhosths_initialize(0);
+  if (!g_hostconn)
     {
       uerr("ERROR: sam_usbhosths_initialize failed\n");
       return -ENODEV;
