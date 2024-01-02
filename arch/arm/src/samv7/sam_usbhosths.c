@@ -73,6 +73,9 @@
 
 #define SAM_RETRY_COUNT     3   /* Number of ctrl transfer retries */
 
+#define USB_CTRL_DPKT_TIMEOUT (500)         /* Timeout between control data packets : 500ms */
+#define USB_CTRL_STAT_TIMEOUT (50)          /* Timeout of status packet : 50ms */
+
 #define SAM_SETUP_DELAY         SEC2TICK(5) /* 5 seconds in system ticks */
 #define SAM_DATANAK_DELAY       SEC2TICK(5) /* 5 seconds in system ticks */
 
@@ -195,11 +198,11 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg);
 
 /* OUT transfers */
 
-static void sam_send_continue(struct sam_usbhost_s *priv,
+static void sam_send_continue(struct sam_usbhosths_s *priv,
                               struct sam_pipe_s *pipe);
-static void sam_send_start(struct sam_usbhost_s *priv,
+static void sam_send_start(struct sam_usbhosths_s *priv,
                            struct sam_pipe_s *pipe);
-static ssize_t sam_out_transfer(struct sam_usbhost_s *priv,
+static ssize_t sam_out_transfer(struct sam_usbhosths_s *priv,
                                 struct sam_pipe_s *pipe,
                                 uint8_t *buffer,
                                 size_t buflen);
@@ -252,12 +255,12 @@ static int sam_xfrep_alloc(struct sam_usbhosths_s *priv,
                            const struct usbhost_epdesc_s *epdesc,
                            usbhost_ep_t *ep);
 
-static int sam_ctrlep_alloc(struct sam_usbhosths_s *priv,
-                            const struct usbhost_epdesc_s *epdesc,
-                            usbhost_ep_t *ep);
-static int sam_xfrep_alloc(struct sam_usbhosths_s *priv,
-                           const struct usbhost_epdesc_s *epdesc,
-                           usbhost_ep_t *ep);
+/* Control/data transfer logic */
+
+static void sam_transfer_terminate(struct sam_usbhosths_s *priv,
+              struct sam_pipe_s *pipe, int result);
+static void sam_transfer_abort(struct sam_usbhosths_s *priv,
+              struct sam_pipe_s *pipe, int result);
 
 /* USB Host Controller Operations *******************************************/
 
@@ -1148,6 +1151,118 @@ static int sam_xfrep_alloc(struct sam_usbhosths_s *priv,
 }
 
 /****************************************************************************
+ * Name: sam_transfer_terminate
+ *
+ * Description:
+ *   Terminate a IN or OUT transfer due to an error (or because a zero-
+ *   length OUT transfer occurred).
+ *
+ * Returned value:
+ *   OK     - Transfer successful
+ *  -EAGAIN - If devices NAKs the transfer.
+ *  -EPERM  - If the endpoint stalls
+ *  -BUSY   - The transfer is not complete
+ *  -EIO    - Other, undecoded error
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+static void sam_transfer_terminate(struct sam_usbhosths_s *priv,
+                                   struct sam_pipe_s *pipe,
+                                   int result)
+{
+  /* Wake up any waiters for the end of transfer event */
+
+  sam_pipe_wakeup(priv, pipe);
+
+  if (pipe->pipestate_general < USB_H_PIPE_S_SETUP ||
+      pipe->pipestate_general > USB_H_PIPE_S_STATO)
+    {
+      /* Not busy */
+
+      return;
+    }
+
+  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
+    {
+      if (priv->n_ctrl_req_user)
+        priv->n_ctrl_req_user--;
+      if (priv->n_sof_user)
+        priv->n_sof_user--;
+    }
+
+  pipe->pipestate_general  = USB_H_PIPE_S_IDLE;
+  pipe->pipestatus_general = result;
+
+  /* Suspend delayed due to control request: start it */
+
+  if (priv->n_ctrl_req_user == 0 && priv->suspend_start < 0)
+    {
+      uint8_t i;
+      if (priv->n_ctrl_req_user)
+        {
+          /* Delay suspend after setup requests */
+
+          priv->suspend_start = -1;
+          return;
+        }
+
+      /* Save pipe freeze states and freeze pipes */
+
+      priv->pipes_unfreeze = 0;
+      for (i = 0; i < SAM_USB_NENDPOINTS; i++)
+        {
+          /* Skip frozen pipes */
+
+          if ((sam_getreg(priv, SAM_USBHS_HSTPIPISR(i)) &
+              USBHS_HSTPIPINT_PFREEZEI) >> 17)
+            {
+              continue;
+            }
+
+          /* Log unfrozen pipes */
+
+          priv->pipes_unfreeze |= 1 << i;
+
+          /* Freeze it to suspend */
+
+          sam_putreg(priv, SAM_USBHS_HSTPIPIER(i), USBHS_HSTPIPINT_PFREEZEI);
+        }
+
+      /* Wait 3 SOFs before entering in suspend state */
+
+      sam_add_sof_user(priv);
+      priv->suspend_start = 3;
+    }
+}
+
+static void sam_transfer_abort(struct sam_usbhosths_s *priv,
+                               struct sam_pipe_s *pipe,
+                               int code)
+{
+  uint32_t regval;
+  /* Stop transfer */
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIER(pipe->idx), USBHS_HSTPIPINT_PFREEZEI);
+
+  /* Update byte count */
+
+  if (pipe->in == 0)
+    {
+      regval = sam_getreg(priv, SAM_USBHS_HSTPIPISR(epno));
+      pipe->count += (regval & USBHS_HSTPIPISR_PBYCT_MASK) >>
+                      USBHS_HSTPIPISR_PBYCT_SHIFT;
+    }
+
+  /* Disable interrupts */
+
+  // TODO
+
+  sam_transfer_terminate(priv, pipe, code);
+}
+
+/****************************************************************************
  * Name: sam_ctrl_sendsetup
  *
  * Description:
@@ -1270,7 +1385,7 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
  *
  ****************************************************************************/
 
-static int sam_ctrl_senddata(struct sam_usbhost_s *priv,
+static int sam_ctrl_senddata(struct sam_usbhosths_s *priv,
                              struct sam_pipe_s *pipe,
                              uint8_t *buffer, unsigned int buflen)
 {
@@ -1317,7 +1432,7 @@ static int sam_ctrl_senddata(struct sam_usbhost_s *priv,
  *
  ****************************************************************************/
 
-static int sam_ctrl_recvdata(struct sam_usbhost_s *priv,
+static int sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
                              struct sam_pipe_s *pipe,
                              uint8_t *buffer, unsigned int buflen)
 {
@@ -1349,19 +1464,410 @@ static int sam_ctrl_recvdata(struct sam_usbhost_s *priv,
 
   ret = sam_pipe_wait(priv, pipe);
 
-  uinfo("pipe%d buffer:%p buflen:%d ADDR=0x%x PKTSIZE=0x%x\n",
-        pipe->idx, buffer, buflen,
-        pipe->descb[0]->addr,
-        pipe->descb[0]->pktsize);
-
-  uinfo("EXTREG=0x%x STATUSBK=0x%x CTRLPIPE=0x%x STATUSPIPE=0x%x\n",
-        pipe->descb[0]->extreg,
-        pipe->descb[0]->stausbk,
-        pipe->descb[0]->ctrlpipe,
-        pipe->descb[0]->statuspipe);
-  sam_pktdump("sam_ctrl_recvdata", pipe->data, pipe->size);
-
   return ret;
+}
+
+/****************************************************************************
+ * Name: sam_in_transfer
+ *
+ * Description:
+ *   Transfer 'buflen' bytes into 'buffer' from an IN pipe.
+ *
+ * Assumptions:
+ *   This function is called only from the TRANSFER.
+ *   The lock, for example, must be relinquished before waiting.
+ *
+ ****************************************************************************/
+
+static ssize_t sam_in_transfer(struct sam_usbhost_s *priv,
+                               struct sam_pipe_s *pipe,
+                               uint8_t *buffer, size_t buflen)
+{
+  clock_t start;
+  ssize_t xfrd;
+  int ret;
+
+  /* Loop until the transfer completes (i.e., buflen is decremented to zero)
+   * or a fatal error occurs any error other than a simple NAK. NAK would
+   * simply indicate the end of the transfer (short-transfer).
+   */
+
+  pipe->data = buffer;
+  pipe->size = buflen;
+  pipe->count = 0;
+  xfrd = 0;
+
+  start = clock_systime_ticks();
+  while (pipe->count < pipe->size)
+    {
+      /* Set up for the wait BEFORE starting the transfer */
+
+      ret = sam_pipe_waitsetup(priv, pipe);
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_DEVDISCONN5, 0);
+          return (ssize_t)ret;
+        }
+
+      /* Set up for the transfer based on the direction
+       * and the endpoint type
+       */
+
+      ret = sam_in_setup(priv, pipe);
+
+      if (ret < 0)
+        {
+          usbhost_trace1(SAM_TRACE1_INSETUP_FAIL1, -ret);
+          return (ssize_t)ret;
+        }
+
+      /* Wait for the transfer to complete and get the result */
+
+      ret = sam_pipe_wait(priv, pipe);
+
+      /* EAGAIN indicates that the device NAKed the transfer. */
+
+      if (ret < 0)
+        {
+          /* The transfer failed.  If we received a NAK, return all data
+           * buffered so far (if any).
+           */
+
+          if (ret == -EAGAIN)
+            {
+              /* Was data buffered prior to the NAK? */
+
+              if (xfrd > 0)
+                {
+                  return xfrd;
+                }
+              else
+                {
+                  useconds_t delay;
+
+                  /* Get the elapsed time. Has the timeout elapsed?
+                   * If not then try again.
+                   */
+
+                  clock_t elapsed = clock_systime_ticks() - start;
+                  if (elapsed >= SAM_DATANAK_DELAY)
+                    {
+                      /* Timeout out... break out returning the NAK as
+                       * as a failure.
+                       */
+
+                      return (ssize_t)ret;
+                    }
+
+                  /* Wait a bit before retrying after a NAK. */
+
+                  if (pipe->eptype == USB_EP_ATTR_XFER_INT)
+                    {
+                      /* For interrupt (and isochronous) endpoints, the
+                       * polling rate is determined by the bInterval field
+                       * of the endpoint descriptor (in units of frames
+                       * which we treat as milliseconds here).
+                       */
+
+                      if (pipe->interval > 0)
+                        {
+                          /* Convert the delay to units of microseconds */
+
+                          delay = (useconds_t)pipe->interval * 1000;
+                        }
+                      else
+                        {
+                          /* Out of range! For interrupt endpoints, the valid
+                           * range is 1-255 frames.  Assume one frame.
+                           */
+
+                          delay = 1000;
+                        }
+                    }
+                  else
+                    {
+                      /* For Isochronous endpoints, bInterval must be 1. Bulk
+                       * endpoints do not have a polling interval.  Rather,
+                       * the should wait until data is received.
+                       *
+                       * REVISIT:  For bulk endpoints this 1 msec delay is
+                       * only intended to give the CPU a break from the bulk
+                       * EP tight polling loop. But are there performance
+                       * issues?
+                       */
+
+                      delay = 1000;
+                    }
+
+                      /* Wait for the next polling interval. For interrupt and
+                       * isochronous endpoints, this is necessary to assure
+                       * the polling interval.  It is used in other cases only
+                       * to prevent the polling from consuming too much CPU
+                       * bandwidth.
+                       *
+                       * Small delays could require more resolution than is
+                       * provided by the system timer. For example, if the
+                       * system timer resolution is 10MS, then
+                       * nxsig_usleep(1000) will actually request a delay 20MS
+                       * (due to both quantization and rounding).
+                       *
+                       * REVISIT: So which is better?  To ignore tiny delays
+                       * and hog the system bandwidth?  Or to wait for an
+                       * excessive amount and destroy system throughput?
+                       */
+
+                  if (delay > CONFIG_USEC_PER_TICK)
+                    {
+                      nxsig_usleep(delay - CONFIG_USEC_PER_TICK);
+                    }
+                }
+            }
+          else
+            {
+              /* Some unexpected, fatal error occurred. */
+
+              usbhost_trace1(SAM_TRACE1_TRANSFER_FAILED3, -ret);
+
+              /* Break out and return the error */
+
+              return (ssize_t)ret;
+            }
+        }
+      else
+        {
+          /* Successfully received another chunk of data... add that to the
+           * running total.  Then continue reading until we read 'buflen'
+           * bytes of data or until the devices NAKs (implying a short
+           * packet).
+           */
+
+          xfrd += pipe->count;
+        }
+    }
+
+  return xfrd;
+}
+
+/****************************************************************************
+ * Name: sam_in_setup
+ *
+ * Description:
+ *   Initiate an IN transfer on an bulk, interrupt, or isochronous pipe.
+ *
+ ****************************************************************************/
+
+static int sam_in_setup(struct sam_usbhost_s *priv,
+                        struct sam_pipe_s *pipe)
+{
+  uinfo("pipe%d\n", pipe->idx);
+
+  /* Set up for the transfer based on the direction and the endpoint type */
+
+  switch (pipe->eptype)
+    {
+      default:
+      case USB_EP_ATTR_XFER_CONTROL: /* Control */
+        {
+          /* This kind of transfer on control endpoints other than EP0 are
+           * not currently supported
+           */
+
+          return -ENOSYS;
+        }
+
+      case USB_EP_ATTR_XFER_ISOC: /* Isochronous */
+        {
+          /* Set up the IN DATA0 PID */
+
+          usbhost_vtrace2(SAM_VTRACE2_ISOCIN, pipe->idx, pipe->size);
+        }
+        break;
+
+      case USB_EP_ATTR_XFER_BULK: /* Bulk */
+        {
+          usbhost_vtrace2(SAM_VTRACE2_BULKIN, pipe->idx, pipe->size);
+          pipe->pipestate_general = pipe->in ?
+                USB_H_PIPE_S_DATI : USB_H_PIPE_S_DATO;
+        }
+        break;
+
+      case USB_EP_ATTR_XFER_INT: /* Interrupt */
+        {
+          usbhost_vtrace2(SAM_VTRACE2_INTRIN, pipe->idx, pipe->size);
+        }
+        break;
+    }
+
+  /* Start the transfer. */
+
+  sam_recv_start(priv, pipe);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_out_setup
+ *
+ * Description:
+ *   Initiate an OUT transfer on an bulk, interrupt, or isochronous pipe.
+ *
+ ****************************************************************************/
+
+static int sam_out_setup(struct sam_usbhost_s *priv,
+                         struct sam_pipe_s *pipe)
+{
+  /* Set up for the transfer based on the direction and the endpoint type */
+
+  switch (pipe->eptype)
+    {
+      default:
+      case USB_EP_ATTR_XFER_CONTROL: /* Control */
+        {
+          /* This kind of transfer on control endpoints other than EP0 are
+           * not currently supported
+           */
+
+          return -ENOSYS;
+        }
+
+      case USB_EP_ATTR_XFER_ISOC: /* Isochronous */
+        {
+          /* Set up the IN DATA0 PID */
+
+          usbhost_vtrace2(SAM_VTRACE2_ISOCOUT,
+                          pipe->idx, pipe->size);
+        }
+        break;
+
+      case USB_EP_ATTR_XFER_BULK: /* Bulk */
+        {
+          usbhost_vtrace2(SAM_VTRACE2_BULKOUT,
+                          pipe->idx, pipe->size);
+          pipe->pipestate_general = pipe->in ?
+                           USB_H_PIPE_S_DATI : USB_H_PIPE_S_DATO;
+        }
+        break;
+
+      case USB_EP_ATTR_XFER_INT: /* Interrupt */
+        {
+          usbhost_vtrace2(SAM_VTRACE2_INTROUT,
+                          pipe->idx, pipe->size);
+        }
+        break;
+    }
+
+  /* Start the transfer */
+
+  sam_send_start(priv, pipe);
+  return OK;
+}
+
+/****************************************************************************
+ * Name: sam_recv_continue
+ *
+ * Description:
+ *   Continue the receive operation started by sam_recv_start().  This
+ *   function is called from the interrupt handler worker when an interrupt
+ *   indicates that new, incoming data is available.
+ *
+ ****************************************************************************/
+
+static void sam_recv_continue(struct sam_usbhosths_s *priv,
+                              struct sam_pipe_s *pipe)
+{
+  uint8_t *src;
+  uint8_t *dst;
+  uint32_t size;
+  uint32_t count;
+  uint32_t i;
+  uint32_t n_rx = 0;
+  uint32_t n_remain;
+  uint32_t regval;
+  volatile const uint8_t *fifo;
+  uint8_t epno = pipe->idx;
+  bool shortpkt = false;
+  bool full = false;
+
+  if (pipe->pipestate_general == USB_H_PIPE_S_STATI)
+    {
+      /* Control status : ZLP IN done */
+
+      sam_transfer_terminate(priv, pipe, OK);
+      return;
+    }
+  else if (pipe->pipestate_general != USB_H_PIPE_S_DATI)
+    {
+      return;
+    }
+
+  /* Read byte count */
+
+  regval = sam_getreg(priv, SAM_USBHS_HSTPIPISR(epno));
+  n_rx = (regval & USBHS_HSTPIPISR_PBYCT_MASK) >> USBHS_HSTPIPISR_PBYCT_SHIFT;
+  if (n_rx < pipe->maxpacket)
+    {
+      shortpkt = true;
+    }
+
+  /* Retrieve packet from the FIFO */
+
+  if (n_rx)
+    {
+      dst = pipe->data;
+      size = pipe->size;
+      count = pipe->count;
+      n_remain = size - count;
+
+      fifo = (volatile const uint8_t *)
+        SAM_USBHSRAM_BASE  + (EPT_FIFO_SIZE * epno);
+
+      dst = &dst[count];
+      if (n_rx >= n_remain)
+        {
+          n_rx = n_remain;
+          full = true;
+        }
+
+      count += n_rx;
+      for (i = 0; i < n_rx; i++)
+        {
+          *dst++ = *fifo++;
+        }
+
+      MEMORY_SYNC();
+
+      pipe->count = count;
+    }
+
+  /* Reset timeout for control pipes */
+
+  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
+    {
+      pipe->pkt_timeout = USB_CTRL_DPKT_TIMEOUT;
+    }
+
+  /* Clear FIFO status */
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIDR(epno), USBHS_HSTPIPINT_FIFOCONI);
+
+  /* Finish on error or short packet */
+
+  if (full || shortpkt)
+    {
+      if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
+        {
+          // TODO
+        }
+      else
+        {
+          sam_transfer_terminate(priv, pipe, OK);
+        }
+    }
+  else
+    {
+      /* Just wait another packet */
+
+      sam_recv_restart(priv, pipe);
+    }
 }
 
 /****************************************************************************
@@ -1372,7 +1878,7 @@ static int sam_ctrl_recvdata(struct sam_usbhost_s *priv,
  *
  ****************************************************************************/
 
-static void sam_recv_restart(struct sam_usbhost_s *priv,
+static void sam_recv_restart(struct sam_usbhosths_s *priv,
                              struct sam_pipe_s *pipe)
 {
   /* Send the IN token. */
@@ -1403,7 +1909,7 @@ static void sam_recv_restart(struct sam_usbhost_s *priv,
  *
  ****************************************************************************/
 
-static void sam_recv_start(struct sam_usbhost_s *priv,
+static void sam_recv_start(struct sam_usbhosths_s *priv,
                            struct sam_pipe_s *pipe)
 {
   /* Set up the initial state of the transfer */
@@ -1964,7 +2470,7 @@ static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
                        const struct usb_ctrlreq_s *req,
                        const uint8_t *buffer)
 {
-  struct sam_usbhost_s *priv = (struct sam_usbhost_s *)drvr;
+  struct sam_usbhosths_s *priv = (struct sam_usbhosths_s *)drvr;
   struct sam_pipe_s *pipe;
   uint16_t buflen;
   clock_t start;
@@ -2053,6 +2559,81 @@ static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   nxmutex_unlock(&priv->lock);
   return -ETIMEDOUT;
+}
+
+/****************************************************************************
+ * Name: sam_transfer
+ *
+ * Description:
+ *   Process a request to handle a transfer descriptor.  This method will
+ *   enqueue the transfer request, blocking until the transfer completes.
+ *   Only one transfer may be  queued; Neither this method nor the ctrlin
+ *   or ctrlout methods can be called again until this function returns.
+ *
+ *   This is a blocking method; this functions will not return until the
+ *   transfer has completed.
+ *
+ * Input Parameters:
+ *   drvr - The USB host driver instance obtained as a parameter from the
+ *     call to the class create() method.
+ *   ep - The IN or OUT endpoint descriptor for the device endpoint on
+ *     which to perform the transfer.
+ *   buffer - A buffer containing the data to be sent (OUT endpoint) or
+ *    received (IN endpoint). Buffer must have been allocated using
+ *    DRVR_ALLOC.
+ *   buflen - The length of the data to be sent or received.
+ *
+ * Returned Value:
+ *   On success, a non-negative value is returned that indicates the number
+ *   of bytes successfully transferred.  On a failure, a negated errno value
+ *   is returned that indicates the nature of the failure:
+ *
+ *     EAGAIN - If devices NAKs the transfer (or NYET or other error where
+ *              it may be appropriate to restart the entire transaction).
+ *     EPERM  - If the endpoint stalls
+ *     EIO    - On a TX or data toggle error
+ *     EPIPE  - Overrun errors
+ *
+ * Assumptions:
+ *   - Called from a single thread so no mutual exclusion is required.
+ *   - Never called from an interrupt handler.
+ *
+ ****************************************************************************/
+
+static ssize_t sam_transfer(struct usbhost_driver_s *drvr,
+                            usbhost_ep_t ep,
+                            uint8_t *buffer,
+                            size_t buflen)
+{
+  struct sam_usbhost_s *priv = (struct sam_usbhost_s *)drvr;
+  struct sam_pipe_s *pipe;
+  unsigned int idx = (unsigned int)ep;
+  ssize_t nbytes;
+
+  uwarn("pipe%d buffer:%p buflen:%d\n",  idx, buffer, buflen);
+
+  DEBUGASSERT(priv && buffer && idx < SAM_USB_NENDPOINTS && buflen > 0);
+  pipe = &priv->pipelist[idx];
+
+  /* We must have exclusive access to the
+   * USB host hardware and state structures
+   */
+
+  nxmutex_lock(&priv->lock);
+
+  /* Handle IN and OUT transfer slightly differently */
+
+  if (pipe->in)
+    {
+      nbytes = sam_in_transfer(priv, pipe, buffer, buflen);
+    }
+  else
+    {
+      nbytes = sam_out_transfer(priv, pipe, buffer, buflen);
+    }
+
+  nxmutex_unlock(&priv->lock);
+  return nbytes;
 }
 
 /****************************************************************************
