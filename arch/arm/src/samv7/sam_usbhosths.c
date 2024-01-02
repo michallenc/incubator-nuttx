@@ -193,6 +193,8 @@ static inline void sam_add_sof_user(struct sam_usbhosths_s *priv);
 
 static int sam_usbhs_disconnect_device(struct sam_usbhosths_s *priv);
 static int sam_usbhs_connect_device(struct sam_usbhosths_s *priv);
+
+static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx);
 static int sam_usbhs_interrupt_top(int irq, void *context, void *arg);
 static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg);
 
@@ -552,9 +554,159 @@ static int sam_usbhs_disconnect_device(struct sam_usbhosths_s *priv)
 }
 
 /****************************************************************************
+ * Name: sam_pipe_interrupt
+ *
+ * Description:
+ *   Handle the USB pipe interrupt
+ *
+ ****************************************************************************/
+
+static void sam_pipe_interrupt(struct sam_usbhost_s *priv, int idx)
+{
+  struct sam_pipe_s *pipe;
+  uint32_t pipisr;
+  uint32_t pipimr;
+  uint32_t pending;
+  uint32_t regval;
+
+  DEBUGASSERT((unsigned)idx < SAM_USB_NENDPOINTS);
+
+  /* Get the pipe structure */
+
+  pipe = &priv->pipelist[idx];
+
+  /* Get the pipe irq */
+
+  pipisr = sam_getreg(priv, SAM_USBHS_HSTPIPISR(idx));
+  pipimr = sam_getreg(priv, SAM_USBHS_HSTPIPIMR(idx));
+
+  pending = pipisr & pipimr;
+  uinfo("pipe%d PINTFLAG:0x" PRIx32 ", PINTENSET:0x" PRIx32 ","
+        "PENDING:0x" PRIx32 "\n", idx, pipisr, pipimr, pending);
+
+  if (pending & USBHS_HSTPIPINT_PERRI)
+    {
+      /* First clear the flag */
+
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR(idx), USBHS_HSTPIPINT_PERRI);
+
+      /* Get info about error */
+
+      regval = sam_getreg(priv, SAM_USBHS_HSTPIPERR(idx));
+      switch (regval & (USBHS_HSTPIPERR_DATATGL | USBHS_HSTPIPERR_DATAPID |
+                        USBHS_HSTPIPERR_PID | USBHS_HSTPIPERR_TIMEOUT))
+        {
+          case USBHS_HSTPIPERR_DATATGL:
+            pipe->pipestatus_general = USB_H_ERR;
+          break;
+
+          case USBHS_HSTPIPERR_TIMEOUT:
+            pipe->pipestatus_general = USB_H_TIMEOUT;
+            pipe->result = -ETIMEDOUT;
+          break;
+
+          case USBHS_HSTPIPERR_PID:
+          case USBHS_HSTPIPERR_DATAPID:
+          default:
+            pipe->pipestatus_general = USB_H_ERR;
+          break;
+        }
+
+      sam_transfer_abort(priv, pipe, USB_H_ERR);
+      return;
+    }
+
+  if (pending & USBHS_HSTPIPINT_RXINI)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR(idx), USBHS_HSTPIPINT_RXINI);
+
+      /* New data available. Check whether pipe is really in pipe */
+
+      if ((sam_getreg(priv, SAM_USBHS_HSTPIPCFG(idx)) &
+          USBHS_HSTPIPCFG_PTOKEN_MASK) == USBHS_HSTPIPCFG_PTOKEN_IN)
+        {
+          if (idx > 0)
+            {
+              sam_recv_continue(priv, pipe);
+            }
+
+          pipe->result = 0;
+          sam_pipe_wakeup(priv, pipe);
+        }
+
+      return;
+    }
+
+  if (pending & UBSHS_HSPIPINT_TXOUTI)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR(idx), UBSHS_HSPIPINT_TXOUTI);
+
+      if ((sam_getreg(priv, SAM_USBHS_HSTPIPCFG(idx)) &
+          USBHS_HSTPIPCFG_PTOKEN_MASK) == USBHS_HSTPIPCFG_PTOKEN_OUT)
+        {
+          if (idx > 0)
+            {
+              sam_send_continue(priv, pipe);
+            }
+
+          pipe->result = 0;
+          sam_pipe_wakeup(priv, pipe);
+        }
+    }
+
+  if (pending & UBSHS_HSPIPINT_TXSTPI)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR(idx), UBSHS_HSPIPINT_TXSTPI);
+
+      if (priv->ctrl_buffer[0] & 0x80) /* 1 = Device to Host */
+        {
+          /* IN */
+
+          uwarn("pipe%d IN TXSTP\n", idx);
+          pipe->pipestate = USB_H_PIPE_S_DATI; /* Pipe in data IN stage */
+
+          /* Start IN requests */
+
+          pipe->result = 0;
+          sam_pipe_wakeup(priv, pipe);
+        }
+      else
+        {
+          /* OUT */
+
+          uwarn("pipe%d OUT TXSTP\n", idx);
+          if (priv->ctrl_buffer[6] || priv->ctrl_buffer[7]) /* setup packet wLength[2] */
+            {
+              pipe->pipestate = USB_H_PIPE_S_DATO; /* Pipe in data OUT stage */
+
+              /* Start OUT */
+
+              pipe->result = 0;
+              sam_pipe_wakeup(priv, pipe);
+            }
+          else
+            {
+              /* No DATA phase */
+
+              uwarn("pipe%d OUT TXSTP ZLP\n", idx);
+              pipe->pipestate = USB_H_PIPE_S_STATI; /* Pipe in control status IN stage */
+
+              /* Start IN ZLP request */
+
+              pipe->result = 0;
+              sam_pipe_wakeup(priv, pipe);
+            }
+        }
+
+      return;
+    }
+}
+
+/****************************************************************************
  * Name: sam_usbhs_interrupt_bottom
  *
  * Description:
+ *  TODO
  ****************************************************************************/
 
 static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
@@ -584,10 +736,12 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
 
   if (pending & USBHS_HSTINT_HSOFI != 0)
     {
-      /* TODO */
+      /* Acknowledge interrupt */
+
+      sam_putreg(priv, SAM_USBHS_HSTICR_OFFSET, USBHS_HSTINT_HSOFI);
     }
 
-  if (pending & USBHS_HSTINT_RSTI)
+  if (pending & USBHS_HSTINT_RSTI != 0)
     {
       /* Clear reset interrupt */
 
@@ -601,6 +755,23 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
         }
     }
 
+   if (pending & USBHS_HSTINT_PEP_MASK != 0)
+      {
+        /* Process each pending pipe interrupt */
+
+        for (i = 0; i < SAM_USBHS_NENDPOINTS; i++)
+          {
+            /* Is there an interrupt pending for pipe i? */
+
+            if ((pending & USBHS_HSTINT_PEP(i)) != 0)
+              {
+                /* Yes.. process the pipe i interrupt */
+
+                sam_pipe_interrupt(priv, i);
+              }
+          }
+      }
+
   if (pending)
     {
       /* TODO: we went throught interrupts but still some are pending */
@@ -613,6 +784,7 @@ static int sam_usbhs_interrupt_bottom(int irq, void *context, void *arg)
  * Name: sam_usbhs_interrupt_top
  *
  * Description:
+ *  TODO
  ****************************************************************************/
 
 static int sam_usbhs_interrupt_top(int irq, void *context, void *arg)
@@ -1336,7 +1508,6 @@ static void sam_send_continue(struct sam_usbhost_s *priv,
       /* Start IN ZLP request */
 
       pipe->pkt_timeout = USB_CTRL_STAT_TIMEOUT;
-      // TODO sam_putreg8(USBHOST_PSTATUS_DTGL, SAM_USBHOST_PSTATUSSET(pipe->idx));
       sam_recv_restart(priv, pipe);
       return;
     }
@@ -1606,6 +1777,11 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
       sam_putreg(priv, SAM_USBHS_HSTPIPCFG(epno), regval);
 
       sam_putreg(priv, SAM_USBHS_HSTPIPICR(epno), USBHS_HSTPIPINT_TXSTPI);
+
+      for (i = 0; i < USB_SIZEOF_CTRLREQ; i++)
+        {
+          priv->ctrl_buffer[i] = pipe->data[i];
+        }
 
       /* Write packet in the FIFO buffer */
 
