@@ -607,6 +607,7 @@
 
 #define USBHS_HSTPIPCFG_PSIZE_SHIFT        (4)               /* Bits 4-6: Pipe Size */
 #define USBHS_HSTPIPCFG_PSIZE_MASK         (7 << USBHS_HSTPIPCFG_PSIZE_SHIFT)
+#  define USBHS_HSTPIPCFG_PSIZE(n)         (((uint8_t)(n) << USBHS_HSTPIPCFG_PSIZE_SHIFT) & USBHS_HSTPIPCFG_PSIZE_MASK)
 #  define USBHS_HSTPIPCFG_PSIZE_8          (0 << USBHS_HSTPIPCFG_PSIZE_SHIFT) /* 8 bytes */
 #  define USBHS_HSTPIPCFG_PSIZE_16         (1 << USBHS_HSTPIPCFG_PSIZE_SHIFT) /* 16 bytes */
 #  define USBHS_HSTPIPCFG_PSIZE_32         (2 << USBHS_HSTPIPCFG_PSIZE_SHIFT) /* 32 bytes */
@@ -624,6 +625,7 @@
 #define USBHS_HSTPIPCFG_AUTOSW             (1 << 10)         /* Bit 10: Automatic Switch */
 #define USBHS_HSTPIPCFG_PTYPE_SHIFT        (12)              /* Bits 12-13: Pipe Type */
 #define USBHS_HSTPIPCFG_PTYPE_MASK         (3 << USBHS_HSTPIPCFG_PTYPE_SHIFT)
+#  define USBHS_HSTPIPCFG_PTYPE(n)         (((uint8_t)(n) << USBHS_HSTPIPCFG_PTYPE_SHIFT) & USBHS_HSTPIPCFG_PTYPE_MASK)
 #  define USBHS_HSTPIPCFG_PTYPE_CTRL       (0 << USBHS_HSTPIPCFG_PTYPE_SHIFT) /* Control pipe */
 #  define USBHS_HSTPIPCFG_PTYPE_ISO        (1 << USBHS_HSTPIPCFG_PTYPE_SHIFT) /* Isochronous pipe */
 #  define USBHS_HSTPIPCFG_PTYPE_BLK        (2 << USBHS_HSTPIPCFG_PTYPE_SHIFT) /* Bulk pipe */

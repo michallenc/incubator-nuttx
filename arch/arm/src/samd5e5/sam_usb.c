@@ -6738,7 +6738,7 @@ static int sam_wait(struct usbhost_connection_s *conn,
                     struct usbhost_hubport_s **hport)
 {
   struct sam_usbhost_s *priv = &g_usbhost;
-  struct usbhost_hubport_s *connport;
+  struct usbhost_hubport_s *connport = &priv->rhport.hport;
   irqstate_t flags;
 
   /* Loop until a change in connection state is detected */
@@ -6752,8 +6752,6 @@ static int sam_wait(struct usbhost_connection_s *conn,
 
       if (priv->change)
         {
-          connport = &priv->rhport.hport;
-
           /* Yes. Remember the new state */
 
           connport->connected = priv->connected;

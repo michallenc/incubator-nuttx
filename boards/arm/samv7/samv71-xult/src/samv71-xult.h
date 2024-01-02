@@ -43,8 +43,9 @@
 
 #define HAVE_HSMCI           1
 #define HAVE_AUTOMOUNTER     1
-#define HAVE_USB             1
-#define HAVE_USBDEV          1
+#define HAVE_USB             0
+#define HAVE_USBHOST         1
+#define HAVE_USBDEV          0
 #define HAVE_USBMONITOR      1
 #define HAVE_NETWORK         1
 #define HAVE_MACADDR         1
@@ -693,6 +694,21 @@ int sam_can_setup(void);
 
 #ifdef HAVE_USB
 void sam_usbinitialize(void);
+#endif
+
+/****************************************************************************
+ * Name: sam_usbhost_initialize
+ *
+ * Description:
+ *   Called at application startup time to initialize the USB host
+ *   functionality.
+ *   This function will start a thread that will monitor for device
+ *   connection/disconnection events.
+ *
+ ****************************************************************************/
+
+#ifdef HAVE_USBHOST
+int sam_usbhost_initialize(void);
 #endif
 
 /****************************************************************************
