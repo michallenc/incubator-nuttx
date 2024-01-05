@@ -173,7 +173,7 @@
 #define SAM_USBHS_HSTDMANXTDSC(n)          (SAM_USBHS_BASE+SAM_USBHS_HSTDMANXTDSC_OFFSET(n))
 #define SAM_USBHS_HSTDMAADDR(n)            (SAM_USBHS_BASE+SAM_USBHS_HSTDMAADDR_OFFSET(n))
 #define SAM_USBHS_HSTDMACTRL(n)            (SAM_USBHS_BASE+SAM_USBHS_HSTDMACTRL_OFFSET(n))
-#define SAM_USBHS_HSTDMASTA(n)             (SAM_USBHS_BASE+SAM_USBHS_HSTDMASTA_OFFSET(n)
+#define SAM_USBHS_HSTDMASTA(n)             (SAM_USBHS_BASE+SAM_USBHS_HSTDMASTA_OFFSET(n))
 
 /* USBHS General Register Addresses */
 
@@ -480,9 +480,9 @@
 #define USBHS_HSTINT_RXRSMI                (1 << 4)          /* Bit 4:  Upstream Resume Received Interrupt */
 #define USBHS_HSTINT_HSOFI                 (1 << 5)          /* Bit 5:  Host Start of Frame Interrupt */
 #define USBHS_HSTINT_HWUPI                 (1 << 6)          /* Bit 6:  Host Wake-Up Interrupt */
-#define USBHS_HSTINT_PEP_SHIFT             (12)              /* Bits 12-23: Pipe interrupts (1) */
+#define USBHS_HSTINT_PEP_SHIFT             (8)              /* Bits 12-23: Pipe interrupts (1) */
 #define USBHS_HSTINT_PEP_MASK              (0xfff << USBHS_HSTINT_PEP_SHIFT)
-#  define USBHS_HSTINT_PEP(n)              (1 << +((n)+12))  /* Pipe n Interrupt, n=0-11 (1) */
+#  define USBHS_HSTINT_PEP(n)              (1 << +((n)+8))  /* Pipe n Interrupt, n=0-11 (1) */
 #  define USBHS_HSTINT_PEP0                (1 << 12)         /* Bit 12: Pipe 0 Interrupt (1) */
 #  define USBHS_HSTINT_PEP1                (1 << 13)         /* Bit 13: Pipe 1 Interrupt (1) */
 #  define USBHS_HSTINT_PEP2                (1 << 14)         /* Bit 14: Pipe 2 Interrupt (1) */
@@ -549,7 +549,7 @@
 
 #define USBHS_HSTADDR1_HSTADDRP0_SHIFT     (0)               /* Bits 0-6: USB Host Address */
 #define USBHS_HSTADDR1_HSTADDRP0_MASK      (0x7f << USBHS_HSTADDR1_HSTADDRP0_SHIFT)
-#  define USBHS_HSTADDR1_HSTADDRP0(n)      (0x7f << USBHS_HSTADDR1_HSTADDRP0_SHIFT)
+#  define USBHS_HSTADDR1_HSTADDRP0(n)      ((uint32_t)(n) << USBHS_HSTADDR1_HSTADDRP0_SHIFT)
 #define USBHS_HSTADDR1_HSTADDRP1_SHIFT     (8)               /* Bits 8-14: USB Host Address */
 #define USBHS_HSTADDR1_HSTADDRP1_MASK      (0x7f << USBHS_HSTADDR1_HSTADDRP1_SHIFT)
 #  define USBHS_HSTADDR1_HSTADDRP1(n)      ((uint32_t)(n) << USBHS_HSTADDR1_HSTADDRP1_SHIFT)
@@ -598,7 +598,7 @@
  * (2) For High-Speed Bulk Out
  */
 
-#define USBHS_HSTPIPCFG_ALLOC              (1 << 0)          /* Bit 0: Pipe Memory Allocate */
+#define USBHS_HSTPIPCFG_ALLOC              (1 << 1)          /* Bit 1: Pipe Memory Allocate */
 #define USBHS_HSTPIPCFG_PBK_SHIFT          (2)               /* Bits 2-3: Pipe Banks */
 #define USBHS_HSTPIPCFG_PBK_MASK           (3 << USBHS_HSTPIPCFG_PBK_SHIFT)
 #  define USBHS_HSTPIPCFG_PBK_1BANK        (0 << USBHS_HSTPIPCFG_PBK_SHIFT) /* Single-bank pipe */

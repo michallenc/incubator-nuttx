@@ -94,7 +94,7 @@ void board_autoled_initialize(void)
   /* Configure LED GPIOs for output */
 
   sam_configgpio(GPIO_LED0);
-  sam_configgpio(GPIO_LED1);
+  //sam_configgpio(GPIO_LED1);
 }
 
 /****************************************************************************
@@ -119,7 +119,7 @@ void board_autoled_on(int led)
 
       case 3:  /* LED_PANIC */
 
-        sam_gpiowrite(GPIO_LED1, false); /* Low illuminates */
+        //sam_gpiowrite(GPIO_LED1, false); /* Low illuminates */
         break;
     }
 }
@@ -132,7 +132,7 @@ void board_autoled_off(int led)
 {
   if (led == 3)
     {
-      sam_gpiowrite(GPIO_LED1, true);  /* High extinguishes */
+      //sam_gpiowrite(GPIO_LED1, true);  /* High extinguishes */
     }
 }
 

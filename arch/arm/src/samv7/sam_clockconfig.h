@@ -81,11 +81,11 @@ void sam_clockconfig(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SAMV7_USBDEVHS) && !defined(CONFIG_SAMV7_USBDEVHS_LOWPOWER)
+//#if defined(CONFIG_SAMV7_USBDEVHS) && !defined(CONFIG_SAMV7_USBDEVHS_LOWPOWER)
 void sam_usbclock(void);
-#else
-#  define sam_usbclock()
-#endif
+//#else
+//#  define sam_usbclock()
+//#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

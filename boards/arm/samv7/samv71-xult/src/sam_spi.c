@@ -73,7 +73,7 @@ void sam_spidev_initialize(void)
 #ifdef CONFIG_SAMV71XULT_MB2_SPI
   /* Enable chip select for mikroBUS2 */
 
-  sam_configgpio(CLICK_MB2_CS);
+  //sam_configgpio(CLICK_MB2_CS);
 
 #endif
 
@@ -173,7 +173,7 @@ void sam_spi0select(uint32_t devid, bool selected)
 #if defined(CONFIG_SAMV71XULT_MB1_BEE)
         sam_gpiowrite(CLICK_MB1_CS, !selected);
 #elif defined(CONFIG_SAMV71XULT_MB2_BEE)
-        sam_gpiowrite(CLICK_MB2_CS, !selected);
+        //sam_gpiowrite(CLICK_MB2_CS, !selected);
 #endif
         break;
 #endif

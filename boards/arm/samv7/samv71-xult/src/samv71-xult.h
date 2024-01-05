@@ -136,6 +136,10 @@
 #  undef CONFIG_USBDEV_TRACE
 #endif
 
+#if !defined(CONFIG_USBHOST)
+#  undef HAVE_USBHOST
+#endif
+
 #ifndef HAVE_USBHOST
 #  undef CONFIG_USBHOST_TRACE
 #endif
