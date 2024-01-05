@@ -215,7 +215,7 @@ static inline void sam_pmcsetup(void)
   putreg32(BOARD_CKGR_PLLAR, SAM_PMC_CKGR_PLLAR);
   sam_pmcwait(PMC_INT_LOCKA);
 
-#ifdef CONFIG_SAMV7_USBDEVHS
+#if defined(CONFIG_SAMV7_USBDEVHS) || defined (CONFIG_SAMV7_USBHOSTHS)
   /* UTMI configuration:
    * Enable port0, select 12/16 MHz MAINOSC crystal source
    */
@@ -228,7 +228,7 @@ static inline void sam_pmcsetup(void)
 #  error ERROR: Unrecognized MAINSOSC frequency
 #endif
 
-#ifdef CONFIG_SAMV7_USBDEVHS_LOWPOWER
+#if defined(CONFIG_SAMV7_USBDEVHS_LOWPOWER) || defined(CONFIG_SAMV7_USBHOSTHS_LOWPOWER)
   /* Enable UTMI Clocking. The USBHS can work in two modes:
    *
    * - Normal mode where High speed, Full speed and Low speed are available.
@@ -395,7 +395,7 @@ void sam_clockconfig(void)
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SAMV7_USBDEVHS) && !defined(CONFIG_SAMV7_USBDEVHS_LOWPOWER)
+//#if defined(CONFIG_SAMV7_USBDEVHS) && !defined(CONFIG_SAMV7_USBDEVHS_LOWPOWER)
 void sam_usbclock(void)
 {
   uint32_t regval;
@@ -433,4 +433,4 @@ void sam_usbclock(void)
   sam_pmcwait(PMC_INT_LOCKU);
 }
 
-#endif /* CONFIG_SAMV7_USBDEVHS && !CONFIG_SAMV7_USBDEVHS_LOWPOWER */
+//#endif /* CONFIG_SAMV7_USBDEVHS && !CONFIG_SAMV7_USBDEVHS_LOWPOWER */

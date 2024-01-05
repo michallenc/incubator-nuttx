@@ -39,6 +39,7 @@
 #include <nuttx/usb/usbdev_trace.h>
 
 #include "arm_internal.h"
+#include "sam_gpio.h"
 #include "sam_usbhosths.h"
 #include "hardware/sam_usbhs.h"
 #include "samv71-xult.h"
@@ -110,6 +111,46 @@ static int usbhost_waiter(int argc, char *argv[])
  ****************************************************************************/
 
 /****************************************************************************
+ * Name: sam_usbhost_vbusdrive
+ *
+ * Description:
+ *   Enable/disable driving of VBUS 5V output.
+ *   This function must be provided by each platform that implements the
+ *   OHCI or EHCI host interface
+ *
+ * Input Parameters:
+ *   rhport - Selects root hub port to be powered host interface.
+ *            See SAM_RHPORT_* definitions above.
+ *   enable - true: enable VBUS power; false: disable VBUS power
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void sam_usbhost_vbusdrive(int rhport, bool enable)
+{
+  uinfo("RHPort%d: enable=%d\n", rhport + 1, enable);
+
+  /* Then enable or disable VBUS power (active low for SAMV71-XULT) */
+
+  if (enable)
+    {
+      /* Enable the Power Switch by driving the enable pin low */
+
+      sam_gpiowrite(GPIO_VBUSON, false);
+      sam_gpiowrite(GPIO_LED1, true);
+    }
+  else
+    {
+      /* Disable the Power Switch by driving the enable pin high */
+
+      sam_gpiowrite(GPIO_VBUSON, true);
+      sam_gpiowrite(GPIO_LED1, false);
+    }
+}
+
+/****************************************************************************
  * Name: sam_usbhost_initialize
  *
  * Description:
@@ -153,6 +194,9 @@ int sam_usbhost_initialize(void)
       uerr("ERROR: Failed to create ehci_waiter task: %d\n", ret);
       return -ENODEV;
     }
+
+  sam_configgpio(GPIO_VBUSON);
+  sam_configgpio(GPIO_LED1);
 
   return OK;
 }
