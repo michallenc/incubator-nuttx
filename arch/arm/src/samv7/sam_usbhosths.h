@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/samd5e5/sam_usbhost.h
+ * arch/arm/src/samv7/sam_usbhosths.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
