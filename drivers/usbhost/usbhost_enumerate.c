@@ -359,6 +359,8 @@ int usbhost_enumerate(FAR struct usbhost_hubport_s *hport,
   usbhost_putle16(ctrlreq->index, 0);
   usbhost_putle16(ctrlreq->len, descsize);
 
+  uinfo("descsize %d\n", descsize);
+
   ret = DRVR_CTRLIN(hport->drvr, hport->ep0, ctrlreq, buffer);
   if (ret < 0)
     {

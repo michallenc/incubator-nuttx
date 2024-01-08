@@ -775,13 +775,16 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
   if (pending & USBHS_HSTPIPINT_TXOUTI)
     {
       uinfo("txouti\n");
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(idx),
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
                  USBHS_HSTPIPINT_TXOUTI);
 
       if ((sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(idx)) &
           USBHS_HSTPIPCFG_PTOKEN_MASK) == USBHS_HSTPIPCFG_PTOKEN_OUT)
         {
-          sam_send_continue(priv, pipe);
+          if (idx > 0)
+            {
+              sam_send_continue(priv, pipe);
+            }
 
           pipe->result = 0;
           sam_pipe_wakeup(priv, pipe);
@@ -791,8 +794,9 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
   if (pending & USBHS_HSTPIPINT_TXSTPI)
     {
       uinfo("txstpi\n");
-      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx), USBHS_HSTPIPINT_PFREEZEI);
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(idx),
+      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
+                 USBHS_HSTPIPINT_PFREEZEI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
                  USBHS_HSTPIPINT_TXSTPI);
 
       if (priv->ctrl_buffer[0] & 0x80) /* 1 = Device to Host */
@@ -1043,8 +1047,8 @@ static void sam_pipe_configure(struct sam_usbhosths_s *priv, int idx)
 
   /* Special case maxpacket handling for high-speed endpoints */
 
-  uinfo("Pipe %d: type %d, nbanks %d, maxpacket = %d\n", idx, pipe->eptype,
-        pipe->nbanks, pipe->maxpacket);
+  uinfo("Pipe %d: type %d, nbanks %d, maxpacket = %d, addr = %d, in = %d\n", idx, pipe->eptype,
+        pipe->nbanks, pipe->maxpacket, pipe->funcaddr, pipe->in);
 
   /* Disable pipe and its interrupts */
 
@@ -1571,24 +1575,31 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
   n_tx = (regval & USBHS_HSTPIPCFG_PSIZE_MASK) >>
           USBHS_HSTPIPCFG_PSIZE_SHIFT;
 
+  n_tx = psize_2_size[n_tx];
+
   /* ZLP cleared if it's short packet */
+
+  uinfo("pipe->maxpacket = %d\n", pipe->maxpacket);
 
   if (n_tx < pipe->maxpacket)
     {
       pipe->zlp = 0;
     }
 
-  src = pipe->data;
   size = pipe->size;
   count = pipe->count;
 
-  if (n_tx)
+  uinfo("n_tx = %d, pipe->count = %d pipe->size = %d", n_tx, pipe->count, pipe->size);
+
+  /*if (n_tx)
     {
       count += n_tx;
       pipe->count = count;
-    }
+    }*/
 
   n_remain = size - count;
+
+  uinfo("n_remain = %d\n", n_remain);
 
   /* Now set n_tx to next transfer size */
 
@@ -1611,7 +1622,9 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
 
   /* All transfer done, including ZLP */
 
-  if (count >= size && !pipe->zlp)
+  uinfo("n_tx = %d\n", n_tx);
+
+  if ((n_tx <= 0) && !pipe->zlp)
     {
       /* At least one bank there, wait to freeze pipe */
 
@@ -1619,33 +1632,56 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
         {
           /* Busy interrupt when all banks are empty */
 
+          uinfo("all done, terminate\n");
           sam_transfer_terminate(priv, pipe, OK);
         }
     }
   else
     {
+      src = &pipe->data[count];
+
       regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
       regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
       regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
       sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
 
-      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
+      //sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
+      //           USBHS_HSTPIPINT_TXOUTI);
 
       /* Write packet in the FIFO buffer */
 
-      fifo = (uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+      uinfo("pipe->size = %d, epno = %d, count = %d\n", pipe->size, epno, count);
 
-      for (; pipe->size; pipe->size--)
+      fifo = (uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + (16 * epno));
+
+      printf("fifo addr = %x\n", fifo);
+
+      for (int i = 0; i < pipe->size; i++)
         {
-          *fifo++ = src[count]++;
+          printf("%x ", src[i]);
+        }
+      printf("\n");
+
+      uinfo("pointer size = %d\n", sizeof(*fifo));
+      int len = 0;
+      for ( ; pipe->size; pipe->size--)
+        {
+          *fifo++ = *src++;
+          len++;
         }
 
       MEMORY_SYNC();
 
-      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
+      uinfo("pipe->size = %d\n", pipe->size);
+
+      fifo = (uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + (16 * epno));
+
+      uinfo("status = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(epno)));
+
+      //sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+      //           USBHS_HSTPIPINT_TXOUTI);
       sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
                  USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
     }
@@ -1676,29 +1712,12 @@ static void sam_send_start(struct sam_usbhosths_s *priv,
 
   if (pipe->size > 0)
     {
-      regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
-      regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
-      sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
-
-      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
-
-      /* Write packet in the FIFO buffer */
-
-      /*fifo = (uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
-
-      for (; pipe->size; pipe->size--)
-        {
-          *fifo++ = *pipe->data++;
-        }
-
-      MEMORY_SYNC();*/
+      /* Just enable interrupt and wait until FIFO is clear */
 
       sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
                  USBHS_HSTPIPINT_TXOUTI);
       sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
-                 USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
+                 USBHS_HSTPIPINT_NBUSYBKI | USBHS_HSTPIPINT_PFREEZEI);
     }
   else
     {
@@ -2405,11 +2424,7 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
 
   if (full || shortpkt)
     {
-      if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
-        {
-          // TODO
-        }
-      else
+      if (pipe->eptype != USB_EP_ATTR_XFER_CONTROL)
         {
           uinfo("finish\n");
           sam_transfer_terminate(priv, pipe, OK);
