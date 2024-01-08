@@ -175,6 +175,16 @@ int sam_usbhost_initialize(void)
     }
 #endif
 
+#ifdef CONFIG_USBHOST_HIDKBD
+  /* Register the USB host HID keyboard class driver */
+
+  ret = usbhost_kbdinit();
+  if (ret != OK)
+    {
+      uerr("ERROR: Failed to register the KBD class\n");
+    }
+#endif
+
   /* Get an instance of the USB HS interface */
 
   g_hostconn = sam_usbhosths_initialize(0);
