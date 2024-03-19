@@ -537,6 +537,16 @@ int sam_bringup(void)
     }
 #endif
 
+#if defined(CONFIG_DEV_GPIO)
+  /* Initialize GPIO driver */
+
+  ret = sam_gpio_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sam_gpio_initialize() failed: %d\n", ret);
+    }
+#endif
+
 #ifdef HAVE_AUDIO_NULL
   /* Configure the NULL audio device */
 

@@ -20,7 +20,7 @@
 
 include $(TOPDIR)/Make.defs
 
-CSRCS = sam_boot.c
+CSRCS = sam_boot.c sam_gpio.c
 
 ifeq ($(CONFIG_SAMV7_SDRAMC),y)
 CSRCS += sam_sdram.c

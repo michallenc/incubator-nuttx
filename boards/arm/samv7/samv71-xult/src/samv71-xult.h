@@ -606,6 +606,23 @@
 #define SPI0_NPCS1        (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | \
                            GPIO_PORT_PIOD | GPIO_PIN25)
 
+/* GPIO pins ****************************************************************/
+
+#define BOARD_NGPIOIN 1
+#define BOARD_NGPIOOUT 1
+#define BOARD_NGPIOINT 0
+
+/* inputs */
+
+#define GPIO_LUA_IN  (GPIO_INPUT | GPIO_CFG_DEFAULT | GPIO_PORT_PIOB | \
+                           GPIO_PIN1)       /* PA_3 */
+
+/* outputs */
+
+#define GPIO_LUA_OUT    (GPIO_OUTPUT | GPIO_CFG_DEFAULT | \
+                           GPIO_OUTPUT_CLEAR | GPIO_PORT_PIOB | \
+                           GPIO_PIN0)      /* PD_11 */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -679,6 +696,8 @@ void sam_spidev_initialize(void);
 #ifdef CONFIG_SAMV7_MCAN
 int sam_can_setup(void);
 #endif
+
+int sam_gpio_initialize(void);
 
 /****************************************************************************
  * Name:  sam_usbinitialize
