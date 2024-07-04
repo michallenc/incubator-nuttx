@@ -266,6 +266,12 @@ config ARCH_CHIP_MAX326XX
 	---help---
 		Maxim Integrated MAX326XX microcontrollers (ARM Cortex-M4F).
 
+config ARCH_CHIP_MCX
+	bool "NXP MCX"
+	select ARCH_CORTEXM33
+	---help---
+		Nordic nRF53 architectures (ARM dual Cortex-M33).
+
 config ARCH_CHIP_MOXART
 	bool "MoxART"
 	select ARCH_ARM7TDMI
@@ -1078,6 +1084,7 @@ config ARCH_CHIP
 	default "lpc43xx"	if ARCH_CHIP_LPC43XX
 	default "lpc54xx"	if ARCH_CHIP_LPC54XX
 	default "max326xx"	if ARCH_CHIP_MAX326XX
+	default "mcx"			if ARCH_CHIP_MCX
 	default "moxart"	if ARCH_CHIP_MOXART
 	default "nrf52"		if ARCH_CHIP_NRF52
 	default "nrf53"		if ARCH_CHIP_NRF53
@@ -1502,6 +1509,9 @@ source "arch/arm/src/s32k3xx/Kconfig"
 endif
 if ARCH_CHIP_MAX326XX
 source "arch/arm/src/max326xx/Kconfig"
+endif
+if ARCH_CHIP_MCX
+source "arch/arm/src/mcx/Kconfig"
 endif
 if ARCH_CHIP_MOXART
 source "arch/arm/src/moxart/Kconfig"

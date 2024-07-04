@@ -1,0 +1,191 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+if ARCH_CHIP_MCX
+
+comment "MCX Configuration Options"
+
+choice
+  prompt "MCX Chip Selection"
+  default ARCH_CHIP_MCXA142
+  depends on ARCH_CHIP_MCX
+
+config ARCH_CHIP_MCXA132
+  bool "MCXA132"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_64
+  select MCX_MEM_RAM_16
+
+config ARCH_CHIP_MCXA133
+  bool "MCXA133"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_128
+  select MCX_MEM_RAM_32
+
+config ARCH_CHIP_MCXA142
+  bool "MCXA142"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_64
+  select MCX_MEM_RAM_16
+
+config ARCH_CHIP_MCXA143
+  bool "MCXA143"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_128
+  select MCX_MEM_RAM_32
+
+config ARCH_CHIP_MCXA144
+  bool "MCXA144"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_256
+  select MCX_MEM_RAM_64
+
+config ARCH_CHIP_MCXA145
+  bool "MCXA145"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_512
+  select MCX_MEM_RAM_96
+
+config ARCH_CHIP_MCXA146
+  bool "MCXA146"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_1024
+  select MCX_MEM_RAM_128
+
+config ARCH_CHIP_MCXA152
+  bool "MCXA152"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_64
+  select MCX_MEM_RAM_16
+
+config ARCH_CHIP_MCXA153
+  bool "MCXA153"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_128
+  select MCX_MEM_RAM_32
+
+config ARCH_CHIP_MCXA154
+  bool "MCXA154"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_256
+  select MCX_MEM_RAM_64
+
+config ARCH_CHIP_MCXA155
+  bool "MCXA155"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_512
+  select MCX_MEM_RAM_96
+
+config ARCH_CHIP_MCXA156
+  bool "MCXA156"
+  select ARCH_FAMILY_MCXAXXX
+  select MCX_MEM_FLASH_1024
+  select MCX_MEM_RAM_128
+
+endchoice # MCX Chip Selection
+
+# MCX Families
+
+config ARCH_FAMILY_MCXAXXX
+  bool
+  default n
+  select ARCH_HAVE_FPU
+	select ARMV7M_HAVE_ICACHE
+	select ARMV7M_HAVE_DCACHE
+	select ARMV7M_HAVE_ITCM
+	select ARMV7M_HAVE_DTCM
+
+# Chip Capabilities
+
+config MCX_MEM_FLASH_64
+	bool
+	default n
+
+config MCX_MEM_FLASH_128
+	bool
+	default n
+
+config MCX_MEM_FLASH_256
+	bool
+	default n
+
+config MCX_MEM_FLASH_512
+	bool
+	default n
+
+config MCX_MEM_FLASH_1024
+	bool
+	default n
+
+config ARCH_CHIP_MCX_MEM_FLASH
+	hex
+	default 0x10000  if MCX_MEM_FLASH_64
+	default 0x20000  if MCX_MEM_FLASH_128
+	default 0x40000  if MCX_MEM_FLASH_256
+	default 0x80000  if MCX_MEM_FLASH_512
+	default 0x100000 if MCX_MEM_FLASH_1024
+
+config MCX_MEM_RAM_16
+	bool
+	default n
+
+config MCX_MEM_RAM_32
+	bool
+	default n
+
+config MCX_MEM_RAM_64
+	bool
+	default n
+
+config MCX_MEM_RAM_96
+	bool
+	default n
+
+config MCX_MEM_RAM_128
+	bool
+	default n
+
+config ARCH_CHIP_MCX_MEM_RAM
+	hex
+	default 0x4000 if MCX_MEM_RAM_16
+	default 0x8000 if MCX_MEM_RAM_32
+	default 0x10000 if MCX_MEM_RAM_64
+	default 0x18000 if MCX_MEM_RAM_96
+	default 0x20000 if MCX_MEM_RAM_128
+
+# Peripheral support
+
+config MCX_LPUART
+  bool
+  default n
+
+menu "MCX Peripheral Selection"
+
+menu "LPUART Peripherals"
+
+config MCX_LPUART0
+  bool "LPUART0"
+  default n
+  select MCX_LPUART
+  select UART0_SERIALDRIVER
+  select ARCH_HAVE_SERIAL_TERMIOS
+
+config MCX_LPUART1
+  bool "LPUART1"
+  default n
+  select MCX_LPUART
+  select UART1_SERIALDRIVER
+  select ARCH_HAVE_SERIAL_TERMIOS
+
+config MCX_LPUART2
+  bool "LPUART2"
+  default n
+  select MCX_LPUART
+  select UART2_SERIALDRIVER
+  select ARCH_HAVE_SERIAL_TERMIOS
+
+endmenu # MCX Peripheral Selection
+
+endif # ARCH_CHIP_MCX
