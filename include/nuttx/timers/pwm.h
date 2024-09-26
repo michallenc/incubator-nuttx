@@ -138,61 +138,57 @@
 #define PWM_DCPOL_LOW            1   /* Logical zero */
 #define PWM_DCPOL_HIGH           2   /* Logical one  */
 
+/* PWM number of configured channels ****************************************/
+
+#ifdef CONFIG_PWM_MULTICHAN
+#define PWM_NCHANNELS CONFIG_PWM_NCHANNELS
+#else
+#define PWM_NCHANNELS 1
+#endif
+
+/* PWM frequency and duty types *********************************************/
+
+#ifdef CONFIG_HAVE_FLOAT
+typedef float pwm_freq_t;
+typedef float pwm_duty_t;
+#define PWM_FREQ_PRI "f"
+#define PWM_DUTY_PRI "f"
+#else
+typedef uint32_t pwm_freq_t;
+typedef uint8_t pwm_duty_t;
+#define PWM_FREQ_PRI PRIx32
+#define PWM_DUTY_PRI PRIx8
+#endif
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
 
-/* If the PWM peripheral supports multiple output channels, then this
- * structure describes the output state on one channel.
- */
+/* This structure describes the characteristics of one channel */
 
-#ifdef CONFIG_PWM_MULTICHAN
 struct pwm_chan_s
 {
-  ub16_t duty;
+  pwm_freq_t frequency;
+  pwm_duty_t duty;
 #ifdef CONFIG_PWM_OVERWRITE
   bool ch_outp_ovrwr;
   bool ch_outp_ovrwr_val;
 #endif
 #ifdef CONFIG_PWM_DEADTIME
-  ub16_t dead_time_a;
-  ub16_t dead_time_b;
+  pwm_duty_t dead_time_a;
+  pwm_duty_t dead_time_b;
 #endif
   uint8_t cpol;
   uint8_t dcpol;
   int8_t channel;
 };
-#endif
 
-/* This structure describes the characteristics of the pulsed output */
+/* This structure describes the PWM device */
 
 struct pwm_info_s
 {
-  uint32_t           frequency; /* Frequency of the pulse train */
-
-#ifdef CONFIG_PWM_MULTICHAN
-                                /* Per-channel output state */
-
-  struct pwm_chan_s  channels[CONFIG_PWM_NCHANNELS];
-
-#else
-  ub16_t             duty;      /* Duty of the pulse train, "1"-to-"0" duration.
-                                 * Maximum: 65535/65536 (0x0000ffff)
-                                 * Minimum:     1/65536 (0x00000001) */
-#ifdef CONFIG_PWM_DEADTIME
-  ub16_t dead_time_a;           /* Dead time value for main output */
-  ub16_t dead_time_b;           /* Dead time value for complementary output */
-#endif
-#  ifdef CONFIG_PWM_PULSECOUNT
-  uint32_t           count;     /* The number of pulse to generate.  0 means to
-                                 * generate an indefinite number of pulses */
-#  endif
-  uint8_t cpol;                 /* Channel polarity */
-  uint8_t dcpol;                /* Disabled channel polarity */
-#endif /* CONFIG_PWM_MULTICHAN */
-
-  FAR void           *arg;      /* User provided argument to be used in the
-                                 * lower half */
+  struct pwm_chan_s  channels[PWM_NCHANNELS];
+  FAR void           *arg; 
 };
 
 /* This structure is a set a callback functions used to call from the upper-

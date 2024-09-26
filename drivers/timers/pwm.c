@@ -114,21 +114,14 @@ static const struct file_operations g_pwmops =
 static void pwm_dump(FAR const char *msg, FAR const struct pwm_info_s *info,
                      bool started)
 {
-#ifdef CONFIG_PWM_MULTICHAN
   int i;
-#endif
 
-  pwminfo("%s: frequency: %" PRId32 "\n", msg, info->frequency);
-
-#ifdef CONFIG_PWM_MULTICHAN
-  for (i = 0; i < CONFIG_PWM_NCHANNELS; i++)
+  for (i = 0; i < PWM_NCHANNELS; i++)
     {
-      pwminfo(" channel: %d duty: %08" PRIx32 "\n",
-              info->channels[i].channel, info->channels[i].duty);
+      pwminfo(" channel: %d frequency: %" PWM_FREQ_PRI " duty:"
+              " %" PWM_FREQ_PRI "\n", info->channels[i].channel,
+              info->channels[i].frequency, info->channels[i].duty);
     }
-#else
-  pwminfo(" duty: %08" PRIx32 "\n", info->duty);
-#endif
 
 #ifdef CONFIG_PWM_PULSECOUNT
   pwminfo(" count: %" PRIx32 "\n", info->count);
