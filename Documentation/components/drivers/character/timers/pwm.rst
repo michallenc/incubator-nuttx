@@ -182,15 +182,21 @@ of PWM channels should be set before this operation.
 
 The ``PWMIOC_STOPS`` command stops the pulsed output.
 
-.. c:macro:: PWMIOC_FAULTS_CLEAR
+.. c:macro:: PWMIOC_FAULTS_FETCH_CLEAR
 
-The ``PWMIOC_FAULTS_CLEAR`` command clears fault inputs. Some faults may
+The ``PWMIOC_FAULTS_FETCH_CLEAR`` command clears fault inputs. Some faults may
 be latched (remain active even if the source is not active anymore) and
 have to be cleared from the software. This provides an option to clear
-faults from the application and re-enable PWM output.
+faults from the application and re-enable PWM output. It can be also used
+to fetch the current faults.
 
-The call takes ``unsigned long`` argument, a bitmask defining which faults
-are to be cleared. This may not be supported by all drivers.
+The call takes a pointer ``unsigned long`` as an argument, a bitmask defining
+which faults are to be cleared. The driver clears these faults and fills the
+argument with the active faults prior to the clear. Having the argument
+variable equal to zero will result in no faults cleared but the user will get
+the currently active faults.
+
+This may not be supported by all drivers.
 
 Application Example
 ~~~~~~~~~~~~~~~~~~~

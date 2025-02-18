@@ -110,17 +110,17 @@
  *
  *  ioctl argument:  None
  *
- * PWMIOC_FAULTS_CLEAR - Clear fault inputs. This command will clear fault
- *  inputs and re-enable PWM output.
+ * PWMIOC_FAULTS_FETCH_CLEAR - Clear fault inputs. This command will clear
+ *  fault inputs and re-enable PWM output.
  *
  *  ioctl argument:  A bitmask of fault inputs to be cleared.
  */
 
-#define PWMIOC_SETCHARACTERISTICS _PWMIOC(1)
-#define PWMIOC_GETCHARACTERISTICS _PWMIOC(2)
-#define PWMIOC_START              _PWMIOC(3)
-#define PWMIOC_STOP               _PWMIOC(4)
-#define PWMIOC_FAULTS_CLEAR       _PWMIOC(5)
+#define PWMIOC_SETCHARACTERISTICS  _PWMIOC(1)
+#define PWMIOC_GETCHARACTERISTICS  _PWMIOC(2)
+#define PWMIOC_START               _PWMIOC(3)
+#define PWMIOC_STOP                _PWMIOC(4)
+#define PWMIOC_FAULTS_FETCH_CLEAR  _PWMIOC(5)
 
 /* PWM channel polarity *****************************************************/
 

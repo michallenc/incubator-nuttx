@@ -1119,15 +1119,25 @@ static int pwm_ioctl(struct pwm_lowerhalf_s *dev, int cmd,
                      unsigned long arg)
 {
   struct sam_pwm_s *priv = (struct sam_pwm_s *)dev;
+  uint32_t regval;
   int ret = OK;
 
   switch (cmd)
     {
-      case PWMIOC_FAULTS_CLEAR:
+      case PWMIOC_FAULTS_FETCH_CLEAR:
         {
-          /* Clear the faults. Clearing inactive fault has no effect. */
+          /* Get current faults. */
 
-          pwm_putreg(priv, SAMV7_PWM_FCR, arg & FCR_FCLR_MASK);
+          regval = pwm_getreg(priv, SAMV7_PWM_FCR);
+
+          /* Clear the faults. */
+
+          pwm_putreg(priv, SAMV7_PWM_FCR,
+                     arg & ((regval & FSR_FS_MASK) >> FSR_FS_SHIFT));
+
+          /* And return the previously read faults. */
+
+          arg = (regval & FSR_FS_MASK) >> FSR_FS_SHIFT;
         }
         break;
       default:
