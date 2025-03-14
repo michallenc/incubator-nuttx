@@ -222,11 +222,11 @@
  * block device (/dev/mtdblockN) and the character device (/dev/mtdN).
  */
 
-#define S25FL1_MTD_MINOR 0
+#define S25FL1_MTD_MINOR 1
 
 /* This is the on-chip progmem memory driver minor number */
 
-#define PROGMEM_MTD_MINOR 1
+#define PROGMEM_MTD_MINOR 0
 
 /* Audio */
 
@@ -809,6 +809,19 @@ int sam_audio_null_initialize(int minor);
 #ifdef HAVE_MRF24J40
 int sam_mrf24j40_initialize(void);
 #endif
+
+/****************************************************************************
+ * Name: sam_s25fl1_init
+ *
+ * Description:
+ *   Initialize s25fl1.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MTD_S25FL1
+int sam_s25fl1_init(void);
+#endif
+
 
 #endif /* __ASSEMBLY__ */
 #endif /* __BOARDS_ARM_SAMV7_SAMV71_XULT_SRC_SAMV71_XULT_H */
