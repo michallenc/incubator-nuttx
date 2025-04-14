@@ -62,8 +62,8 @@
  ****************************************************************************/
 
 #define ADC_MAX_CHANNELS 12
-#define AFEC0_MAX_PINS   11
-#define AFEC1_MAX_PINS   12
+#define AFEC0_MAX_PINS   ADC_MAX_CHANNELS
+#define AFEC1_MAX_PINS   ADC_MAX_CHANNELS
 
 #ifdef CONFIG_SAMV7_AFEC_DMA
 #define DMA_FLAGS  (DMACH_FLAG_FIFOCFG_LARGEST | \
@@ -224,6 +224,7 @@ gpio_pinset_t g_adcpinlist0[AFEC0_MAX_PINS] =
   GPIO_AFE0_AD8,
   GPIO_AFE0_AD9,
   GPIO_AFE0_AD10,
+  0
 };
 #endif
 
@@ -847,7 +848,10 @@ static void afec_reset(struct adc_dev_s *dev)
     {
       DEBUGASSERT(priv->chanlist[i] < priv->max_pins);
       pinset = pinlist[priv->chanlist[i]];
-      sam_configgpio(pinset);
+      if (pinset != 0)
+        {
+          sam_configgpio(pinset);
+        }
 
       afec_putreg(priv, SAM_AFEC_CSELR_OFFSET,
                   AFEC_CSELR_CSEL(priv->chanlist[i]));
