@@ -44,9 +44,9 @@
 #include <nuttx/usb/usbhost_devaddr.h>
 
 #include <arch/board/board.h>
+#include <arch/barriers.h>
 
 #include "arm_internal.h"
-#include "barriers.h"
 
 #include "chip.h"
 #include "sam_periphclks.h"
@@ -79,7 +79,7 @@
 
 /* Cache-related */
 
-#define MEMORY_SYNC()          do { ARM_DSB();ARM_ISB(); } while (0)
+#define MEMORY_SYNC()          do { UP_DSB();UP_ISB(); } while (0)
 
 #define EP0                 (0)
 #define SAM_EPSET_ALL       (0xffff)  /* All endpoints */
