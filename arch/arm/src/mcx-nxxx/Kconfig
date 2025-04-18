@@ -16,6 +16,11 @@ config ARCH_CHIP_N236
 	select ARCH_HAVE_RESET
 	select ARMV8M_HAVE_ICACHE
 
+config ARCH_CHIP_N974
+	bool "MCXN947 Processor"
+	select ARCH_HAVE_RESET
+	select ARMV8M_HAVE_ICACHE
+
 endchoice # MCX NXXx Chip Selection
 
 endmenu # "MCX NXXx Chip Selection"
