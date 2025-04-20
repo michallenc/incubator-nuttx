@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/mcx-nxxx/nxxx_gpiobase.c
+ * boards/arm/mcx-nxxx/frdm-mcxn947/src/frdm-mcxn947.h
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -20,34 +20,42 @@
  *
  ****************************************************************************/
 
+#ifndef __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_SRC_FRDM_MCXN947_H
+#define __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_SRC_FRDM_MCXN947_H
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
 
-#include "nxxx_gpio.h"
+#include <stdint.h>
+
+/****************************************************************************
+ * Public Types
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
 
-#if defined(CONFIG_ARCH_CHIP_N236) || defined(CONFIG_ARCH_CHIP_N947)
-/* Base address for the GPIO memory mapped registers */
-
-const uintptr_t g_gpio_base[] =
-{
-  NXXX_GPIO0_BASE,
-  NXXX_GPIO1_BASE,
-  NXXX_GPIO2_BASE,
-  NXXX_GPIO3_BASE,
-  NXXX_GPIO4_BASE,
-  NXXX_GPIO5_BASE,
-};
-#else
-#  error Unrecognized NXXx architecture
-#endif
+#ifndef __ASSEMBLY__
 
 /****************************************************************************
- * Public Functions
+ * Public Functions Definitions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: n23x_bringup
+ *
+ * Description:
+ *   Bring up board features
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_BOARDCTL) || defined(CONFIG_BOARD_LATE_INITIALIZE)
+int nxxx_bringup(void);
+#endif
+
+#endif /* __ASSEMBLY__ */
+#endif /* __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_SRC_FRDM_MCXN947_H */

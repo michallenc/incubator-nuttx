@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/mcx-nxxx/frdm-mcxn236/scripts/flash.ld
+ * boards/arm/mcx-nxxx/frdm-mcxn947/scripts/flash.ld
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -17,6 +17,7 @@
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
  * License for the specific language governing permissions and limitations
  * under the License.
+ *
  *
  ****************************************************************************/
 

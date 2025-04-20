@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/mcx-nxxx/nxxx_gpiobase.c
+ * boards/arm/mcx-nxxx/frdm-mcxn947/include/board.h
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -20,34 +20,64 @@
  *
  ****************************************************************************/
 
+#ifndef __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_INCLUDE_BOARD_H
+#define __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_INCLUDE_BOARD_H
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
 
-#include "nxxx_gpio.h"
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define PORT_LPUART4_RX PORT_CFG(1, 8, PORT_PCR_MUX_ALT2 | PORT_PCR_IBE)
+#define PORT_LPUART4_TX PORT_CFG(1, 9, PORT_PCR_MUX_ALT2 | PORT_PCR_IBE)
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
 
-#if defined(CONFIG_ARCH_CHIP_N236) || defined(CONFIG_ARCH_CHIP_N947)
-/* Base address for the GPIO memory mapped registers */
+#ifndef __ASSEMBLY__
 
-const uintptr_t g_gpio_base[] =
+#undef EXTERN
+#if defined(__cplusplus)
+#define EXTERN extern "C"
+extern "C"
 {
-  NXXX_GPIO0_BASE,
-  NXXX_GPIO1_BASE,
-  NXXX_GPIO2_BASE,
-  NXXX_GPIO3_BASE,
-  NXXX_GPIO4_BASE,
-  NXXX_GPIO5_BASE,
-};
 #else
-#  error Unrecognized NXXx architecture
+#define EXTERN extern
 #endif
 
 /****************************************************************************
- * Public Functions
+ * Public Function Prototypes
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: nxxx_boardinitialize
+ *
+ * Description:
+ *   All architectures must provide the following entry point.  This
+ *   entry point is called in the initialization phase -- after
+ *   imx_memory_initialize and after all memory has been configured and
+ *   mapped but before any devices have been initialized.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void nxxx_boardinitialize(void);
+
+#undef EXTERN
+#if defined(__cplusplus)
+}
+#endif
+
+#endif /* __ASSEMBLY__ */
+#endif /* __BOARDS_ARM_MCX_NXXX_FRDM_MCXN947_INCLUDE_BOARD_H */

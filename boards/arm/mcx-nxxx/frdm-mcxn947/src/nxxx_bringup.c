@@ -1,5 +1,5 @@
 /****************************************************************************
- * arch/arm/src/mcx-nxxx/nxxx_gpiobase.c
+ * boards/arm/mcx-nxxx/frdm-mcxn947/src/nxxx_bringup.c
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -25,29 +25,38 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/fs/fs.h>
+#include <sys/types.h>
+#include <syslog.h>
 
-#include "nxxx_gpio.h"
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-#if defined(CONFIG_ARCH_CHIP_N236) || defined(CONFIG_ARCH_CHIP_N947)
-/* Base address for the GPIO memory mapped registers */
-
-const uintptr_t g_gpio_base[] =
-{
-  NXXX_GPIO0_BASE,
-  NXXX_GPIO1_BASE,
-  NXXX_GPIO2_BASE,
-  NXXX_GPIO3_BASE,
-  NXXX_GPIO4_BASE,
-  NXXX_GPIO5_BASE,
-};
-#else
-#  error Unrecognized NXXx architecture
-#endif
+#include "frdm-mcxn947.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: imx_bringup
+ *
+ * Description:
+ *   Bring up board features
+ *
+ ****************************************************************************/
+
+int nxxx_bringup(void)
+{
+  int ret;
+
+#ifdef CONFIG_FS_PROCFS
+  /* Mount the procfs file system */
+
+  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to mount procfs at /proc: %d\n", ret);
+    }
+#endif
+
+  UNUSED(ret);
+  return OK;
+}
