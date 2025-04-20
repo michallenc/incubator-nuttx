@@ -33,6 +33,8 @@
 
 #if defined(CONFIG_ARCH_CHIP_N236)
 #  include "hardware/n236/n236_clock.h"
+#elif defined(CONFIG_ARCH_CHIP_N947)
+#  include "hardware/nx4x/nx4x_clock.h"
 #else
 #  error Unrecognized NXXx architecture
 #endif

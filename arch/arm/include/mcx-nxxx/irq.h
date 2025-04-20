@@ -35,6 +35,8 @@
 
 #if defined(CONFIG_ARCH_CHIP_N236)
 #  include <arch/mcx-nxxx/n236_irq.h>
+#elif defined(CONFIG_ARCH_CHIP_N947)
+#  include <arch/mcx-nxxx/nx4x_irq.h>
 #else
 #  error "Unrecognized MCX-NXXx architecture"
 #endif

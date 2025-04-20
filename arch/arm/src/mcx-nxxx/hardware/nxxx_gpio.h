@@ -31,6 +31,8 @@
 
 #if defined(CONFIG_ARCH_CHIP_N236)
 #  include "hardware/n236/n236_gpio.h"
+#elif defined(CONFIG_ARCH_CHIP_N947)
+#  include "hardware/nx4x/nx4x_gpio.h"
 #else
 #  error Unrecognized NXXx architecture
 #endif
