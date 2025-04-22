@@ -230,6 +230,7 @@ static inline int usbhost_classbind(FAR struct usbhost_hubport_s *hport,
         {
           /* Then bind the newly instantiated class instance */
 
+          uinfo("call class connect\n");
           ret = CLASS_CONNECT(devclass, configdesc, desclen);
           if (ret < 0)
             {

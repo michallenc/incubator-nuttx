@@ -755,7 +755,7 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
   if (pending & USBHS_HSTPIPINT_RXINI)
     {
       uinfo("rxini\n");
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(idx),
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
                  USBHS_HSTPIPINT_RXINI);
 
       /* New data available. Check whether pipe is really in pipe */
@@ -859,7 +859,9 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
       sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
                  USBHS_HSTPIPINT_RXSTALLDI | USBHS_HSTPIPINT_PERRI);
 
-      // TODO: abort?
+      sam_transfer_abort(priv, pipe, EPERM);
+      pipe->result = EPERM;
+      sam_pipe_wakeup(priv, pipe);
     }
 
   return;
@@ -1115,7 +1117,7 @@ static void sam_pipe_configure(struct sam_usbhosths_s *priv, int idx)
 
   /* Check whether the pipe is correctly configured */
 
-  while (((regval = sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(idx)))
+  while ((sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(idx))
           & USBHS_HSTPIPISR_CFGOK) == 0);
 
   if (idx < 4)
@@ -1240,7 +1242,7 @@ static int sam_pipe_wait(struct sam_usbhosths_s *priv,
 
   ret = -(int)pipe->result;
   leave_critical_section(flags);
-  return 0;
+  return ret;
 }
 
 /****************************************************************************
@@ -1603,7 +1605,7 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
 
   /* Now set n_tx to next transfer size */
 
-  n_tx = n_remain > 16320 ? 16320 : n_remain;
+  n_tx = n_remain > pipe->maxpacket ? pipe->maxpacket : n_remain;
 
   /* For Control, all data is done, to STATUS stage */
 
@@ -1616,6 +1618,7 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
       /* Start IN ZLP request */
 
       pipe->pkt_timeout = USB_CTRL_STAT_TIMEOUT;
+      uinfo("here restart\n");
       sam_recv_restart(priv, pipe);
       return;
     }
@@ -1645,43 +1648,43 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
       regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
       sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
 
-      //sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
-      //           USBHS_HSTPIPINT_TXOUTI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
+                 USBHS_HSTPIPINT_TXOUTI);
 
       /* Write packet in the FIFO buffer */
 
       uinfo("pipe->size = %d, epno = %d, count = %d\n", pipe->size, epno, count);
 
-      fifo = (uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (16 * epno));
+      fifo = (volatile uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
 
-      printf("fifo addr = %x\n", fifo);
+        printf("fifo addr = %x\n", fifo);
 
       for (int i = 0; i < pipe->size; i++)
         {
           printf("%x ", src[i]);
         }
-      printf("\n");
+        printf("\n");
 
-      uinfo("pointer size = %d\n", sizeof(*fifo));
-      int len = 0;
-      for ( ; pipe->size; pipe->size--)
+      for (int i = 0; i < n_tx; i++)
         {
           *fifo++ = *src++;
-          len++;
         }
 
+      pipe->count += n_tx;
       MEMORY_SYNC();
+
+      fifo = (volatile uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+      for (int i = 0; i < n_tx; i++)
+        {
+          printf("%x ", *fifo++);
+        }
+      printf("\n");
 
       uinfo("pipe->size = %d\n", pipe->size);
 
-      fifo = (uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (16 * epno));
-
       uinfo("status = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(epno)));
-
-      //sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
-      //           USBHS_HSTPIPINT_TXOUTI);
       sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
                  USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
     }
@@ -1698,7 +1701,6 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
 static void sam_send_start(struct sam_usbhosths_s *priv,
                            struct sam_pipe_s *pipe)
 {
-  volatile uint8_t *fifo;
   uint32_t regval;
   uint8_t psize;
   uint8_t epno = pipe->idx;
@@ -1710,16 +1712,17 @@ static void sam_send_start(struct sam_usbhosths_s *priv,
 
   regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
 
-  if (pipe->size > 0)
-    {
-      /* Just enable interrupt and wait until FIFO is clear */
+  uinfo("here %d\n", pipe->size);
+  // if (pipe->size > 0)
+  //   {
+  //     /* Just enable interrupt and wait until FIFO is clear */
 
-      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
-                 USBHS_HSTPIPINT_NBUSYBKI | USBHS_HSTPIPINT_PFREEZEI);
-    }
-  else
+  //     sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+  //                USBHS_HSTPIPINT_TXOUTI);
+  //     sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+  //                USBHS_HSTPIPINT_NBUSYBKI | USBHS_HSTPIPINT_PFREEZEI);
+  //   }
+  // else
     {
       regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
       regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
@@ -1787,18 +1790,18 @@ static ssize_t sam_out_transfer(struct sam_usbhosths_s *priv,
           return (ssize_t)ret;
         }
 
-      /* Set up for the transfer based
-       * on the direction and the endpoint type
+      /* Set up for the transfer based on the direction and the endpoint
+       * type
        */
 
       ret = sam_out_setup(priv, pipe);
-
       if (ret < 0)
         {
           return (ssize_t)ret;
         }
 
       /* Wait for the transfer to complete and get the result */
+
 
       ret = sam_pipe_wait(priv, pipe);
 
@@ -1917,7 +1920,7 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
 
       /* Write packet in the FIFO buffer */
 
-      fifo = (uint8_t *)
+      fifo = (volatile uint8_t *)
         ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
 
       for (; pipe->size; pipe->size--)
@@ -1944,15 +1947,7 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
 
       if (ret != -EAGAIN)
         {
-          /* Output some debug information if the transfer failed */
-
-          if (ret < 0)
-            {
-              // TODO
-              uerr("ERROR\n");
-            }
-
-          /* Return the result in any event */
+          /* Return the result in any event except for EAGAIN */
 
           return ret;
         }
@@ -2049,6 +2044,7 @@ static int sam_ctrl_recvdata(struct sam_usbhosths_s *priv,
 
   /* Start the transfer */
 
+  uinfo("here\n");
   sam_recv_start(priv, pipe);
 
   /* Wait for the transfer to complete and return the result */
@@ -2297,6 +2293,7 @@ static int sam_out_setup(struct sam_usbhosths_s *priv,
 {
   /* Set up for the transfer based on the direction and the endpoint type */
 
+  uinfo("here pipe->eptype %d\n", pipe->eptype);
   switch (pipe->eptype)
     {
       default:
@@ -2345,7 +2342,6 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
   uint8_t *dst;
   uint32_t size;
   uint32_t count;
-  uint32_t i;
   uint32_t n_rx = 0;
   uint32_t n_remain;
   uint32_t regval;
@@ -2388,7 +2384,7 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
       n_remain = size - count;
 
       fifo = (volatile const uint8_t *)
-        SAM_USBHSRAM_BASE  + (EPT_FIFO_SIZE * epno);
+        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
 
       dst = &dst[count];
       if (n_rx >= n_remain)
@@ -2398,7 +2394,7 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
         }
 
       count += n_rx;
-      for (i = 0; i < n_rx; i++)
+      for (int i = 0; i < n_rx; i++)
         {
           *dst++ = *fifo++;
         }
@@ -2474,7 +2470,7 @@ static void sam_recv_restart(struct sam_usbhosths_s *priv,
       sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
                  USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
 
-      printf("SAM_USBHS_HSTPIPIMR = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPIMR_OFFSET(epno)));
+      uinfo("SAM_USBHS_HSTPIPIMR = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPIMR_OFFSET(epno)));
     }
   else
     {
@@ -2508,6 +2504,7 @@ static void sam_recv_start(struct sam_usbhosths_s *priv,
 
   /* Start the transfer. */
 
+  uinfo("here\n");
   sam_recv_restart(priv, pipe);
 }
 

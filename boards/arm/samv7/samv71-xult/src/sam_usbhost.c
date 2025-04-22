@@ -132,22 +132,10 @@ void sam_usbhost_vbusdrive(int rhport, bool enable)
 {
   uinfo("RHPort%d: enable=%d\n", rhport + 1, enable);
 
-  /* Then enable or disable VBUS power (active low for SAMV71-XULT) */
+  /* Enable or disable VBUS power (active low for SAMV71-XULT) */
 
-  if (enable)
-    {
-      /* Enable the Power Switch by driving the enable pin low */
-
-      sam_gpiowrite(GPIO_VBUSON, false);
-      sam_gpiowrite(GPIO_LED1, true);
-    }
-  else
-    {
-      /* Disable the Power Switch by driving the enable pin high */
-
-      sam_gpiowrite(GPIO_VBUSON, true);
-      sam_gpiowrite(GPIO_LED1, false);
-    }
+  sam_gpiowrite(GPIO_VBUSON, !enable);
+  sam_gpiowrite(GPIO_LED1, enable);
 }
 
 /****************************************************************************

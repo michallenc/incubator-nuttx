@@ -95,7 +95,7 @@
 #define USBHOST_ALLFOUND    0x07
 
 #define USBHOST_RETRY_USEC  (50*1000)  /* Retry each 50 milliseconds */
-#define USBHOST_MAX_RETRIES 100        /* Give up after 5 seconds */
+#define USBHOST_MAX_RETRIES 2        /* Give up after 5 seconds */
 #define USBHOST_MAX_CREFS   INT16_MAX  /* Max cref count before signed overflow */
 
 /****************************************************************************
@@ -705,8 +705,10 @@ static inline int usbhost_testunitready(FAR struct usbhost_state_s *priv)
     {
       /* Receive the CSW */
 
+      uinfo("receive csw\n");
       nbytes = DRVR_TRANSFER(hport->drvr, priv->bulkin,
                              priv->tbuffer, USBMSC_CSW_SIZEOF);
+      uinfo("received %d bytes\n", nbytes);
       if (nbytes >= 0)
         {
           usbhost_dumpcsw((FAR struct usbmsc_csw_s *)priv->tbuffer);
@@ -1767,6 +1769,7 @@ static int usbhost_connect(FAR struct usbhost_class_s *usbclass,
 
   /* Parse the configuration descriptor to get the bulk I/O endpoints */
 
+  uinfo("call usbhost_cfgdesc\n");
   ret = usbhost_cfgdesc(priv, configdesc, desclen);
   if (ret < 0)
     {
@@ -1774,6 +1777,7 @@ static int usbhost_connect(FAR struct usbhost_class_s *usbclass,
     }
   else
     {
+      uinfo("desc configured, initvolume\n");
       /* Now configure the LUNs and register the block driver(s) */
 
       ret = usbhost_initvolume(priv);
@@ -1781,6 +1785,7 @@ static int usbhost_connect(FAR struct usbhost_class_s *usbclass,
         {
           uerr("ERROR: usbhost_initvolume() failed: %d\n", ret);
         }
+      uinfo("init volume finished\n");
     }
 
   return ret;
