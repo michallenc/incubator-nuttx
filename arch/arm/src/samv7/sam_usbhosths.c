@@ -183,11 +183,12 @@ struct sam_pipe_s
   uint8_t *data;                       /* Pointer to transfer data */
   int16_t pkt_timeout;                 /* Timeout between packets (500ms for data and 50ms for status), -1 if disabled */
   uint8_t zlp:1;                       /* Transfer ZLP support */
+  uint8_t shortpacket:1;
+  uint16_t offset;
 
   uint8_t           stalled:1;    /* true: Endpoint is stalled */
   uint8_t           pending:1;    /* true: IN Endpoint stall is pending */
   uint8_t           halted:1;     /* true: Endpoint feature halted */
-  uint8_t           zlpsent:1;    /* Zero length packet has been sent */
   uint8_t           txbusy:1;     /* Write request queue is busy (recursion avoidance kludge) */
   uint8_t           rxactive:1;   /* read request is active (for top of queue) */
   bool              inuse;        /* True: This pipe is "in use" */
@@ -717,6 +718,17 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
   uinfo("pipe%d PINTFLAG:0x%x, PINTENSET:0x%x,"
         "PENDING:0x%x\n", idx, pipisr, pipimr, pending);
 
+  if (pending & USBHS_HSTPIPINT_SHRTPCKTI)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
+                 USBHS_HSTPIPINT_SHRTPCKTI);
+
+      sam_recv_continue(priv, pipe);
+
+      pipe->result = 0;
+      sam_pipe_wakeup(priv, pipe);
+    }
+
   if (pending & USBHS_HSTPIPINT_PERRI)
     {
       uinfo("perri\n");
@@ -768,15 +780,13 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
           pipe->result = 0;
           sam_pipe_wakeup(priv, pipe);
         }
-
-      //return;
     }
 
   if (pending & USBHS_HSTPIPINT_TXOUTI)
     {
       uinfo("txouti\n");
       sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
-                 USBHS_HSTPIPINT_TXOUTI);
+                USBHS_HSTPIPINT_TXOUTI);
 
       if ((sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(idx)) &
           USBHS_HSTPIPCFG_PTOKEN_MASK) == USBHS_HSTPIPCFG_PTOKEN_OUT)
@@ -785,13 +795,15 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
             {
               sam_send_continue(priv, pipe);
             }
-
-          pipe->result = 0;
-          sam_pipe_wakeup(priv, pipe);
+          else
+            {
+              pipe->result = 0;
+              sam_pipe_wakeup(priv, pipe);
+            }
         }
     }
 
-  if (pending & USBHS_HSTPIPINT_TXSTPI)
+  if (pending & USBHS_HSTPIPINT_TXSTPI && idx == 0)
     {
       uinfo("txstpi\n");
       sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
@@ -842,6 +854,11 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
 
   if (pending & USBHS_HSTPIPINT_RXSTALLDI)
     {
+      /* Reset data toggle */
+
+      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
+                 USBHS_HSTPIPINT_RSTDTI);
+
       sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
                  USBHS_HSTPIPINT_RXSTALLDI);
 
@@ -858,9 +875,39 @@ static void sam_pipe_interrupt(struct sam_usbhosths_s *priv, int idx)
 
       sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
                  USBHS_HSTPIPINT_RXSTALLDI | USBHS_HSTPIPINT_PERRI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(idx),
+                 USBHS_HSTPIPINT_TXOUTI | USBHS_HSTPIPINT_RXINI);
 
       sam_transfer_abort(priv, pipe, EPERM);
       pipe->result = EPERM;
+      sam_pipe_wakeup(priv, pipe);
+    }
+
+  if (pending & USBHS_HSTPIPINT_NAKEDI)
+    {
+      if ((sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(idx)) &
+          USBHS_HSTPIPCFG_PTOKEN_MASK) == USBHS_HSTPIPCFG_PTOKEN_IN)
+        {
+          sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
+                     USBHS_HSTPIPINT_PFREEZEI);
+          sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx),
+                     USBHS_HSTPIPINT_NAKEDI);
+        }
+    }
+
+  if (pipimr & USBHS_HSTPIPINT_NBUSYBKI &&
+      (pipisr & USBHS_HSTPIPISR_NBUSYBK_MASK) == USBHS_HSTPIPISR_NBUSYBK_0BUSY)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
+                 USBHS_HSTPIPINT_PFREEZEI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(idx),
+                 USBHS_HSTPIPINT_NBUSYBKI);
+      sam_putreg(priv, SAM_USBHS_HSTIDR_OFFSET,
+                 USBHS_HSTINT_PEP(idx));
+      sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(idx),
+                 USBHS_HSTPIPCFG_AUTOSW);
+
+      pipe->result = 0;
       sam_pipe_wakeup(priv, pipe);
     }
 
@@ -964,6 +1011,8 @@ static int sam_usbhs_interrupt(int irq, void *context, void *arg)
 
       sam_putreg(priv, SAM_USBHS_HSTICR_OFFSET, 0xff);
     }
+
+  return OK;
 }
 
 /****************************************************************************
@@ -1145,8 +1194,21 @@ static void sam_pipe_configure(struct sam_usbhosths_s *priv, int idx)
   /* Enable pipe interrupts */
 
   sam_putreg(priv, SAM_USBHS_HSTIER_OFFSET, USBHS_HSTINT_PEP(idx));
-  sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx),
-             USBHS_HSTPIPINT_RXSTALLDI | USBHS_HSTPIPINT_PERRI);
+  regval = USBHS_HSTPIPINT_RXSTALLDI | USBHS_HSTPIPINT_PERRI;
+  if (pipe->in && pipe->eptype != USB_EP_ATTR_XFER_CONTROL)
+    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(idx), USBHS_HSTPIPINT_NAKEDI);
+      regval |= USBHS_HSTPIPINT_NAKEDI;
+    }
+  sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(idx), regval);
+
+
+  if (idx == 0)
+    pipe->offset = 0;
+  if (idx == 1)
+    pipe->offset = 16;
+  if (idx == 2)
+    pipe->offset = 16 * 3;
 }
 
 /****************************************************************************
@@ -1436,6 +1498,7 @@ static void sam_transfer_terminate(struct sam_usbhosths_s *priv,
 {
   /* Wake up any waiters for the end of transfer event */
 
+  pipe->result = result;
   sam_pipe_wakeup(priv, pipe);
 
   if (pipe->pipestate_general < USB_H_PIPE_S_SETUP ||
@@ -1554,39 +1617,49 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
 
   uinfo("here\n");
 
-  if (pipe->pipestate_general == USB_H_PIPE_S_STATO)
+  if (pipe->size >= pipe->count && !pipe->zlp)
     {
-      /* Control status : ZLP OUT done */
-
-      sam_transfer_terminate(priv, pipe, OK);
-      return;
-    }
-  else if (pipe->pipestate_general != USB_H_PIPE_S_DATO)
-    {
+      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+                 USBHS_HSTPIPINT_TXOUTI);
+      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+                 USBHS_HSTPIPINT_NBUSYBKI);
       return;
     }
 
-  /* Reset packet timeout for control pipes */
+  // if (pipe->zlp && (pipe->count == pipe->size))
+  //   {
+  //     /* Control status : ZLP OUT done */
 
-  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL)
-    {
-      pipe->pkt_timeout = USB_CTRL_DPKT_TIMEOUT;
-    }
+  //     uinfo("ZLP out done\n");
+  //     sam_transfer_terminate(priv, pipe, OK);
+  //     return;
+  //   }
+  // if (pipe->pipestate_general == USB_H_PIPE_S_STATO)
+  //   {
+  //     /* Control status : ZLP OUT done */
 
-  regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
-  n_tx = (regval & USBHS_HSTPIPCFG_PSIZE_MASK) >>
-          USBHS_HSTPIPCFG_PSIZE_SHIFT;
+  //     sam_transfer_terminate(priv, pipe, OK);
+  //     return;
+  //   }
+  // else if (pipe->pipestate_general != USB_H_PIPE_S_DATO)
+  //   {
+  //     return;
+  //   }
 
-  n_tx = psize_2_size[n_tx];
+  // regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
+  // n_tx = (regval & USBHS_HSTPIPCFG_PSIZE_MASK) >>
+  //         USBHS_HSTPIPCFG_PSIZE_SHIFT;
+
+  // n_tx = psize_2_size[n_tx];
 
   /* ZLP cleared if it's short packet */
 
-  uinfo("pipe->maxpacket = %d\n", pipe->maxpacket);
+  uinfo("n_tx = %d pipe->maxpacket = %d\n", n_tx, pipe->maxpacket);
 
-  if (n_tx < pipe->maxpacket)
-    {
-      pipe->zlp = 0;
-    }
+  // if ((pipe->size % pipe->maxpacket) == 0)
+  //   {
+  //     pipe->zlp = 1;
+  //   }
 
   size = pipe->size;
   count = pipe->count;
@@ -1599,7 +1672,7 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
       pipe->count = count;
     }*/
 
-  n_remain = size - count;
+  n_remain = pipe->size - pipe->count;
 
   uinfo("n_remain = %d\n", n_remain);
 
@@ -1607,60 +1680,31 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
 
   n_tx = n_remain > pipe->maxpacket ? pipe->maxpacket : n_remain;
 
-  /* For Control, all data is done, to STATUS stage */
-
-  if (pipe->eptype == USB_EP_ATTR_XFER_CONTROL &&
-                     pipe->count >= pipe->size &&
-                     !pipe->zlp)
-    {
-      pipe->pipestate = USB_H_PIPE_S_STATI;
-
-      /* Start IN ZLP request */
-
-      pipe->pkt_timeout = USB_CTRL_STAT_TIMEOUT;
-      uinfo("here restart\n");
-      sam_recv_restart(priv, pipe);
-      return;
-    }
-
   /* All transfer done, including ZLP */
 
   uinfo("n_tx = %d\n", n_tx);
 
-  if ((n_tx <= 0) && !pipe->zlp)
+  // regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
+  // regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+  // regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
+  // sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
+
+  // sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
+  //             USBHS_HSTPIPINT_TXOUTI);
+
+  /* Write packet in the FIFO buffer */
+
+  uinfo("pipe->size = %d, epno = %d, count = %d\n", pipe->size, epno, count);
+
+  if (n_tx > 0)
     {
-      /* At least one bank there, wait to freeze pipe */
-
-      if (pipe->eptype != USB_EP_ATTR_XFER_CONTROL)
-        {
-          /* Busy interrupt when all banks are empty */
-
-          uinfo("all done, terminate\n");
-          sam_transfer_terminate(priv, pipe, OK);
-        }
-    }
-  else
-    {
-      src = &pipe->data[count];
-
-      regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
-      regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
-      regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
-      sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
-
-      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
-
-      /* Write packet in the FIFO buffer */
-
-      uinfo("pipe->size = %d, epno = %d, count = %d\n", pipe->size, epno, count);
-
+      src = &pipe->data[pipe->count];
       fifo = (volatile uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+        ((uint32_t *)SAM_USBHSRAM_BASE + pipe->offset);
 
         printf("fifo addr = %x\n", fifo);
 
-      for (int i = 0; i < pipe->size; i++)
+      for (int i = 0; i < n_tx; i++)
         {
           printf("%x ", src[i]);
         }
@@ -1675,19 +1719,34 @@ static void sam_send_continue(struct sam_usbhosths_s *priv,
       MEMORY_SYNC();
 
       fifo = (volatile uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+        ((uint32_t *)SAM_USBHSRAM_BASE + pipe->offset);
       for (int i = 0; i < n_tx; i++)
         {
           printf("%x ", *fifo++);
         }
       printf("\n");
-
-      uinfo("pipe->size = %d\n", pipe->size);
-
-      uinfo("status = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(epno)));
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
-                 USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
     }
+
+  uinfo("pipe->size = %d\n", pipe->size);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+             USBHS_HSTPIPINT_FIFOCONI);
+  if (n_tx < pipe->maxpacket)
+    {
+      pipe->zlp = false;
+    }
+
+  // if (pipe->count >= pipe->size && !pipe->zlp)
+  //   {
+  //     sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+  //                USBHS_HSTPIPINT_TXOUTI);
+  //     sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+  //                USBHS_HSTPIPINT_NBUSYBKI);
+  //   }
+
+  // uinfo("status = %lx\n", sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(epno)));
+  // sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+  //             USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
 }
 
 /****************************************************************************
@@ -1702,15 +1761,24 @@ static void sam_send_start(struct sam_usbhosths_s *priv,
                            struct sam_pipe_s *pipe)
 {
   uint32_t regval;
-  uint8_t psize;
+  uint32_t size;
+  uint8_t *src;
+  volatile uint8_t *fifo;
   uint8_t epno = pipe->idx;
 
   /* Set up the initial state of the transfer */
 
   pipe->result = EBUSY;
   pipe->count = 0;
+  pipe->zlp = 1;
 
   regval = sam_getreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno));
+  regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+  regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
+  sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
+
+  sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
+  USBHS_HSTPIPINT_TXOUTI);
 
   uinfo("here %d\n", pipe->size);
   // if (pipe->size > 0)
@@ -1723,19 +1791,45 @@ static void sam_send_start(struct sam_usbhosths_s *priv,
   //                USBHS_HSTPIPINT_NBUSYBKI | USBHS_HSTPIPINT_PFREEZEI);
   //   }
   // else
+    // {
+    //   regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
+    //   regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
+    //   sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
+
+    //   sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
+    //              USBHS_HSTPIPINT_TXOUTI);
+
+    //   sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+    //              USBHS_HSTPIPINT_TXOUTI);
+    //   sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+    //              USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
+    // }
+
+
+  if (pipe->size > 0)
     {
-      regval &= ~USBHS_HSTPIPCFG_PTOKEN_MASK;
-      regval |= USBHS_HSTPIPCFG_PTOKEN_OUT;
-      sam_putreg(priv, SAM_USBHS_HSTPIPCFG_OFFSET(epno), regval);
+      uinfo("pipe>offset = %d\n", pipe->offset);
+      src = &pipe->data[0];
+      fifo = (volatile uint8_t *)
+        ((uint32_t *)SAM_USBHSRAM_BASE + pipe->offset);
 
-      sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
+      size = pipe->size > pipe->maxpacket ? pipe->maxpacket : pipe->size;
+      pipe->zlp = pipe->size >= pipe->maxpacket;
+      for (int i = 0; i < size; i++)
+        {
+          *fifo++ = *src++;
+        }
 
-      sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
-                 USBHS_HSTPIPINT_TXOUTI);
-      sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
-                 USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
+      MEMORY_SYNC();
+      pipe->count += size;
     }
+
+    sam_putreg(priv, SAM_USBHS_HSTIER_OFFSET,
+               USBHS_HSTINT_PEP(epno));
+    sam_putreg(priv, SAM_USBHS_HSTPIPIER_OFFSET(epno),
+                USBHS_HSTPIPINT_TXOUTI);
+    sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
+                USBHS_HSTPIPINT_FIFOCONI | USBHS_HSTPIPINT_PFREEZEI);
 }
 
 /****************************************************************************
@@ -1909,19 +2003,15 @@ static int sam_ctrl_sendsetup(struct sam_usbhosths_s *priv,
       sam_putreg(priv, SAM_USBHS_HSTPIPICR_OFFSET(epno),
                  USBHS_HSTPIPINT_TXSTPI);
 
-      printf("-------------------------------------------\n");
       for (i = 0; i < USB_SIZEOF_CTRLREQ; i++)
         {
           priv->ctrl_buffer[i] = pipe->data[i];
-          printf("%x ", priv->ctrl_buffer[i]);
         }
-
-      printf("\n-------------------------------------------\n");
 
       /* Write packet in the FIFO buffer */
 
       fifo = (volatile uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+        ((uint32_t *)SAM_USBHSRAM_BASE + pipe->offset);
 
       for (; pipe->size; pipe->size--)
         {
@@ -2087,7 +2177,7 @@ static ssize_t sam_in_transfer(struct sam_usbhosths_s *priv,
   xfrd = 0;
 
   start = clock_systime_ticks();
-  while (pipe->count < pipe->size)
+  while (xfrd < pipe->size)
     {
       /* Set up for the wait BEFORE starting the transfer */
 
@@ -2101,6 +2191,7 @@ static ssize_t sam_in_transfer(struct sam_usbhosths_s *priv,
        * and the endpoint type
        */
 
+      uinfo("xdrd %d, pipe->count = %d, pipe->size = %d\n", xfrd, pipe->count, pipe->size);
       ret = sam_in_setup(priv, pipe);
 
       if (ret < 0)
@@ -2111,6 +2202,7 @@ static ssize_t sam_in_transfer(struct sam_usbhosths_s *priv,
       /* Wait for the transfer to complete and get the result */
 
       ret = sam_pipe_wait(priv, pipe);
+      uinfo("wakeup %d\n", ret);
 
       /* EAGAIN indicates that the device NAKed the transfer. */
 
@@ -2350,7 +2442,7 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
   bool shortpkt = false;
   bool full = false;
 
-  if (pipe->pipestate_general == USB_H_PIPE_S_STATI)
+  if (pipe->pipestate == USB_H_PIPE_S_STATI)
     {
       /* Control status : ZLP IN done */
 
@@ -2384,7 +2476,7 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
       n_remain = size - count;
 
       fifo = (volatile const uint8_t *)
-        ((uint32_t *)SAM_USBHSRAM_BASE + (EPT_FIFO_SIZE * epno));
+        ((uint32_t *)SAM_USBHSRAM_BASE + pipe->offset);
 
       dst = &dst[count];
       if (n_rx >= n_remain)
@@ -2423,7 +2515,8 @@ static void sam_recv_continue(struct sam_usbhosths_s *priv,
       if (pipe->eptype != USB_EP_ATTR_XFER_CONTROL)
         {
           uinfo("finish\n");
-          sam_transfer_terminate(priv, pipe, OK);
+          pipe->pipestate = USB_H_PIPE_S_STATO;
+          sam_transfer_terminate(priv, pipe, OK);;
         }
     }
   else
@@ -2482,6 +2575,12 @@ static void sam_recv_restart(struct sam_usbhosths_s *priv,
       sam_putreg(priv, SAM_USBHS_HSTPIPIDR_OFFSET(epno),
                  USBHS_HSTPIPINT_PFREEZEI);
     }
+
+  // if (sam_getreg(priv, SAM_USBHS_HSTPIPISR_OFFSET(epno) & USBHS_HSTPIPINT_RWALL))
+  //   {
+  //     uinfo("rwall\n");
+  //     sam_recv_continue(priv, pipe);
+  //   }
 }
 
 /****************************************************************************
@@ -3420,7 +3519,6 @@ static void sam_pipe_reset(struct sam_usbhosths_s *priv, uint8_t epno)
   pipe->stalled   = false;
   pipe->pending   = false;
   pipe->halted    = false;
-  pipe->zlpsent   = false;
   pipe->txbusy    = false;
   pipe->rxactive  = false;
 }
