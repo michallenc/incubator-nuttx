@@ -37,6 +37,12 @@
  * Public Types
  ****************************************************************************/
 
+enum mtd_progmem_types
+{
+  PROGMEM_TYPE_FTL = 0,
+  PROGMEM_TYPE_MTD,
+};
+
 struct mtd_partition_s
 {
   size_t            offset;    /* Partition offset from the beginning of MTD */

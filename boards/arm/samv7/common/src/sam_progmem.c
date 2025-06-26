@@ -64,7 +64,7 @@
  ****************************************************************************/
 
 static int sam_progmem_register_driver(int minor, struct mtd_dev_s *mtd,
-                                       const char *devpath)
+                                       const char *devpath, uint8_t type)
 {
 #ifdef CONFIG_BCH
   char blockdev[18];
@@ -72,34 +72,50 @@ static int sam_progmem_register_driver(int minor, struct mtd_dev_s *mtd,
 #endif
   int ret = OK;
 
-  /* Use the FTL layer to wrap the MTD driver as a block driver */
-
-  ret = ftl_initialize(minor, mtd);
-  if (ret < 0)
+  if (type == PROGMEM_TYPE_FTL)
     {
-      ferr("ERROR: Failed to initialize the FTL layer: %d\n", ret);
-      return ret;
-    }
+      /* Use the FTL layer to wrap the MTD driver as a block driver */
+
+      ret = ftl_initialize(minor, mtd);
+      if (ret < 0)
+        {
+          ferr("ERROR: Failed to initialize the FTL layer: %d\n", ret);
+          return ret;
+        }
 
 #ifdef CONFIG_BCH
-  /* Use the minor number to create device paths */
+      /* Use the minor number to create device paths */
 
-  snprintf(blockdev, sizeof(blockdev), "/dev/mtdblock%d", minor);
-  if (devpath == NULL)
-    {
-      snprintf(chardev, sizeof(chardev), "/dev/mtd%d", minor);
-      devpath = chardev;
-    }
+      snprintf(blockdev, sizeof(blockdev), "/dev/mtdblock%d", minor);
+      if (devpath == NULL)
+        {
+          snprintf(chardev, sizeof(chardev), "/dev/mtd%d", minor);
+          devpath = chardev;
+        }
 
-  /* Now create a character device on the block device */
+      /* Now create a character device on the block device */
 
-  ret = bchdev_register(blockdev, devpath, false);
-  if (ret < 0)
-    {
-      ferr("ERROR: bchdev_register %s failed: %d\n", devpath, ret);
-      return ret;
-    }
+      ret = bchdev_register(blockdev, devpath, false);
+      if (ret < 0)
+        {
+          ferr("ERROR: bchdev_register %s failed: %d\n", devpath, ret);
+          return ret;
+        }
 #endif
+    }
+  else if (type == PROGMEM_TYPE_MTD)
+    {
+      ret = mtd_partition_register(mtd, devpath, false);
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "Failed to register %s: %d\n", devpath, ret);
+        }
+    }
+  else
+    {
+      syslog(LOG_ERR, "Unknown progmem partition type: %d", type);
+      ret = ERROR;
+    }
 
   return ret;
 }
@@ -188,7 +204,8 @@ int board_progmem_init(int minor, struct mtd_partition_s *table,
 
   if (table == NULL || count == 0)
     {
-      ret = sam_progmem_register_driver(minor, progmem_mtd, NULL);
+      ret = sam_progmem_register_driver(minor, progmem_mtd, NULL,
+                                        PROGMEM_TYPE_FTL);
     }
   else
     {
@@ -203,7 +220,8 @@ int board_progmem_init(int minor, struct mtd_partition_s *table,
               if (part->devpath != NULL)
                 {
                   ret = sam_progmem_register_driver(minor + i, part->mtd,
-                                                    part->devpath);
+                                                    part->devpath,
+                                                    part->type);
                   if (ret < 0)
                     {
                       break;
