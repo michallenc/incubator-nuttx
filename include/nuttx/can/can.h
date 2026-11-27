@@ -569,6 +569,13 @@
 #define CAN_BITTIMING_NOMINAL     0  /* Specifies nominal bittiming */
 #define CAN_BITTIMING_DATA        1  /* Specifies data bittiming */
 
+#define CAN_BITTIMING_FROM_PRECOMPUTED  0  /* Apply precomputed bittiming
+                                            * values
+                                            */
+#define CAN_BITTIMING_FROM_BAUDRATE     1  /* Calculate bittiming from a
+                                            * given baudrate
+                                            */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -912,12 +919,33 @@ struct canioc_bittiming_s
                                           * used to specify which bit timing
                                           * should be set/obtained. Applies
                                           * only if CAN FD is configured.
+                                          *
+                                          * CAN_BITTIMING_NOMINAL or
+                                          * CAN_BITTIMING_DATA.
                                           */
 #endif
-  uint32_t              bt_baud;         /* Bit rate = 1 / bit time */
-  uint8_t               bt_tseg1;        /* TSEG1 in time quanta */
-  uint8_t               bt_tseg2;        /* TSEG2 in time quanta */
+  uint8_t               from;            /* Decides if the bittiming is
+                                          * calculated from a given
+                                          * bitrate or precomputed values
+                                          * are applied.
+                                          *
+                                          * CAN_BITTIMING_FROM_PRECOMPUTED
+                                          * or CAN_BITTIMING_FROM_BAUDRATE.
+                                          */
+  uint8_t               bt_tq;           /* Time quanta value */
   uint8_t               bt_sjw;          /* Synchronization Jump Width in time quanta */
+  uint8_t               bt_brp;          /* Bit rate prescaler */
+  uint16_t              bt_prop_seg;     /* Propagation segment */
+  uint16_t              bt_tseg1;        /* TSEG1 in time quanta
+                                          *
+                                          * TSEG1 = prop_seg + phase_seg1
+                                          */
+  uint16_t              bt_tseg2;        /* TSEG2 in time quanta
+                                          *
+                                          * TSEG2 = phase_seg2
+                                          */
+  uint16_t              bt_sp;           /* Sample point */
+  uint32_t              bt_baud;         /* Bit rate = 1 / bit time */
 };
 
 /* CANIOC_GET_ERRORS:
